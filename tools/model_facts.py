@@ -224,6 +224,27 @@ def main():
         P("| %s | `%s` | %s |" % (k, v["content"].replace("|", "\\|"), v.get("special")))
     P("")
 
+    # fields whose name is known but whose exact semantics are NOT verifiable from the files alone
+    P("## Fields listed above whose semantics are inferred, not verified from files")
+    P("")
+    P("These are tabulated above because the engine needs them, but the note column is an inference")
+    P("(from tensor shapes or from the transformers 5.16.1 reference source in the venv), not a fact read")
+    P("from a config file. Phase 2 fixtures must pin each one against the reference implementation.")
+    P("")
+    P("| JSON path | what is verified | what is inferred |")
+    P("|---|---|---|")
+    P("| `text_config.attn_output_gate` | q_proj is 2 x (heads x head_dim) wide | that the second half is a sigmoid gate on the attention output, and its layout (interleaved per head vs. concatenated) |")
+    P("| `text_config.output_gate_type` | value `swish` | which tensor it gates (in_proj_z / GGUF attn_gate) and where the norm sits relative to the gate |")
+    P("| `text_config.mamba_ssm_dtype` | value `float32` | that only the recurrent state is float32 while projections stay bf16 |")
+    P("| `text_config.partial_rotary_factor` | 0.25 x 256 = 64; GGUF `qwen35.rope.dimension_count` = 64 | which 64 of the 256 dims rotate (first 64 in the reference source) |")
+    P("| `text_config.rope_parameters.mrope_section` | [11,11,10] sums to 32 = 64/2 | for text-only input all three position streams are identical, so interleaved mRoPE reduces to plain RoPE (reference source `apply_interleaved_mrope` copies H/W freqs into T slots; equal positions give equal freqs) |")
+    P("| `text_config.rope_parameters.mrope_interleaved` | value true | the THW interleave pattern (only matters with images/video) |")
+    P("| `text_config.linear_conv_kernel_dim` | conv1d.weight is [10240,1,4] | that the conv runs over the concatenated q,k,v (10240 channels) before the recurrence, causal with zero left padding |")
+    P("| `text_config.mtp_use_dedicated_embeddings` | value false; safetensors has no mtp.embed / mtp.lm_head | that the MTP layer reuses embed_tokens and lm_head |")
+    P("| `linear_attn.A_log`, `dt_bias`, `in_proj_a`, `in_proj_b` | shapes [48], [48], [48,5120], [48,5120] | the decay/beta formulas that combine them (must come from the reference source, not from a config field) |")
+    P("| `self_attn.q_norm` / `k_norm` | shape [256] = head_dim | per-head RMSNorm applied before RoPE |")
+    P("")
+
     # unrecognised
     P("## Unrecognised fields in config.json (verbatim; meaning NOT guessed)")
     P("")
