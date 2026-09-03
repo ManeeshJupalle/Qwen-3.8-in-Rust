@@ -1,0 +1,89 @@
+{
+ "name": "fib",
+ "prompt_text": "def fibonacci(n):",
+ "prompt_ids": [
+  727,
+  73111,
+  1393,
+  1590
+ ],
+ "n_prompt_ids": 4,
+ "argmax": 198,
+ "argmax_text": "\n",
+ "top10": [
+  198,
+  317,
+  271,
+  653,
+  695,
+  220,
+  2449,
+  1031,
+  2228,
+  262
+ ],
+ "top10_logits": [
+  19.890592575073242,
+  15.706405639648438,
+  15.295361518859863,
+  14.74747085571289,
+  14.571971893310547,
+  13.366744041442871,
+  12.674915313720703,
+  12.50514030456543,
+  12.41130256652832,
+  12.235503196716309
+ ],
+ "top10_text": [
+  "\n",
+  "\r\n",
+  "\n\n",
+  " #",
+  " \n",
+  " ",
+  " \r\n",
+  "    \n",
+  "  \n",
+  "   "
+ ],
+ "greedy_ids": [
+  198,
+  262,
+  413,
+  307,
+  2564,
+  220,
+  15,
+  25,
+  198,
+  285,
+  460,
+  220,
+  15,
+  198,
+  262,
+  4265
+ ],
+ "greedy_text": "\n    if n <= 0:\n        return 0\n    elif",
+ "logits_stats": {
+  "max": 19.890592575073242,
+  "min": -15.053207397460938,
+  "mean": -2.597381353378296,
+  "std": 1.6304709911346436,
+  "n_nan": 0
+ },
+ "prompt_seconds": 7.272,
+ "gen_seconds": 64.443,
+ "ms_per_generated_token": 4027.7,
+ "info": {
+  "llama_cpp_python": "0.3.35",
+  "gguf": "Qwen3.8-27B-UD-Q4_K_M.gguf",
+  "gguf_bytes": 16464440224,
+  "n_vocab": 248320,
+  "n_ctx": 512,
+  "threads": 6,
+  "load_seconds": 69.1,
+  "greedy_tokens": 16,
+  "note": "raw ids fed with Llama.eval (no BOS, no template); logits read from llama_get_logits (last evaluated position); greedy = argmax of the returned logits, appended one token at a time with KV cache"
+ }
+}

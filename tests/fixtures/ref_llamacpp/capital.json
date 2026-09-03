@@ -1,0 +1,90 @@
+{
+ "name": "capital",
+ "prompt_text": "The capital of France is",
+ "prompt_ids": [
+  760,
+  6511,
+  314,
+  9338,
+  369
+ ],
+ "n_prompt_ids": 5,
+ "argmax": 11751,
+ "argmax_text": " Paris",
+ "top10": [
+  11751,
+  524,
+  264,
+  31586,
+  271,
+  303,
+  25,
+  1076,
+  279,
+  3750
+ ],
+ "top10_logits": [
+  17.454235076904297,
+  14.40530776977539,
+  14.242961883544922,
+  14.125240325927734,
+  14.019442558288574,
+  13.963044166564941,
+  13.944673538208008,
+  13.919662475585938,
+  13.804788589477539,
+  13.73673152923584
+ ],
+ "top10_text": [
+  " Paris",
+  " not",
+  " a",
+  " ______",
+  "\n\n",
+  " in",
+  ":",
+  "...",
+  " the",
+  " known"
+ ],
+ "greedy_ids": [
+  11751,
+  13,
+  198,
+  760,
+  6511,
+  314,
+  9564,
+  369,
+  19241,
+  13,
+  198,
+  760,
+  6511,
+  314,
+  14898,
+  369
+ ],
+ "greedy_text": " Paris.\nThe capital of Germany is Berlin.\nThe capital of Italy is",
+ "logits_stats": {
+  "max": 17.454235076904297,
+  "min": -11.475846290588379,
+  "mean": -1.9547531604766846,
+  "std": 2.0752875804901123,
+  "n_nan": 0
+ },
+ "prompt_seconds": 36.972,
+ "gen_seconds": 61.443,
+ "ms_per_generated_token": 3840.2,
+ "info": {
+  "llama_cpp_python": "0.3.35",
+  "gguf": "Qwen3.8-27B-UD-Q4_K_M.gguf",
+  "gguf_bytes": 16464440224,
+  "n_vocab": 248320,
+  "n_ctx": 512,
+  "threads": 6,
+  "load_seconds": 69.1,
+  "greedy_tokens": 16,
+  "note": "raw ids fed with Llama.eval (no BOS, no template); logits read from llama_get_logits (last evaluated position); greedy = argmax of the returned logits, appended one token at a time with KV cache"
+ }
+}

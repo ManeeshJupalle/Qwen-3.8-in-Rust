@@ -223,8 +223,8 @@ consistent with the in-file layout found in item 3.
 
 ## 21. Reference timing on this machine (for planning, not a divergence)
 
-`tests/fixtures/ref_llamacpp/summary.txt`: llama.cpp CPU (6 threads, i7-9750H, 32 GB): first prompt eval
-included cold page-in of the 15.3 GiB file; steady-state decode about 4.4 to 4.5 s per token with the model fully
-mmap-resident. ARCHITECTURE.md's cost model (`20 ms x GB_ram` = about 0.3 s/token for 15 GB in RAM) is 15x more
-optimistic than llama.cpp on this CPU; the target table's "32 GB: fits fully, reference" row should be measured,
-not assumed.
+`tests/fixtures/ref_llamacpp/summary.txt`: llama.cpp CPU (llama-cpp-python 0.3.35, 6 threads, i7-9750H, 32 GB,
+model mmap-resident after a first cold run): load 69 s, prompt eval 7 to 37 s for 4 to 39 tokens, greedy decode
+3.8 to 4.0 s per token at short context and 9.1 s per token after the 39-token prompt. ARCHITECTURE.md's cost
+model (`20 ms x GB_ram` = about 0.3 s/token for 15 GB in RAM) is more than 10x more optimistic than llama.cpp on
+this CPU; the target table's "32 GB: fits fully, reference" row should be measured, not assumed.
