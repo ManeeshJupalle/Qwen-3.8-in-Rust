@@ -122,12 +122,13 @@ fn gated_deltanet_prefill_and_step() {
         check(&format!("deltanet prefill vs HF chunk kernel (threads {threads})"), &y, &fx.arr(&c["prefill"]["y"]), width, fx.k());
         check("deltanet prefill vs HF sequential recurrence", &y, &fx.arr(&c["prefill"]["y_seq"]), width, fx.k());
         check("deltanet prefill recurrent state", &state.rec, &fx.arr(&c["prefill"]["rec_state"]), width, fx.k());
-        assert_eq!(max_diff(&state.conv, &fx.arr(&c["prefill"]["conv_state"])), 0.0, "conv window must be bit-exact (a shift of the inputs)");
+        // the window holds projection outputs (a matmul in HF vs block partial sums here): projection budget
+        check("deltanet prefill conv window", &state.conv, &hf_conv_window(&fx, &c["prefill"]["conv_state"], layer.kernel), hidden, fx.k());
         let mut y1 = vec![0f32; hidden];
         layer.forward_token(&fx.arr(&c["step"]["x"]), &mut state, &mut y1, threads);
         check(&format!("deltanet step with carried state (threads {threads})"), &y1, &fx.arr(&c["step"]["y"]), width, fx.k());
         check("deltanet step recurrent state", &state.rec, &fx.arr(&c["step"]["rec_state"]), width, fx.k());
-        assert_eq!(max_diff(&state.conv, &fx.arr(&c["step"]["conv_state"])), 0.0);
+        check("deltanet step conv window", &state.conv, &hf_conv_window(&fx, &c["step"]["conv_state"], layer.kernel), hidden, fx.k());
         if threads == 1 {
             // thread invariance: repeat with 3 threads below and compare bits
             let mut s3 = layer.new_state();
@@ -137,6 +138,20 @@ fn gated_deltanet_prefill_and_step() {
             assert_eq!(bits(&s3.rec), bits(&fx_state_after_prefill(&layer, &x, t)), "deltanet state: thread invariance");
         }
     }
+}
+
+/// HF's DynamicCache keeps `kernel` samples per channel (shape `[conv_dim, kernel]`); only the last
+/// `kernel - 1` feed the next step (causal_conv1d_update takes `window[1..]`). Ours stores exactly those.
+fn hf_conv_window(fx: &Fx, field: &serde_json::Value, kernel: usize) -> Vec<f32> {
+    let shape: Vec<usize> = field["shape"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();
+    let data = fx.arr(field);
+    let (channels, state_len) = (shape[0], shape[1]);
+    assert!(state_len >= kernel - 1, "HF conv state shorter than kernel-1");
+    let mut out = Vec::with_capacity(channels * (kernel - 1));
+    for ch in 0..channels {
+        out.extend_from_slice(&data[ch * state_len + (state_len - (kernel - 1))..(ch + 1) * state_len]);
+    }
+    out
 }
 
 fn fx_state_after_prefill(layer: &GatedDeltaNet, x: &[f32], t: usize) -> Vec<f32> {
