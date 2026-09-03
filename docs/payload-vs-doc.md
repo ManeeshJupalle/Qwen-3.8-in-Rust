@@ -370,3 +370,95 @@ Result: 60/60 greedy tokens, per-layer hidden states at 1% of budget, logits wit
 `gguf.quants.quantize` implements only Q4_0 and Q8_0 (plus F32/F16 pass-through). K-quant dot-kernel
 fixtures therefore use rows sliced from the real bartowski GGUF plus hostile blocks tiled from the Phase 1
 dequant fixtures with rewritten f16 scales (`tools/fixtures/gen_kernels.py`).
+
+# Phase 2b findings (real layers, noise floor, AVX2)
+
+## 31. Against the dequantised-GGUF reference, an f32-activation engine sits at 0.3% of the derived budget; the Q8 engine path is 2^15 times further away, by construction
+
+`tests/fixtures/ref_gguf/` is HF transformers in float32 on the bartowski GGUF dequantised with gguf-py
+(`tools/ref_forward.py --weights gguf`; 66 MB, 64 layers x 3 prompts, every position). The engine was run
+against it in two modes (`crates/core/tests/real_layers.rs`, `docs/data/phase2b_parity_0_63.log`):
+
+| mode | what it computes | layers 0..63, worst max\|diff\| / budget | logits vs ref_gguf (3 prompts) |
+|---|---|---|---|
+| f32 | weights dequantised in Rust (bit-identical to gguf-py), f32 dot | 0.0027 (layer 0, sentence: 1.1e-5 vs 4.2e-3); never above 0.003 | max\|diff\| 1.2e-5 to 2.1e-5 (budget 0.27 to 0.33), argmax 3/3, top-10 10/10, argmax at every prompt position 48/48 |
+| q8 | the engine's real path: quantised rows x Q8_0 activations | relative max error 3e-4 to 1.9e-2 per layer (worst layer 55, sentence) | max\|diff\| 0.11 to 0.16, argmax 3/3, top-10 9 to 10 of 10, argmax at every position 48/48 |
+
+Rule 5's budget (`k * sqrt(width) * f32_eps * max|h|`, k = 16 per layer, compounding as `k * (L + 1)`) can
+only gate the f32 mode: quantising an activation block to 8 bits moves each element by up to `max|block| / 254`,
+about 2^-8 relative, against 2^-23 for f32 rounding. So the parity gate is: f32 mode within budget (checks every
+binding, op order, re-tiling, norm, RoPE, DeltaNet and cache), q8 mode measured and gated on argmax / top-10.
+The tiny oracle never saw this because its GGUF is F32 (the f32 dot path); the Q8 kernels themselves are checked
+bit-exactly against dequantised-Q8 fixtures in `tests/kernels.rs`.
+
+The q8 mode is also compared with llama.cpp on the same file (`tests/fixtures/ref_llamacpp`): max|diff| 0.32 to
+0.39, argmax 3/3, top-10 9 to 10 of 10. llama.cpp is itself 0.31 to 0.38 from the f32 reference (it quantises
+activations to Q8_K, 256-value blocks with one scale; ours are Q8_0, 32-value blocks), so the two 8-bit engines
+disagree with each other about as much as either disagrees with float32, and ours is nearer to float32
+(0.11 to 0.16). "Matching llama.cpp" is therefore a loose target: two correct Q8 engines differ by ~0.35 in raw
+logits on these prompts; a wrong binding differs by tens.
+
+## 32. `-exp(A_log)` cannot be inverted bit-exactly in float32 for a third of the DeltaNet heads
+
+The converter stores `ssm_a = -exp(A_log)` in float32. Recovering `A_log = log(-ssm_a)` and letting HF compute
+`-exp(A_log)` again reproduces the stored value on all 48 heads in only 17 of the 48 DeltaNet layers
+(`tests/fixtures/ref_gguf/info.json`, `a_log_exact_per_layer`); on the other layers some heads have no float32
+neighbour whose `exp` lands on the stored value, and the nearest one is 1 ulp off. The engine uses `ssm_a` as
+stored, so it is exact; the reference carries a 6e-8 relative error on those decay exponents, invisible at the
+budget (finding 31's f32 numbers include it). A reference built through `A_log` cannot be bit-exact on the gate;
+one built on the GGUF's `ssm_a` directly could be.
+
+## 33. The decode step and the prefill are the same code today, so "incremental == prefill" is bit-exact by construction
+
+`GatedDeltaNet::forward_prefill` and `GqaAttention::forward_prefill` are T sequential `forward_token` calls
+(Phase 2a). The 2b check (prefill T-1 positions, clone the state, decode the last token) therefore passes bit for
+bit on all 64 layers without testing anything new. It stays in the harness so that a batched or chunked prefill
+(Phase 3) has to keep it true; HF's own chunked prefill differs from its sequential recurrence by 5e-7 (finding 28).
+
+## 34. Timing facts for planning: everything on this box streams from a SATA disk
+
+`models/` lives on D:, the 1 TB SATA HDD (ST1000LM049), not the NVMe. Consequences measured this session:
+the 66 MB reference dump took 1206 s (64 layers x 3 prompts; gguf-py dequantisation 8 to 10 s per layer plus
+the read); the bf16 reference took 45 to 70 s per layer, almost all of it reading 0.87 GB of shards from disk;
+the Rust parity harness streams the GGUF once per run and took 3012 s for 0..63 in both modes with scalar
+kernels (45 s per layer over 48 prompt tokens, 95 s per lm_head pass); with AVX2 the q8 mode drops from 19 s to
+5 s per layer (`docs/data/phase2b_parity_0_7_avx2.log`). The reference and the engine cannot both fit next to
+the user's other processes (about 22 GB of the 32 GB were taken), which is why both stream one layer at a time.
+
+## 35. Quantisation noise floor: the published bf16 model and the Q4_K_M file differ by 0.5 to 0.7 in raw logits; the two Q8 engines differ by the same amount from each other
+
+`docs/data/quant_noise_floor.txt` (`tools/noise_floor.py`): HF in float32 on the bf16 shards versus HF in
+float32 on the dequantised bartowski GGUF, identical code, only the weight bytes differ.
+
+| | layer 0 | layer 7 | layer 31 | layer 63 | final norm | logits |
+|---|---|---|---|---|---|---|
+| max\|diff\| / max\|bf16\| | 3.5e-3 to 1.2e-2 | 1.3e-2 to 2.6e-2 | 5e-3 to 1e-2 | 3.8e-2 to 4.9e-2 | 2.2e-2 to 3.8e-2 | raw max\|diff\| 0.52 to 0.68, mean 0.07 to 0.11 |
+| rms(diff) / rms(bf16) | 1.0e-2 to 1.3e-2 | 1.7e-2 to 2.2e-2 | 3.4e-2 to 5.2e-2 | 4.9e-2 to 6.4e-2 | 5.1e-2 to 6.5e-2 | argmax 3/3, top-10 9 to 10 of 10 |
+| cosine | 0.99995 | 0.9998 to 0.9999 | 0.9987 to 0.9994 | 0.9980 to 0.9988 | | |
+
+So Q4_K_M keeps the residual stream within about 5% RMS of the bf16 model after 64 layers and moves raw logits
+by up to 0.7 on these prompts, without changing the argmax. Against bf16, llama.cpp sits at 0.63 to 0.66
+(weight noise plus its Q8_K activations) and our engine's q8 mode, by finding 31, at roughly the same distance.
+This is the floor the ladder's "same tokens at every budget" claim lives above: it is a statement about one
+GGUF file, and any engine reading that file is 0.5 to 0.7 from the bf16 model before its own rounding enters.
+Note also that the bf16 run died silently in its lm_head pass on Windows (safetensors slicing of the 2.5 GB
+tensor); the logits were recomputed from the saved final-norm dumps by `tools/ref_logits_from_dump.py`, and the
+shard store now loads that tensor whole.
+
+## 36. AVX2 kernels are bit-identical to scalar, and compute-bound rather than memory-bound
+
+`docs/simd.md`: the five dot kernels, the Q8_0 quantiser, `rmsnorm` and `softmax` have AVX2 versions selected
+at runtime; each produces the same bits as the scalar kernel (`tests/avx2.rs`: 93 fixture rows, 5000 random
+rows, 1000 quantiser rows including 167 with exact .5 ties, max diff 0), and layers 0..7 of the real model give
+identical numbers with the scalar path forced (`docs/data/phase2b_parity_0_7_scalar.log` vs `_avx2.log`). To
+get there the scalar `inv_rms` and softmax sums were redefined as eight interleaved lanes with a fixed reduction
+order; the fixture tests and the tiny oracle (60/60) still pass. `docs/data/kernels_bench.txt` (17408 x 5120
+matrices, best of three runs): single thread AVX2 is 2.9x (Q4_K) to 13x (Q6_K) the scalar speed; with all
+threads the dot kernels reach 2.9 (Q4_K) to 6.1 (Q8_0) GB/s of weights, a fifth of this laptop's memory
+bandwidth: the per-block horizontal reductions and the serial f32 accumulation kept for bit-identity bound the
+kernels, not DRAM. At the file's mix (58% Q4_K, 33% Q6_K) that is about 3.4 GB/s, i.e. 5 s per token for the
+17.7 GB file, llama.cpp's neighbourhood on this CPU (4.2 to 4.7 s, finding 21). The three bench runs disagree
+by up to 2x on the same kernel (an idle-machine run was the slowest), which on a laptop after hours of full
+load reads as thermal throttling; the ladder numbers in Phase 4 must be taken on a cooled machine with the
+clock frequency logged. Doubling the kernel throughput needs a batched reduction (four blocks per horizontal
+add) and is the first Phase 3 speed item.

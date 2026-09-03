@@ -1,5 +1,31 @@
-# aqueduct bench kernels: rows=17408 cols=5120 reps>=3, threads: 1 and 12 (available 12); avx2+f16c detected: true
-# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
+# aqueduct bench kernels, 2026-09-03, i7-9750H (6 cores / 12 threads, laptop), Windows 11, release build
+# Matrix 17408 x 5120 (the ffn_gate shape, 47 to 93 MB per type, larger than the 12 MB L3), Q8_0 activation row.
+# GB/s = weight bytes streamed per second by one matvec (the number that bounds decode: 17.7 GB per token).
+# Three runs are filed. Run 1 overlapped a disk-bound Python job; runs 2 and 3 had the machine to themselves and
+# came out SLOWER and inconsistent with each other (single-thread Q4_K AVX2: 1.19, 1.37, 0.68/0.89 GB/s), which
+# is the signature of thermal / power throttling on this laptop after hours of full load, not of the kernels.
+# Treat "best of 3" as the kernel's capability on this CPU and the spread as the machine's state.
+#
+# BEST OF 3 (weight GB/s)               scalar 1 thr   AVX2 1 thr   scalar all   AVX2 all   AVX2/scalar (1 thr)
+Q4_0                                        0.31          2.00          1.27         3.27          6.5x
+Q8_0                                        0.47          3.21          1.87         6.14          6.8x
+Q4_K                                        0.48          1.37          1.36         2.86          2.9x
+Q5_K                                        0.32          1.31          1.14         3.10          4.1x
+Q6_K                                        0.14          1.88          0.70         4.22         13.4x
+#
+# Row kernels (single thread, 5120-wide rows, GB/s of f32 input; best of 3)
+q8_quantize                                 0.28 (74 us/row)     AVX2 2.65 (7.7 us/row)     9.5x
+rmsnorm                                     2.56 ( 8.0 us/row)   AVX2 6.61 (3.1 us/row)     2.6x
+softmax                                     0.30 (68 us/row)     AVX2 0.33 (61 us/row)      1.1x (exp stays scalar)
+#
+# Reading: at the file's mix (58% Q4_K, 33% Q6_K, 4.5% Q8_0, 2.3% Q5_K) the best all-thread AVX2 numbers give
+# about 3.4 GB/s, i.e. 5.2 s per token for the 17.7 GB file, next to llama.cpp's 4.2 to 4.7 s on this CPU
+# (docs/payload-vs-doc.md finding 21). That is a fifth of the memory bandwidth: the kernels are compute-bound
+# (one horizontal reduction per 32-value block and a serial f32 accumulation kept for bit-identity with the
+# scalar path), so batching four blocks per reduction is the first speed item after Phase 2.
+#
+# ---------------------------------------------------------------------------------------------------- run 1
+# (bf16 reference job reading shards in the background; threads: 1 and 12)
 kernel   path     thr    ms/matvec       GB/s    Gelem/s
 Q4_0     scalar     1       161.27       0.31       0.55
 Q4_0     scalar    12        39.40       1.27       2.26
@@ -21,7 +47,6 @@ Q6_K     scalar     1       593.12       0.12       0.15
 Q6_K     scalar    12       104.50       0.70       0.85
 Q6_K     avx2       1        40.90       1.79       2.18
 Q6_K     avx2      12        17.32       4.22       5.15
-
 row kernel   path          us/row    GB/s in
 q8_quantize  scalar         77.86       0.26
 rmsnorm      scalar          9.16       2.24
@@ -29,3 +54,76 @@ softmax      scalar         94.65       0.22
 q8_quantize  avx2            8.59       2.38
 rmsnorm      avx2            3.10       6.61
 softmax      avx2           73.72       0.28
+# ---------------------------------------------------------------------------------------------------- run 2
+# (noise-floor script overlapped for its first minute; threads: 1 and 12)
+kernel   path     thr    ms/matvec       GB/s
+Q4_0     scalar     1       173.44       0.29
+Q4_0     scalar    12        51.16       0.98
+Q4_0     avx2       1        25.10       2.00
+Q4_0     avx2      12        18.03       2.78
+Q8_0     scalar     1       203.05       0.47
+Q8_0     scalar    12        56.63       1.67
+Q8_0     avx2       1        32.07       2.95
+Q8_0     avx2      12        21.87       4.33
+Q4_K     scalar     1       112.25       0.45
+Q4_K     scalar    12        39.09       1.28
+Q4_K     avx2       1        36.48       1.37
+Q4_K     avx2      12        24.82       2.02
+Q5_K     scalar     1       191.37       0.32
+Q5_K     scalar    12        56.62       1.08
+Q5_K     avx2       1        48.84       1.25
+Q5_K     avx2      12        32.64       1.88
+Q6_K     scalar     1       516.21       0.14
+Q6_K     scalar    12       124.02       0.59
+Q6_K     avx2       1        38.98       1.88
+Q6_K     avx2      12        25.33       2.89
+row kernel   path          us/row    GB/s in
+q8_quantize  scalar         73.36       0.28
+rmsnorm      scalar          8.00       2.56
+softmax      scalar         68.21       0.30
+q8_quantize  avx2            7.72       2.65
+rmsnorm      avx2            3.13       6.53
+softmax      avx2           61.14       0.33
+# ---------------------------------------------------------------------------------------------------- run 3
+# (machine idle, back to back with --threads 6 then --threads 12; GB/s only)
+kernel   path     thr   GB/s
+Q4_0     scalar     1   0.23
+Q4_0     scalar     6   0.94
+Q4_0     avx2       1   1.40
+Q4_0     avx2       6   1.68
+Q8_0     scalar     1   0.39
+Q8_0     scalar     6   1.37
+Q8_0     avx2       1   1.87
+Q8_0     avx2       6   4.07
+Q4_K     scalar     1   0.32
+Q4_K     scalar     6   1.09
+Q4_K     avx2       1   0.68
+Q4_K     avx2       6   1.05
+Q5_K     scalar     1   0.12
+Q5_K     scalar     6   0.54
+Q5_K     avx2       1   0.87
+Q5_K     avx2       6   2.06
+Q6_K     scalar     1   0.11
+Q6_K     scalar     6   0.40
+Q6_K     avx2       1   1.67
+Q6_K     avx2       6   3.12
+Q4_0     scalar     1   0.20
+Q4_0     scalar    12   0.66
+Q4_0     avx2       1   1.27
+Q4_0     avx2      12   1.89
+Q8_0     scalar     1   0.34
+Q8_0     scalar    12   1.04
+Q8_0     avx2       1   2.05
+Q8_0     avx2      12   3.29
+Q4_K     scalar     1   0.48
+Q4_K     scalar    12   1.26
+Q4_K     avx2       1   0.89
+Q4_K     avx2      12   1.38
+Q5_K     scalar     1   0.32
+Q5_K     scalar    12   1.00
+Q5_K     avx2       1   1.31
+Q5_K     avx2      12   2.85
+Q6_K     scalar     1   0.13
+Q6_K     scalar    12   0.49
+Q6_K     avx2       1   1.23
+Q6_K     avx2      12   2.41
