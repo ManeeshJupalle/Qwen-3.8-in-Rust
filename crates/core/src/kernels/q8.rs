@@ -16,8 +16,22 @@ pub struct Q8Row {
 impl Q8Row {
     pub const BLOCK: usize = 32;
 
-    /// Quantise `x` (length a multiple of 32).
+    /// Quantise `x` (length a multiple of 32). AVX2 when available (bit-identical, `avx2.rs`), else scalar.
     pub fn quantize(x: &[f32]) -> Q8Row {
+        #[cfg(target_arch = "x86_64")]
+        if super::simd::use_avx2() {
+            assert!(x.len().is_multiple_of(Self::BLOCK), "Q8Row::quantize: length {} is not a multiple of 32", x.len());
+            let mut d = Vec::with_capacity(x.len() / Self::BLOCK);
+            let mut qs = Vec::with_capacity(x.len());
+            // SAFETY: `use_avx2` is only true when the CPU reports AVX2 and F16C.
+            unsafe { super::avx2::quantize_row(x, &mut d, &mut qs) };
+            return Q8Row { n: x.len(), d, qs };
+        }
+        Self::quantize_scalar(x)
+    }
+
+    /// The scalar reference quantiser.
+    pub fn quantize_scalar(x: &[f32]) -> Q8Row {
         assert!(x.len().is_multiple_of(Self::BLOCK), "Q8Row::quantize: length {} is not a multiple of 32", x.len());
         let nb = x.len() / Self::BLOCK;
         let mut d = Vec::with_capacity(nb);

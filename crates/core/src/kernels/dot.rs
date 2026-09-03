@@ -206,8 +206,21 @@ pub fn dot_f32(w: &[f32], x: &[f32]) -> f32 {
     acc + part
 }
 
-/// Dispatch by weight type. `w` is one row in ggml layout (or f32 bytes for F32).
+/// Dispatch by weight type and instruction path. `w` is one row in ggml layout (or f32 bytes for F32).
+/// The AVX2 kernels are bit-identical to the scalar ones (`avx2.rs`), so the path never changes the result.
 pub fn dot_q8(t: GgmlType, w: &[u8], x: &Q8Row) -> f32 {
+    #[cfg(target_arch = "x86_64")]
+    if super::simd::use_avx2() {
+        // SAFETY: `use_avx2` is only true when the CPU reports AVX2 and F16C.
+        if let Some(v) = unsafe { super::avx2::dot_q8(t, w, x) } {
+            return v;
+        }
+    }
+    dot_q8_scalar(t, w, x)
+}
+
+/// The scalar reference dispatch (what `dot_q8` computes on any CPU).
+pub fn dot_q8_scalar(t: GgmlType, w: &[u8], x: &Q8Row) -> f32 {
     match t {
         GgmlType::Q8_0 => dot_q8_0_q8(w, x),
         GgmlType::Q4_0 => dot_q4_0_q8(w, x),
@@ -218,6 +231,6 @@ pub fn dot_q8(t: GgmlType, w: &[u8], x: &Q8Row) -> f32 {
             let wf: Vec<f32> = w.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
             dot_f32_q8(&wf, x)
         }
-        other => panic!("dot_q8: unsupported weight type {other:?}"),
+        other => panic!("dot_q8_scalar: unsupported weight type {other:?}"),
     }
 }
