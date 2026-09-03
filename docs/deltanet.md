@@ -96,3 +96,17 @@ reproduce `torch_recurrent_gated_delta_rule` and the full `Qwen3_5GatedDeltaNet`
 chunk kernel, then a cached step) within k = 16 budgets; measured max diffs are ~4e-7 on outputs of order 1.
 HF's chunked prefill and its sequential recurrence differ from each other by 4.6e-7 (fixture field
 `chunk_vs_seq_max_diff`). HF's cache keeps 4 conv samples per channel; only the last 3 are used.
+
+## Reference side (Phase 2b): reading the GGUF layout back into the HF module
+
+`tools/fixtures/common.py::hf_layout_deltanet` inverts the table above so `tools/ref_forward.py --weights gguf`
+can load dequantised GGUF tensors into `Qwen3_5GatedDeltaNet`: V heads are un-tiled with `reorder_v_heads`
+called with the two head counts exchanged (position `p = v * 16 + k` back to `j = k * 3 + v`), on the V rows
+of `attn_qkv`, on `attn_gate`, `ssm_alpha`, `ssm_beta`, `ssm_a`, `ssm_dt.bias`, the V channels of
+`ssm_conv1d` and the input columns of `ssm_out`; `conv1d.weight` gets its middle axis back; every zero-centered
+norm loses the +1; `ssm_norm` is copied. `A_log` is recovered as the float32 value whose `-exp` round-trips to
+the stored `ssm_a`, searching up to three ulps around `log(-ssm_a)`: on the real file only 17 of the 48 DeltaNet
+layers round-trip exactly on all 48 heads, the rest keep a 1-ulp residual on some heads (finding 32). The
+inverse is verified two ways: `check_gguf_hf_roundtrip` (HF -> GGUF -> HF is the identity on random shapes) and
+`tools/ref_gguf_selftest.py` (the tiny F32 GGUF read through the inverse reproduces the tiny HF reference
+bit for bit on every layer and the logits).

@@ -1,0 +1,18 @@
+    Finished `release` profile [optimized] target(s) in 0.34s
+     Running tests\real_layers.rs (target\release\deps\real_layers-d15e1a95bde710be.exe)
+
+running 1 test
+test real_layers_0_7 ... embeddings: 3 prompts bit-exact with the reference
+layer  0 linear_attention | capital  f32 2.86e-6/5.04e-3 | fib      f32 7.63e-6/6.24e-3 | sentence f32 7.63e-6/4.24e-3 [f32: load 8.3s run 17.2s] q8 1.75e-2 (8.7e-4 rel, vs f32 8.7e-4) q8 2.13e-2 (8.6e-4 rel, vs f32 8.6e-4) q8 4.04e-2 (2.4e-3 rel, vs f32 2.4e-3) [q8: load 2.9s run 19.4s] incremental=bit-exact (49s, total 54s)
+layer  1 linear_attention | capital  f32 3.81e-6/1.53e-2 | fib      f32 2.67e-5/1.80e-2 | sentence f32 9.54e-6/1.20e-2 [f32: load 8.3s run 15.6s] q8 4.80e-2 (1.6e-3 rel, vs f32 1.6e-3) q8 7.15e-2 (2.0e-3 rel, vs f32 2.0e-3) q8 4.52e-2 (1.9e-3 rel, vs f32 1.9e-3) [q8: load 3.6s run 19.4s] incremental=bit-exact (48s, total 102s)
+layer  2 linear_attention | capital  f32 3.81e-6/3.33e-2 | fib      f32 3.05e-5/3.14e-2 | sentence f32 1.34e-5/2.41e-2 [f32: load 8.0s run 15.6s] q8 2.34e-2 (5.3e-4 rel, vs f32 5.3e-4) q8 9.57e-2 (2.3e-3 rel, vs f32 2.3e-3) q8 8.88e-2 (2.8e-3 rel, vs f32 2.8e-3) [q8: load 3.1s run 18.4s] incremental=bit-exact (47s, total 149s)
+layer  3 full_attention   | capital  f32 9.54e-6/5.14e-2 | fib      f32 2.67e-5/5.36e-2 | sentence f32 1.34e-5/3.74e-2 [f32: load 5.5s run 16.1s] q8 8.88e-2 (1.7e-3 rel, vs f32 1.7e-3) q8 1.51e-1 (2.8e-3 rel, vs f32 2.8e-3) q8 1.07e-1 (2.9e-3 rel, vs f32 2.9e-3) [q8: load 2.3s run 18.7s] incremental=bit-exact (44s, total 193s)
+layer  4 linear_attention | capital  f32 1.14e-5/6.83e-2 | fib      f32 2.67e-5/7.19e-2 | sentence f32 1.53e-5/5.40e-2 [f32: load 6.3s run 15.9s] q8 6.33e-2 (1.2e-3 rel, vs f32 1.2e-3) q8 7.96e-2 (1.4e-3 rel, vs f32 1.4e-3) q8 1.14e-1 (2.7e-3 rel, vs f32 2.7e-3) [q8: load 2.6s run 19.1s] incremental=bit-exact (46s, total 239s)
+layer  5 linear_attention | capital  f32 1.14e-5/8.58e-2 | fib      f32 2.29e-5/9.11e-2 | sentence f32 1.53e-5/6.97e-2 [f32: load 6.8s run 15.8s] q8 6.82e-2 (1.2e-3 rel, vs f32 1.2e-3) q8 1.13e-1 (1.9e-3 rel, vs f32 1.9e-3) q8 1.24e-1 (2.7e-3 rel, vs f32 2.7e-3) [q8: load 2.5s run 19.0s] incremental=bit-exact (46s, total 285s)
+layer  6 linear_attention | capital  f32 1.14e-5/1.19e-1 | fib      f32 1.53e-5/1.21e-1 | sentence f32 1.14e-5/9.52e-2 [f32: load 5.6s run 16.1s] q8 8.10e-2 (1.2e-3 rel, vs f32 1.2e-3) q8 1.03e-1 (1.5e-3 rel, vs f32 1.5e-3) q8 9.41e-2 (1.7e-3 rel, vs f32 1.7e-3) [q8: load 3.1s run 18.6s] incremental=bit-exact (44s, total 329s)
+layer  7 full_attention   | capital  f32 1.53e-5/1.34e-1 | fib      f32 1.53e-5/1.37e-1 | sentence f32 1.53e-5/1.10e-1 [f32: load 5.6s run 17.1s] q8 1.41e-1 (2.1e-3 rel, vs f32 2.1e-3) q8 1.14e-1 (1.7e-3 rel, vs f32 1.7e-3) q8 1.27e-1 (2.3e-3 rel, vs f32 2.3e-3) [q8: load 1.8s run 18.8s] incremental=bit-exact (45s, total 374s)
+summary: worst f32 layer 0 sentence: diff 7.629e-6 vs budget 4.242e-3 (0.002 of budget); worst q8 rel error vs ref: layer 3 sentence 2.871e-3; worst q8 vs f32 rel: layer 3 sentence 2.871e-3; incremental bit-exact
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 389.42s
+
