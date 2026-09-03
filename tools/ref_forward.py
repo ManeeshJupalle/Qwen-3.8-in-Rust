@@ -156,6 +156,8 @@ def main():
             cur_ids.append(nxt)
             cur, _, s = forward_logits(store, tcfg, cur_ids, None, log=lambda *x: None)
             print("  greedy token %d -> %d %r (%.0fs)" % (len(gen), nxt, tok.decode([nxt]), s))
+        if not np.isfinite(logits).all() or not np.any(logits) or float(logits.std()) < 1e-6:
+            raise RuntimeError("%s: logits all-zero/constant/non-finite; refusing to write" % p["name"])
         np.save(os.path.join(OUT, p["name"] + ".logits.npy"), logits)
         rec = {
             "name": p["name"], "prompt_text": p["text"], "prompt_ids": ids, "n_prompt_ids": len(ids),

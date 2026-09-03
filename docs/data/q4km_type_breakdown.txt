@@ -1,0 +1,94 @@
+# ggml-type breakdown from GGUF headers only (tools/gguf_type_breakdown.py); no tensor data read
+
+== Qwen3.8-27B-UD-Q4_K_M.gguf (local index tests/fixtures/ud/gguf_index.json)
+   file_size: 16464440224
+   tensors: 866   tensor bytes: 16453443584 (15.323 GiB)   distinct ggml types: 9
+   type     tensors           bytes   share
+   Q5_K         131      4833607680   29.4%
+   IQ4_XS       117      4760043520   28.9%
+   Q4_K         104      4203970560   25.6%
+   Q6_K          30      1812787200   11.0%
+   IQ4_NL         7       330301440    2.0%
+   Q3_K           7       268083200    1.6%
+   IQ3_S          4       153190400    0.9%
+   Q8_0         106        80773120    0.5%
+   F32          360        10686464    0.1%
+   types by tensor role:
+     blk.N.attn_gate.weight               {'Q5_K': 12, 'Q4_K': 24, 'IQ4_XS': 12}
+     blk.N.attn_k.weight                  {'Q4_K': 1, 'Q5_K': 5, 'Q6_K': 9, 'Q8_0': 2}
+     blk.N.attn_k_norm.weight             {'F32': 17}
+     blk.N.attn_norm.weight               {'F32': 65}
+     blk.N.attn_output.weight             {'Q6_K': 5, 'Q5_K': 11, 'IQ4_XS': 1}
+     blk.N.attn_q.weight                  {'Q5_K': 2, 'Q4_K': 6, 'IQ4_XS': 8, 'Q6_K': 1}
+     blk.N.attn_q_norm.weight             {'F32': 17}
+     blk.N.attn_qkv.weight                {'Q5_K': 12, 'Q4_K': 29, 'IQ4_NL': 1, 'IQ4_XS': 6}
+     blk.N.attn_v.weight                  {'Q5_K': 6, 'Q8_0': 8, 'Q6_K': 3}
+     blk.N.ffn_down.weight                {'IQ4_XS': 24, 'IQ4_NL': 3, 'Q4_K': 10, 'Q3_K': 1, 'IQ3_S': 3, 'Q5_K': 22, 'Q6_K': 2}
+     blk.N.ffn_gate.weight                {'IQ4_XS': 31, 'Q4_K': 14, 'IQ3_S': 1, 'Q3_K': 4, 'Q5_K': 12, 'IQ4_NL': 2, 'Q6_K': 1}
+     blk.N.ffn_up.weight                  {'Q3_K': 2, 'IQ4_XS': 30, 'Q4_K': 14, 'Q5_K': 16, 'IQ4_NL': 1, 'Q6_K': 2}
+     blk.N.nextn.eh_proj.weight           {'Q6_K': 1}
+     blk.N.nextn.enorm.weight             {'F32': 1}
+     blk.N.nextn.hnorm.weight             {'F32': 1}
+     blk.N.nextn.shared_head_norm.weight  {'F32': 1}
+     blk.N.post_attention_norm.weight     {'F32': 65}
+     blk.N.ssm_a                          {'F32': 48}
+     blk.N.ssm_alpha.weight               {'Q8_0': 48}
+     blk.N.ssm_beta.weight                {'Q8_0': 48}
+     blk.N.ssm_conv1d.weight              {'F32': 48}
+     blk.N.ssm_dt.bias                    {'F32': 48}
+     blk.N.ssm_norm.weight                {'F32': 48}
+     blk.N.ssm_out.weight                 {'Q5_K': 33, 'Q6_K': 5, 'IQ4_XS': 5, 'Q4_K': 5}
+     output.weight                        {'Q6_K': 1}
+     output_norm.weight                   {'F32': 1}
+     token_embd.weight                    {'Q4_K': 1}
+   blocks: 65 (0..64); has blk.64 (MTP): yes; nextn tensors: 4
+
+== bartowski/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf (remote header)
+   repo: bartowski/Qwen3.8-27B-GGUF
+   remote_file_size: 17772537440
+   general.architecture: qwen35
+   general.file_type: 15
+   header_bytes (data_offset): 10995296
+   block_count: 65
+   tensors: 866   tensor bytes: 17761542144 (16.542 GiB)   distinct ggml types: 6
+   type     tensors           bytes   share
+   Q4_K         249     10317496320   58.1%
+   Q6_K          97      5894246400   33.2%
+   Q8_0          24       802160640    4.5%
+   Q5_K          32       403701760    2.3%
+   Q4_0           8       238878720    1.3%
+   F32          456       105058304    0.6%
+   types by tensor role:
+     blk.N.attn_gate.weight               {'Q4_K': 48}
+     blk.N.attn_k.weight                  {'Q5_K': 16, 'Q4_0': 1}
+     blk.N.attn_k_norm.weight             {'F32': 17}
+     blk.N.attn_norm.weight               {'F32': 65}
+     blk.N.attn_output.weight             {'Q5_K': 16, 'Q4_0': 1}
+     blk.N.attn_q.weight                  {'Q6_K': 8, 'Q4_K': 8, 'Q4_0': 1}
+     blk.N.attn_q_norm.weight             {'F32': 17}
+     blk.N.attn_qkv.weight                {'Q6_K': 48}
+     blk.N.attn_v.weight                  {'Q6_K': 8, 'Q4_K': 8, 'Q4_0': 1}
+     blk.N.ffn_down.weight                {'Q6_K': 32, 'Q4_K': 32, 'Q4_0': 1}
+     blk.N.ffn_gate.weight                {'Q4_K': 64, 'Q4_0': 1}
+     blk.N.ffn_up.weight                  {'Q4_K': 64, 'Q4_0': 1}
+     blk.N.nextn.eh_proj.weight           {'Q4_0': 1}
+     blk.N.nextn.enorm.weight             {'F32': 1}
+     blk.N.nextn.hnorm.weight             {'F32': 1}
+     blk.N.nextn.shared_head_norm.weight  {'F32': 1}
+     blk.N.post_attention_norm.weight     {'F32': 65}
+     blk.N.ssm_a                          {'F32': 48}
+     blk.N.ssm_alpha.weight               {'F32': 48}
+     blk.N.ssm_beta.weight                {'F32': 48}
+     blk.N.ssm_conv1d.weight              {'F32': 48}
+     blk.N.ssm_dt.bias                    {'F32': 48}
+     blk.N.ssm_norm.weight                {'F32': 48}
+     blk.N.ssm_out.weight                 {'Q8_0': 24, 'Q4_K': 24}
+     output.weight                        {'Q6_K': 1}
+     output_norm.weight                   {'F32': 1}
+     token_embd.weight                    {'Q4_K': 1}
+   blocks: 65 (0..64); has blk.64 (MTP): yes; nextn tensors: 4
+
+== summary: distinct ggml types per file
+    9  Qwen3.8-27B-UD-Q4_K_M.gguf
+    6  bartowski/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf
+   fewest types: bartowski/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf (6)

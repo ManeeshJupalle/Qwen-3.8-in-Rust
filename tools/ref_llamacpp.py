@@ -7,7 +7,8 @@ For each prompt in tests/fixtures/prompts.json:
                                                       tests/fixtures/ref_llamacpp/<name>.json
   - appends a human-readable line to                 tests/fixtures/ref_llamacpp/summary.txt
 
-Usage: python tools/ref_llamacpp.py <model.gguf> [--threads N] [--greedy 16]
+Usage: python tools/ref_llamacpp.py <model.gguf> [--threads N] [--greedy 16] [--out DIR]
+Refuses to write logits that are all-zero, constant, or non-finite.
 """
 import argparse
 import json
@@ -21,6 +22,16 @@ from llama_cpp import Llama
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIX = os.path.join(ROOT, "tests", "fixtures")
 OUT = os.path.join(FIX, "ref_llamacpp")
+
+
+def check_logits(arr, what):
+    """Refuse to write a logits vector that is all-zero or contains NaN/Inf (a silent readout failure)."""
+    if not np.isfinite(arr).all():
+        raise RuntimeError("%s: logits contain %d non-finite values; refusing to write" % (what, int((~np.isfinite(arr)).sum())))
+    if not np.any(arr):
+        raise RuntimeError("%s: logits are all zero (readout failure); refusing to write" % what)
+    if float(arr.std()) < 1e-6:
+        raise RuntimeError("%s: logits are constant (std=%g); refusing to write" % (what, float(arr.std())))
 
 
 def last_logits(llm, n_vocab):
@@ -39,8 +50,10 @@ def main():
     ap.add_argument("--threads", type=int, default=max(1, (os.cpu_count() or 2) - 0))
     ap.add_argument("--greedy", type=int, default=16)
     ap.add_argument("--n-ctx", type=int, default=512)
+    ap.add_argument("--out", default=OUT, help="output directory (default tests/fixtures/ref_llamacpp)")
     a = ap.parse_args()
-    os.makedirs(OUT, exist_ok=True)
+    out_dir = a.out
+    os.makedirs(out_dir, exist_ok=True)
 
     prompts = json.load(open(os.path.join(FIX, "prompts.json")))["prompts"]
 
@@ -82,7 +95,8 @@ def main():
             cur = last_logits(llm, n_vocab)
         t_gen = time.time() - t2
         text = llm.detokenize(gen).decode("utf-8", "replace") if gen else ""
-        np.save(os.path.join(OUT, p["name"] + ".logits.npy"), last)
+        check_logits(last, p["name"])
+        np.save(os.path.join(out_dir, p["name"] + ".logits.npy"), last)
         rec = {
             "name": p["name"],
             "prompt_text": p["text"],
@@ -102,16 +116,16 @@ def main():
             "ms_per_generated_token": round(1000 * t_gen / max(1, a.greedy), 1),
         }
         rec.update({"info": info})
-        with open(os.path.join(OUT, p["name"] + ".json"), "w", encoding="utf-8") as fh:
+        with open(os.path.join(out_dir, p["name"] + ".json"), "w", encoding="utf-8") as fh:
             json.dump(rec, fh, indent=1, ensure_ascii=False)
         line = "%-9s argmax=%d %r top10=%s greedy=%r prompt=%.1fs gen=%.1fs (%.0f ms/tok)" % (
             p["name"], argmax, rec["argmax_text"], top10, text, t_prompt, t_gen, rec["ms_per_generated_token"])
         print(line)
         summary.append(line)
-    with open(os.path.join(OUT, "summary.txt"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(out_dir, "summary.txt"), "w", encoding="utf-8") as fh:
         fh.write("# tools/ref_llamacpp.py  %s  llama-cpp-python %s  threads=%d\n" % (info["gguf"], info["llama_cpp_python"], a.threads))
         fh.write("\n".join(summary) + "\n")
-    with open(os.path.join(OUT, "info.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(out_dir, "info.json"), "w", encoding="utf-8") as fh:
         json.dump(info, fh, indent=1)
 
 

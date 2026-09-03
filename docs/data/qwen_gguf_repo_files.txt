@@ -1,0 +1,6 @@
+# repo: Qwen/Qwen3.8-27B-GGUF
+# Queried 2026-09-02 anonymously (no HF_TOKEN). Result:
+#   huggingface_hub RepositoryNotFoundError: 401 for https://huggingface.co/api/models/Qwen/Qwen3.8-27B-GGUF/tree/main
+# HfApi.list_models(author="Qwen", search="Qwen3.8-27B") returns only: Qwen/Qwen3.8-27B, Qwen/Qwen3.8-27B-FP8
+# Conclusion: the Qwen organisation publishes no public GGUF for this model (or it is private/gated).
+# No files listed; nothing probed.
