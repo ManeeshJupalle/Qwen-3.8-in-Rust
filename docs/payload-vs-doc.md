@@ -228,3 +228,32 @@ model mmap-resident after a first cold run): load 69 s, prompt eval 7 to 37 s fo
 3.8 to 4.0 s per token at short context and 9.1 s per token after the 39-token prompt. ARCHITECTURE.md's cost
 model (`20 ms x GB_ram` = about 0.3 s/token for 15 GB in RAM) is more than 10x more optimistic than llama.cpp on
 this CPU; the target table's "32 GB: fits fully, reference" row should be measured, not assumed.
+
+# Addendum (same day): second GGUF source, MTP identity
+
+## 22. Qwen publishes no GGUF; bartowski's Q4_K_M has 6 ggml types, Unsloth's has 9
+
+`docs/data/qwen_gguf_repo_files.txt`: `Qwen/Qwen3.8-27B-GGUF` does not exist publicly (401/404 anonymously; the
+Qwen author search returns only `Qwen3.8-27B` and `Qwen3.8-27B-FP8`). `docs/data/q4km_type_breakdown.txt`, from
+headers only:
+
+| file | bytes | distinct types | composition |
+|---|---|---|---|
+| `unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_M.gguf` | 16,464,440,224 | 9 | Q5_K 29.4%, IQ4_XS 28.9%, Q4_K 25.6%, Q6_K 11.0%, IQ4_NL, Q3_K, IQ3_S, Q8_0, F32 |
+| `bartowski/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf` | 17,772,537,440 | 6 | Q4_K 58.1%, Q6_K 33.2%, Q8_0 4.5%, Q5_K 2.3%, Q4_0 1.3%, F32 0.6% |
+
+bartowski's file is the classic llama.cpp Q4_K_M recipe (no IQ types): attn_qkv Q6_K, ffn_gate/up Q4_K,
+ffn_down half Q6_K half Q4_K, attn_v/attn_q half Q6_K half Q4_K, ssm_out half Q8_0 half Q4_K, ssm_alpha/beta/A/dt
+F32, and the whole MTP block (`blk.64.*` quantised tensors) in Q4_0. It is 1.3 GB larger than the UD file. It was
+chosen as the primary GGUF for Phase 1+ because it needs the fewest kernels (Q4_K, Q5_K, Q6_K, Q8_0, Q4_0); the UD
+fixtures are kept under `tests/fixtures/ud/` and `docs/data/ud/`. Both files have `general.architecture = qwen35`,
+`block_count = 65` and `blk.64.nextn.*`.
+
+## 23. The separate MTP GGUF holds the same weights as `blk.64` of the main file
+
+`docs/data/ud/mtp_blk64_diff.txt` (`tools/mtp_blk64_diff.py`; 38 MB of the MTP file fetched by range request):
+the 15 `blk.64.*` tensors have identical names and shapes in both files; the 7 F32 tensors are bit-identical;
+the quantised tensors dequantize to cosine 0.9998 (attn_k, attn_v: Q8_0 vs Q6_K, 2% relative RMS) and 0.9973
+(nextn.eh_proj: Q6_K vs Q4_K, 7% relative RMS), i.e. the same bf16 source at different quantisation types. The
+separate file is a convenience for llama.cpp's draft-model path, not extra weights. A CPU engine should read the
+MTP block from the main file and ignore `MTP/`.

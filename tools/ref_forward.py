@@ -57,14 +57,16 @@ class ShardStore:
         return {k[len(pre):]: self.get(k) for k in self.weight_map if k.startswith(pre)}
 
 
-def forward_logits(store, tcfg, ids, dump_dir=None, log=print):
-    """Full forward over all layers for token ids -> (logits[-1] float32, per-layer stats)."""
-    torch.set_default_dtype(torch.bfloat16)
+def forward_logits(store, tcfg, ids, dump_dir=None, log=print, dtype=torch.bfloat16):
+    """Full forward over all layers for token ids -> (logits[-1] float32, per-layer stats).
+    dtype: compute/weight dtype (bf16 = the checkpoint's dtype; float32 for debugging the plumbing).
+    Attention runs with the eager implementation (explicit softmax in float32), set on tcfg by the caller."""
+    torch.set_default_dtype(dtype)
     T = len(ids)
     ids_t = torch.tensor([ids], dtype=torch.long)
     t0 = time.time()
-    emb = store.get(PREFIX + "embed_tokens.weight")
-    h = emb[ids_t]  # (1, T, hidden) bf16
+    emb = store.get(PREFIX + "embed_tokens.weight").to(dtype)
+    h = emb[ids_t]  # (1, T, hidden)
     del emb
     gc.collect()
 
@@ -82,7 +84,7 @@ def forward_logits(store, tcfg, ids, dump_dir=None, log=print):
     for i in range(tcfg.num_hidden_layers):
         t1 = time.time()
         layer = Qwen3_5DecoderLayer(tcfg, i)
-        sd = store.layer_state_dict(i)
+        sd = {k: v.to(dtype) for k, v in store.layer_state_dict(i).items()}
         missing, unexpected = layer.load_state_dict(sd, strict=True)
         assert not missing and not unexpected, (missing, unexpected)
         layer.eval()
@@ -104,11 +106,11 @@ def forward_logits(store, tcfg, ids, dump_dir=None, log=print):
         gc.collect()
 
     norm = Qwen3_5RMSNorm(tcfg.hidden_size, eps=tcfg.rms_norm_eps)
-    norm.load_state_dict({"weight": store.get(PREFIX + "norm.weight")}, strict=True)
+    norm.load_state_dict({"weight": store.get(PREFIX + "norm.weight").to(dtype)}, strict=True)
     with torch.no_grad():
         h = norm(h)
-        lm_head = store.get("lm_head.weight")  # (vocab, hidden) bf16
-        logits = (h[0, -1:] @ lm_head.T).float()[0]  # bf16 matmul like HF, then float32
+        lm_head = store.get("lm_head.weight").to(dtype)  # (vocab, hidden)
+        logits = (h[0, -1:] @ lm_head.T).float()[0]  # matmul in `dtype` like HF, then float32
     del lm_head
     gc.collect()
     total = time.time() - t0
@@ -127,6 +129,7 @@ def main():
 
     cfg = AutoConfig.from_pretrained(a.hf_dir)
     tcfg = cfg.text_config
+    tcfg._attn_implementation = "eager"  # explicit; standalone layers cannot dispatch sdpa
     prompts = json.load(open(os.path.join(FIX, "prompts.json")))["prompts"]
     if a.prompt:
         prompts = [p for p in prompts if p["name"] in a.prompt]
