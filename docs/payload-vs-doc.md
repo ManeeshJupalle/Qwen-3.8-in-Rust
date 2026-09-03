@@ -249,6 +249,12 @@ chosen as the primary GGUF for Phase 1+ because it needs the fewest kernels (Q4_
 fixtures are kept under `tests/fixtures/ud/` and `docs/data/ud/`. Both files have `general.architecture = qwen35`,
 `block_count = 65` and `blk.64.nextn.*`.
 
+Layout of the bartowski file (`docs/data/gguf_layout.txt`, now the primary): 866 tensors, all 65 blocks contiguous
+with zero gap bytes, data at byte 10,995,296. Because the recipe is uniform the layer sizes sit in a narrow band:
+largest layer 0 at 269,681,536 bytes (257.2 MiB), smallest layer 11 at 214,018,048 bytes (204.1 MiB), versus 172 to
+269 MiB in the UD file. The pinned set is unchanged (output Q6_K + token_embd Q4_K + norm = 1,676.7 MiB) plus a
+253.7 MiB MTP block (Q4_0). Ring slot for this file: 257.2 MiB.
+
 ## 23. The separate MTP GGUF holds the same weights as `blk.64` of the main file
 
 `docs/data/ud/mtp_blk64_diff.txt` (`tools/mtp_blk64_diff.py`; 38 MB of the MTP file fetched by range request):
@@ -257,3 +263,8 @@ the quantised tensors dequantize to cosine 0.9998 (attn_k, attn_v: Q8_0 vs Q6_K,
 (nextn.eh_proj: Q6_K vs Q4_K, 7% relative RMS), i.e. the same bf16 source at different quantisation types. The
 separate file is a convenience for llama.cpp's draft-model path, not extra weights. A CPU engine should read the
 MTP block from the main file and ignore `MTP/`.
+
+The same holds for bartowski's `blk.64` (`docs/data/mtp_blk64_diff.txt`, `docs/data/mtp_blk64_diff.bartowski_vs_ud.txt`):
+identical names and shapes, F32 tensors bit-identical to both Unsloth files, quantised tensors at cosine 0.9953 to
+0.9964 against Unsloth's copies. bartowski stores the MTP block's matrices as Q4_0 (relative RMS error about 9%
+against Q8_0/Q6_K), the noisiest of the three copies; Unsloth's main file keeps them at Q6_K/Q8_0.

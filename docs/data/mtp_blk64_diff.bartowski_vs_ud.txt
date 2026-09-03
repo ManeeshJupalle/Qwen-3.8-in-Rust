@@ -1,0 +1,40 @@
+# blk.64 (MTP block) comparison: tools/mtp_blk64_diff.py
+A = Qwen3.8-27B-Q4_K_M.gguf
+B = Qwen3.8-27B-UD-Q4_K_M.gguf
+
+== names / shapes / types (A vs B)
+tensor                                   shape A                shape B                type A   type B   same shape
+blk.64.attn_k.weight                     [1024, 5120]           [1024, 5120]           Q4_0     Q8_0     yes
+blk.64.attn_k_norm.weight                [256]                  [256]                  F32      F32      yes
+blk.64.attn_norm.weight                  [5120]                 [5120]                 F32      F32      yes
+blk.64.attn_output.weight                [5120, 6144]           [5120, 6144]           Q4_0     Q6_K     yes
+blk.64.attn_q.weight                     [12288, 5120]          [12288, 5120]          Q4_0     Q6_K     yes
+blk.64.attn_q_norm.weight                [256]                  [256]                  F32      F32      yes
+blk.64.attn_v.weight                     [1024, 5120]           [1024, 5120]           Q4_0     Q8_0     yes
+blk.64.ffn_down.weight                   [5120, 17408]          [5120, 17408]          Q4_0     Q6_K     yes
+blk.64.ffn_gate.weight                   [17408, 5120]          [17408, 5120]          Q4_0     Q6_K     yes
+blk.64.ffn_up.weight                     [17408, 5120]          [17408, 5120]          Q4_0     Q6_K     yes
+blk.64.nextn.eh_proj.weight              [5120, 10240]          [5120, 10240]          Q4_0     Q6_K     yes
+blk.64.nextn.enorm.weight                [5120]                 [5120]                 F32      F32      yes
+blk.64.nextn.hnorm.weight                [5120]                 [5120]                 F32      F32      yes
+blk.64.nextn.shared_head_norm.weight     [5120]                 [5120]                 F32      F32      yes
+blk.64.post_attention_norm.weight        [5120]                 [5120]                 F32      F32      yes
+
+name sets identical: True (A has 15, B has 15); all shapes identical: True
+types identical: False
+
+== values: F32 tensors (bit-exact test)
+blk.64.attn_k_norm.weight                bit-identical: True  max|diff|=0.000e+00  A[:4]=[1.308590054512024, 0.8857399821281433, 1.6992199420928955, 1.2636699676513672]
+blk.64.attn_norm.weight                  bit-identical: True  max|diff|=0.000e+00  A[:4]=[1.0115400552749634, 1.0869100093841553, 1.051509976387024, 1.0466300249099731]
+blk.64.attn_q_norm.weight                bit-identical: True  max|diff|=0.000e+00  A[:4]=[1.2441400289535522, 1.0727499723434448, 1.816409945487976, 1.253909945487976]
+blk.64.nextn.enorm.weight                bit-identical: True  max|diff|=0.000e+00  A[:4]=[0.41016000509262085, 0.5117200016975403, 0.7285199761390686, 0.5546900033950806]
+blk.64.nextn.hnorm.weight                bit-identical: True  max|diff|=0.000e+00  A[:4]=[0.7627000212669373, 0.875, 0.7841799855232239, 0.8359400033950806]
+blk.64.nextn.shared_head_norm.weight     bit-identical: True  max|diff|=0.000e+00  A[:4]=[2.3125, 1.972659945487976, 2.117189884185791, 2.09375]
+blk.64.post_attention_norm.weight        bit-identical: True  max|diff|=0.000e+00  A[:4]=[1.2734400033950806, 1.2109400033950806, 1.2636699676513672, 1.249019980430603]
+
+== values: quantised tensors (dequantized on both sides)
+blk.64.attn_k.weight                     A=Q4_0   B=Q8_0   cosine=0.995575 rel_rms_err=0.0940 max|diff|=0.0172 rms(A)=0.0161 rms(B)=0.0161
+blk.64.attn_v.weight                     A=Q4_0   B=Q8_0   cosine=0.996006 rel_rms_err=0.0893 max|diff|=0.0327 rms(A)=0.0299 rms(B)=0.0298
+blk.64.nextn.eh_proj.weight              A=Q4_0   B=Q6_K   cosine=0.996383 rel_rms_err=0.0850 max|diff|=0.0476 rms(A)=0.0129 rms(B)=0.0129
+
+VERDICT: SAME underlying weights (F32 tensors bit-identical: True; min cosine over 3 quantised tensors: 0.995575)
