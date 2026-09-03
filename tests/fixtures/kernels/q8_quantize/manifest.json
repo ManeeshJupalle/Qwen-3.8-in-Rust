@@ -1,0 +1,112 @@
+{
+ "group": "q8_quantize",
+ "torch": "2.14.0+cpu",
+ "f32_eps": 1.1920928955078125e-07,
+ "source": "gguf.quants.quantize(x, Q8_0) == ggml quantize_row_q8_0_ref: d = amax/127 (f32) -> f16; id = 1/d (f32, from the unrounded d); q = round-half-away(x*id)",
+ "exact": true,
+ "note": "an all-denormal row is NOT generated: amax/127 underflows f16 to 0 while id overflows, and ggml's int8 conversion of inf is undefined; |x| > 127*65504 overflows the f16 scale likewise",
+ "cases": [
+  {
+   "case": "q8_w32",
+   "kind": "q8_quantize",
+   "width": 32,
+   "rows": [
+    "random",
+    "denormal_mixed",
+    "large",
+    "neg_zero",
+    "all_equal",
+    "max_last",
+    "tie_pm",
+    "half_round"
+   ],
+   "x": {
+    "file": "q8_w32__x.npy",
+    "shape": [
+     8,
+     32
+    ]
+   },
+   "raw": {
+    "file": "q8_w32__raw.bin",
+    "bytes": 272
+   },
+   "deq": {
+    "file": "q8_w32__deq.npy",
+    "shape": [
+     8,
+     32
+    ]
+   },
+   "block_bytes": 34
+  },
+  {
+   "case": "q8_w64",
+   "kind": "q8_quantize",
+   "width": 64,
+   "rows": [
+    "random",
+    "denormal_mixed",
+    "large",
+    "neg_zero",
+    "all_equal",
+    "max_last",
+    "tie_pm",
+    "half_round"
+   ],
+   "x": {
+    "file": "q8_w64__x.npy",
+    "shape": [
+     8,
+     64
+    ]
+   },
+   "raw": {
+    "file": "q8_w64__raw.bin",
+    "bytes": 544
+   },
+   "deq": {
+    "file": "q8_w64__deq.npy",
+    "shape": [
+     8,
+     64
+    ]
+   },
+   "block_bytes": 34
+  },
+  {
+   "case": "q8_w5120",
+   "kind": "q8_quantize",
+   "width": 5120,
+   "rows": [
+    "random",
+    "denormal_mixed",
+    "large",
+    "neg_zero",
+    "all_equal",
+    "max_last",
+    "tie_pm",
+    "half_round"
+   ],
+   "x": {
+    "file": "q8_w5120__x.npy",
+    "shape": [
+     8,
+     5120
+    ]
+   },
+   "raw": {
+    "file": "q8_w5120__raw.bin",
+    "bytes": 43520
+   },
+   "deq": {
+    "file": "q8_w5120__deq.npy",
+    "shape": [
+     8,
+     5120
+    ]
+   },
+   "block_bytes": 34
+  }
+ ]
+}

@@ -1,0 +1,149 @@
+{
+ "group": "conv1d",
+ "torch": "2.14.0+cpu",
+ "f32_eps": 1.1920928955078125e-07,
+ "source": "causal_conv1d_update (200-218): window = cat(state, x_new); out = sum_j w[c, j] * window[j]; state <- window[1:]; then silu. causal_conv1d_fn (220-240) for prefill",
+ "budget_k": 8,
+ "cases": [
+  {
+   "case": "conv_step_c16",
+   "kind": "conv_step",
+   "channels": 16,
+   "kernel": 4,
+   "w": {
+    "file": "conv_step_c16__w.npy",
+    "shape": [
+     16,
+     4
+    ]
+   },
+   "state": {
+    "file": "conv_step_c16__state.npy",
+    "shape": [
+     16,
+     3
+    ]
+   },
+   "x_new": {
+    "file": "conv_step_c16__x_new.npy",
+    "shape": [
+     16
+    ]
+   },
+   "out": {
+    "file": "conv_step_c16__out.npy",
+    "shape": [
+     16
+    ]
+   },
+   "new_state": {
+    "file": "conv_step_c16__new_state.npy",
+    "shape": [
+     16,
+     3
+    ]
+   },
+   "max_abs": 8.486766041576243e+17
+  },
+  {
+   "case": "conv_prefill_c16",
+   "kind": "conv_prefill",
+   "channels": 16,
+   "kernel": 4,
+   "t": 7,
+   "w": {
+    "file": "conv_prefill_c16__w.npy",
+    "shape": [
+     16,
+     4
+    ]
+   },
+   "x": {
+    "file": "conv_prefill_c16__x.npy",
+    "shape": [
+     16,
+     7
+    ]
+   },
+   "out": {
+    "file": "conv_prefill_c16__out.npy",
+    "shape": [
+     16,
+     7
+    ]
+   },
+   "max_abs": 4.0638227462768555,
+   "note": "zero initial state; T sequential conv_step calls must reproduce this"
+  },
+  {
+   "case": "conv_step_c10240",
+   "kind": "conv_step",
+   "channels": 10240,
+   "kernel": 4,
+   "w": {
+    "file": "conv_step_c10240__w.npy",
+    "shape": [
+     10240,
+     4
+    ]
+   },
+   "state": {
+    "file": "conv_step_c10240__state.npy",
+    "shape": [
+     10240,
+     3
+    ]
+   },
+   "x_new": {
+    "file": "conv_step_c10240__x_new.npy",
+    "shape": [
+     10240
+    ]
+   },
+   "out": {
+    "file": "conv_step_c10240__out.npy",
+    "shape": [
+     10240
+    ]
+   },
+   "new_state": {
+    "file": "conv_step_c10240__new_state.npy",
+    "shape": [
+     10240,
+     3
+    ]
+   },
+   "max_abs": 5.6129666589025894e+17
+  },
+  {
+   "case": "conv_prefill_c10240",
+   "kind": "conv_prefill",
+   "channels": 10240,
+   "kernel": 4,
+   "t": 7,
+   "w": {
+    "file": "conv_prefill_c10240__w.npy",
+    "shape": [
+     10240,
+     4
+    ]
+   },
+   "x": {
+    "file": "conv_prefill_c10240__x.npy",
+    "shape": [
+     10240,
+     7
+    ]
+   },
+   "out": {
+    "file": "conv_prefill_c10240__out.npy",
+    "shape": [
+     10240,
+     7
+    ]
+   },
+   "max_abs": 6.629421234130859,
+   "note": "zero initial state; T sequential conv_step calls must reproduce this"
+  }
+ ]
+}

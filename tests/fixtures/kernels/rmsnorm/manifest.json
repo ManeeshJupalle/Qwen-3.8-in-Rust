@@ -1,0 +1,234 @@
+{
+ "group": "rmsnorm",
+ "torch": "2.14.0+cpu",
+ "f32_eps": 1.1920928955078125e-07,
+ "source": "modeling_qwen3_5.Qwen3_5RMSNorm (lines 723-742): y = x * rsqrt(mean(x^2) + eps) * (1 + w); gated: Qwen3_5RMSNormGated (168-186)",
+ "budget_k": 8,
+ "weight_note": "w_gguf = 1 + w_hf for the zero-centered norm (converter adds 1); gated norm weight stored as-is",
+ "cases": [
+  {
+   "case": "rmsnorm_w64",
+   "kind": "rmsnorm",
+   "width": 64,
+   "eps": 1e-06,
+   "rows": [
+    "random",
+    "denormal",
+    "large",
+    "neg_zero",
+    "all_equal",
+    "mixed"
+   ],
+   "x": {
+    "file": "rmsnorm_w64__x.npy",
+    "shape": [
+     6,
+     64
+    ]
+   },
+   "w_gguf": {
+    "file": "rmsnorm_w64__w_gguf.npy",
+    "shape": [
+     64
+    ]
+   },
+   "y": {
+    "file": "rmsnorm_w64__y.npy",
+    "shape": [
+     6,
+     64
+    ]
+   },
+   "max_abs": 6.223677158355713
+  },
+  {
+   "case": "rmsnorm_w100",
+   "kind": "rmsnorm",
+   "width": 100,
+   "eps": 1e-06,
+   "rows": [
+    "random",
+    "denormal",
+    "large",
+    "neg_zero",
+    "all_equal",
+    "mixed"
+   ],
+   "x": {
+    "file": "rmsnorm_w100__x.npy",
+    "shape": [
+     6,
+     100
+    ]
+   },
+   "w_gguf": {
+    "file": "rmsnorm_w100__w_gguf.npy",
+    "shape": [
+     100
+    ]
+   },
+   "y": {
+    "file": "rmsnorm_w100__y.npy",
+    "shape": [
+     6,
+     100
+    ]
+   },
+   "max_abs": 6.77025032043457
+  },
+  {
+   "case": "rmsnorm_w256",
+   "kind": "rmsnorm",
+   "width": 256,
+   "eps": 1e-06,
+   "rows": [
+    "random",
+    "denormal",
+    "large",
+    "neg_zero",
+    "all_equal",
+    "mixed"
+   ],
+   "x": {
+    "file": "rmsnorm_w256__x.npy",
+    "shape": [
+     6,
+     256
+    ]
+   },
+   "w_gguf": {
+    "file": "rmsnorm_w256__w_gguf.npy",
+    "shape": [
+     256
+    ]
+   },
+   "y": {
+    "file": "rmsnorm_w256__y.npy",
+    "shape": [
+     6,
+     256
+    ]
+   },
+   "max_abs": 10.00317096710205
+  },
+  {
+   "case": "rmsnorm_w5120",
+   "kind": "rmsnorm",
+   "width": 5120,
+   "eps": 1e-06,
+   "rows": [
+    "random",
+    "denormal",
+    "large",
+    "neg_zero",
+    "all_equal",
+    "mixed"
+   ],
+   "x": {
+    "file": "rmsnorm_w5120__x.npy",
+    "shape": [
+     6,
+     5120
+    ]
+   },
+   "w_gguf": {
+    "file": "rmsnorm_w5120__w_gguf.npy",
+    "shape": [
+     5120
+    ]
+   },
+   "y": {
+    "file": "rmsnorm_w5120__y.npy",
+    "shape": [
+     6,
+     5120
+    ]
+   },
+   "max_abs": 47.56528091430664
+  },
+  {
+   "case": "rmsnorm_gated_w8",
+   "kind": "rmsnorm_gated",
+   "width": 8,
+   "eps": 1e-06,
+   "rows": [
+    "random",
+    "denormal",
+    "large",
+    "neg_zero",
+    "all_equal",
+    "mixed"
+   ],
+   "x": {
+    "file": "rmsnorm_gated_w8__x.npy",
+    "shape": [
+     6,
+     8
+    ]
+   },
+   "gate": {
+    "file": "rmsnorm_gated_w8__gate.npy",
+    "shape": [
+     6,
+     8
+    ]
+   },
+   "w_gguf": {
+    "file": "rmsnorm_gated_w8__w_gguf.npy",
+    "shape": [
+     8
+    ]
+   },
+   "y": {
+    "file": "rmsnorm_gated_w8__y.npy",
+    "shape": [
+     6,
+     8
+    ]
+   },
+   "max_abs": 2.1124912781291684e+18
+  },
+  {
+   "case": "rmsnorm_gated_w128",
+   "kind": "rmsnorm_gated",
+   "width": 128,
+   "eps": 1e-06,
+   "rows": [
+    "random",
+    "denormal",
+    "large",
+    "neg_zero",
+    "all_equal",
+    "mixed"
+   ],
+   "x": {
+    "file": "rmsnorm_gated_w128__x.npy",
+    "shape": [
+     6,
+     128
+    ]
+   },
+   "gate": {
+    "file": "rmsnorm_gated_w128__gate.npy",
+    "shape": [
+     6,
+     128
+    ]
+   },
+   "w_gguf": {
+    "file": "rmsnorm_gated_w128__w_gguf.npy",
+    "shape": [
+     128
+    ]
+   },
+   "y": {
+    "file": "rmsnorm_gated_w128__y.npy",
+    "shape": [
+     6,
+     128
+    ]
+   },
+   "max_abs": 7.460256213448524e+18
+  }
+ ]
+}

@@ -1,0 +1,188 @@
+{
+ "group": "softmax",
+ "torch": "2.14.0+cpu",
+ "f32_eps": 1.1920928955078125e-07,
+ "source": "torch.softmax(x, -1, dtype=float32) as in eager_attention_forward (line 618); causal: softmax(scores + mask) with mask = finfo(float32).min above the diagonal (create_causal_mask)",
+ "budget_k": 8,
+ "cases": [
+  {
+   "case": "softmax_w5",
+   "kind": "softmax",
+   "width": 5,
+   "rows": [
+    "random",
+    "large",
+    "all_equal",
+    "outlier",
+    "neg_inf",
+    "denormal",
+    "neg_zero"
+   ],
+   "x": {
+    "file": "softmax_w5__x.npy",
+    "shape": [
+     7,
+     5
+    ]
+   },
+   "y": {
+    "file": "softmax_w5__y.npy",
+    "shape": [
+     7,
+     5
+    ]
+   },
+   "max_abs": 1.0
+  },
+  {
+   "case": "softmax_w32",
+   "kind": "softmax",
+   "width": 32,
+   "rows": [
+    "random",
+    "large",
+    "all_equal",
+    "outlier",
+    "neg_inf",
+    "denormal",
+    "neg_zero"
+   ],
+   "x": {
+    "file": "softmax_w32__x.npy",
+    "shape": [
+     7,
+     32
+    ]
+   },
+   "y": {
+    "file": "softmax_w32__y.npy",
+    "shape": [
+     7,
+     32
+    ]
+   },
+   "max_abs": 1.0
+  },
+  {
+   "case": "softmax_w100",
+   "kind": "softmax",
+   "width": 100,
+   "rows": [
+    "random",
+    "large",
+    "all_equal",
+    "outlier",
+    "neg_inf",
+    "denormal",
+    "neg_zero"
+   ],
+   "x": {
+    "file": "softmax_w100__x.npy",
+    "shape": [
+     7,
+     100
+    ]
+   },
+   "y": {
+    "file": "softmax_w100__y.npy",
+    "shape": [
+     7,
+     100
+    ]
+   },
+   "max_abs": 1.0
+  },
+  {
+   "case": "softmax_w512",
+   "kind": "softmax",
+   "width": 512,
+   "rows": [
+    "random",
+    "large",
+    "all_equal",
+    "outlier",
+    "neg_inf",
+    "denormal",
+    "neg_zero"
+   ],
+   "x": {
+    "file": "softmax_w512__x.npy",
+    "shape": [
+     7,
+     512
+    ]
+   },
+   "y": {
+    "file": "softmax_w512__y.npy",
+    "shape": [
+     7,
+     512
+    ]
+   },
+   "max_abs": 1.0
+  },
+  {
+   "case": "causal_t1",
+   "kind": "softmax_causal",
+   "t": 1,
+   "scores": {
+    "file": "causal_t1__scores.npy",
+    "shape": [
+     1,
+     1
+    ]
+   },
+   "y": {
+    "file": "causal_t1__y.npy",
+    "shape": [
+     1,
+     1
+    ]
+   },
+   "max_abs": 1.0,
+   "mask_note": "row i attends to columns 0..=i; masked columns must contribute exactly 0"
+  },
+  {
+   "case": "causal_t7",
+   "kind": "softmax_causal",
+   "t": 7,
+   "scores": {
+    "file": "causal_t7__scores.npy",
+    "shape": [
+     7,
+     7
+    ]
+   },
+   "y": {
+    "file": "causal_t7__y.npy",
+    "shape": [
+     7,
+     7
+    ]
+   },
+   "max_abs": 1.0,
+   "mask_note": "row i attends to columns 0..=i; masked columns must contribute exactly 0"
+  },
+  {
+   "case": "causal_t40",
+   "kind": "softmax_causal",
+   "t": 40,
+   "scores": {
+    "file": "causal_t40__scores.npy",
+    "shape": [
+     40,
+     40
+    ]
+   },
+   "y": {
+    "file": "causal_t40__y.npy",
+    "shape": [
+     40,
+     40
+    ]
+   },
+   "max_abs": 1.0,
+   "mask_note": "row i attends to columns 0..=i; masked columns must contribute exactly 0"
+  }
+ ]
+}

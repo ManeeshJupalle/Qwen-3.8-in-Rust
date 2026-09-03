@@ -1,0 +1,51 @@
+{
+ "group": "act",
+ "torch": "2.14.0+cpu",
+ "f32_eps": 1.1920928955078125e-07,
+ "source": "torch.nn.functional.silu (ACT2FN['silu']); swiglu = silu(gate) * up, the elementwise part of Qwen3_5MLP (707-722)",
+ "budget_k": 8,
+ "cases": [
+  {
+   "case": "silu",
+   "kind": "silu",
+   "n": 1016,
+   "x": {
+    "file": "silu__x.npy",
+    "shape": [
+     1016
+    ]
+   },
+   "y": {
+    "file": "silu__y.npy",
+    "shape": [
+     1016
+    ]
+   },
+   "max_abs": 1.0000000150474662e+30
+  },
+  {
+   "case": "swiglu",
+   "kind": "swiglu",
+   "n": 1008,
+   "gate": {
+    "file": "swiglu__gate.npy",
+    "shape": [
+     1008
+    ]
+   },
+   "up": {
+    "file": "swiglu__up.npy",
+    "shape": [
+     1008
+    ]
+   },
+   "y": {
+    "file": "swiglu__y.npy",
+    "shape": [
+     1008
+    ]
+   },
+   "max_abs": 100.0
+  }
+ ]
+}

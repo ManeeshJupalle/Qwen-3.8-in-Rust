@@ -1,0 +1,186 @@
+{
+ "group": "deltanet",
+ "torch": "2.14.0+cpu",
+ "f32_eps": 1.1920928955078125e-07,
+ "source": "torch_recurrent_gated_delta_rule (331-386) with use_qk_l2norm_in_kernel=True; gates from Qwen3_5GatedDeltaNet.forward lines 492-494; see docs/deltanet.md",
+ "budget_k": 16,
+ "order": "S *= exp(g); kv_mem = k^T S; delta = (v - kv_mem) * beta; S += outer(k, delta); out = q^T S; q,k L2-normed (eps 1e-6) and q scaled by 1/sqrt(dk) BEFORE the step",
+ "cases": [
+  {
+   "case": "step_h6_dk8",
+   "kind": "deltanet_step",
+   "heads": 6,
+   "dk": 8,
+   "dv": 8,
+   "q": {
+    "file": "step_h6_dk8__q.npy",
+    "shape": [
+     6,
+     8
+    ]
+   },
+   "k": {
+    "file": "step_h6_dk8__k.npy",
+    "shape": [
+     6,
+     8
+    ]
+   },
+   "v": {
+    "file": "step_h6_dk8__v.npy",
+    "shape": [
+     6,
+     8
+    ]
+   },
+   "a": {
+    "file": "step_h6_dk8__a.npy",
+    "shape": [
+     6
+    ]
+   },
+   "b": {
+    "file": "step_h6_dk8__b.npy",
+    "shape": [
+     6
+    ]
+   },
+   "A": {
+    "file": "step_h6_dk8__A.npy",
+    "shape": [
+     6
+    ]
+   },
+   "dt_bias": {
+    "file": "step_h6_dk8__dt_bias.npy",
+    "shape": [
+     6
+    ]
+   },
+   "g": {
+    "file": "step_h6_dk8__g.npy",
+    "shape": [
+     6
+    ]
+   },
+   "beta": {
+    "file": "step_h6_dk8__beta.npy",
+    "shape": [
+     6
+    ]
+   },
+   "state": {
+    "file": "step_h6_dk8__state.npy",
+    "shape": [
+     6,
+     8,
+     8
+    ]
+   },
+   "out": {
+    "file": "step_h6_dk8__out.npy",
+    "shape": [
+     6,
+     8
+    ]
+   },
+   "new_state": {
+    "file": "step_h6_dk8__new_state.npy",
+    "shape": [
+     6,
+     8,
+     8
+    ]
+   },
+   "max_abs": 72112.296875
+  },
+  {
+   "case": "step_h3_dk128",
+   "kind": "deltanet_step",
+   "heads": 3,
+   "dk": 128,
+   "dv": 128,
+   "q": {
+    "file": "step_h3_dk128__q.npy",
+    "shape": [
+     3,
+     128
+    ]
+   },
+   "k": {
+    "file": "step_h3_dk128__k.npy",
+    "shape": [
+     3,
+     128
+    ]
+   },
+   "v": {
+    "file": "step_h3_dk128__v.npy",
+    "shape": [
+     3,
+     128
+    ]
+   },
+   "a": {
+    "file": "step_h3_dk128__a.npy",
+    "shape": [
+     3
+    ]
+   },
+   "b": {
+    "file": "step_h3_dk128__b.npy",
+    "shape": [
+     3
+    ]
+   },
+   "A": {
+    "file": "step_h3_dk128__A.npy",
+    "shape": [
+     3
+    ]
+   },
+   "dt_bias": {
+    "file": "step_h3_dk128__dt_bias.npy",
+    "shape": [
+     3
+    ]
+   },
+   "g": {
+    "file": "step_h3_dk128__g.npy",
+    "shape": [
+     3
+    ]
+   },
+   "beta": {
+    "file": "step_h3_dk128__beta.npy",
+    "shape": [
+     3
+    ]
+   },
+   "state": {
+    "file": "step_h3_dk128__state.npy",
+    "shape": [
+     3,
+     128,
+     128
+    ]
+   },
+   "out": {
+    "file": "step_h3_dk128__out.npy",
+    "shape": [
+     3,
+     128
+    ]
+   },
+   "new_state": {
+    "file": "step_h3_dk128__new_state.npy",
+    "shape": [
+     3,
+     128,
+     128
+    ]
+   },
+   "max_abs": 0.8680832982063293
+  }
+ ]
+}

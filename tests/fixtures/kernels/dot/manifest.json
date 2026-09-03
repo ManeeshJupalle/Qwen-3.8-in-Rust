@@ -1,0 +1,1000 @@
+{
+ "group": "dot",
+ "torch": "2.14.0+cpu",
+ "f32_eps": 1.1920928955078125e-07,
+ "source": "weights: gguf-py quantize (Q4_0/Q8_0/F32) or real GGUF rows (K-quants) then dequantize; activations: gguf-py Q8_0 quantize then dequantize; reference = float64 dot of the two dequantized rows",
+ "budget_k": 8,
+ "budget_note": "budget = k * sqrt(n) * eps * max_abs_term; the Rust kernels sum 32-element block partials then accumulate blocks left to right",
+ "cases": [
+  {
+   "case": "Q4_0_w256",
+   "kind": "dot",
+   "ggml_type": "Q4_0",
+   "ggml_type_id": 2,
+   "width": 256,
+   "rows": [
+    "random",
+    "large_w",
+    "tiny_w",
+    "all_equal_w",
+    "neg_zero_w"
+   ],
+   "w_source": "random rows quantized with gguf-py",
+   "n_rows": 5,
+   "w_raw": {
+    "file": "Q4_0_w256__w_raw.bin",
+    "bytes": 720
+   },
+   "w_deq": {
+    "file": "Q4_0_w256__w_deq.npy",
+    "shape": [
+     5,
+     256
+    ]
+   },
+   "x_raw": {
+    "file": "Q4_0_w256__x_raw.bin",
+    "bytes": 1360
+   },
+   "x_deq": {
+    "file": "Q4_0_w256__x_deq.npy",
+    "shape": [
+     5,
+     256
+    ]
+   },
+   "ref_f64": [
+    -0.06958181533263996,
+    14100.858863830566,
+    0.004345390203525312,
+    0.0,
+    0.0
+   ],
+   "max_abs_term": [
+    0.33536676689982414,
+    17994.483032226562,
+    0.0006637168116867542,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "case": "Q4_0_w5120",
+   "kind": "dot",
+   "ggml_type": "Q4_0",
+   "ggml_type_id": 2,
+   "width": 5120,
+   "rows": [
+    "random",
+    "large_w",
+    "tiny_w",
+    "all_equal_w",
+    "neg_zero_w"
+   ],
+   "w_source": "random rows quantized with gguf-py",
+   "n_rows": 5,
+   "w_raw": {
+    "file": "Q4_0_w5120__w_raw.bin",
+    "bytes": 14400
+   },
+   "w_deq": {
+    "file": "Q4_0_w5120__w_deq.npy",
+    "shape": [
+     5,
+     5120
+    ]
+   },
+   "x_raw": {
+    "file": "Q4_0_w5120__x_raw.bin",
+    "bytes": 27200
+   },
+   "x_deq": {
+    "file": "Q4_0_w5120__x_deq.npy",
+    "shape": [
+     5,
+     5120
+    ]
+   },
+   "ref_f64": [
+    7.183000083605293,
+    116677.60681533813,
+    -0.005177658662432805,
+    0.0,
+    0.0
+   ],
+   "max_abs_term": [
+    0.4003722192719579,
+    23920.0283203125,
+    0.0007457277970388532,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "case": "Q4_0_w17408",
+   "kind": "dot",
+   "ggml_type": "Q4_0",
+   "ggml_type_id": 2,
+   "width": 17408,
+   "rows": [
+    "random",
+    "large_w",
+    "tiny_w",
+    "all_equal_w",
+    "neg_zero_w"
+   ],
+   "w_source": "random rows quantized with gguf-py",
+   "n_rows": 5,
+   "w_raw": {
+    "file": "Q4_0_w17408__w_raw.bin",
+    "bytes": 48960
+   },
+   "w_deq": {
+    "file": "Q4_0_w17408__w_deq.npy",
+    "shape": [
+     5,
+     17408
+    ]
+   },
+   "x_raw": {
+    "file": "Q4_0_w17408__x_raw.bin",
+    "bytes": 92480
+   },
+   "x_deq": {
+    "file": "Q4_0_w17408__x_deq.npy",
+    "shape": [
+     5,
+     17408
+    ]
+   },
+   "ref_f64": [
+    -2.3965618233196437,
+    384311.06719207764,
+    -0.030229869051254354,
+    0.0,
+    0.0
+   ],
+   "max_abs_term": [
+    0.46130181290209293,
+    24065.01171875,
+    0.0008334604790434241,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "case": "Q8_0_w256",
+   "kind": "dot",
+   "ggml_type": "Q8_0",
+   "ggml_type_id": 8,
+   "width": 256,
+   "rows": [
+    "random",
+    "large_w",
+    "tiny_w",
+    "all_equal_w",
+    "neg_zero_w"
+   ],
+   "w_source": "random rows quantized with gguf-py",
+   "n_rows": 5,
+   "w_raw": {
+    "file": "Q8_0_w256__w_raw.bin",
+    "bytes": 1360
+   },
+   "w_deq": {
+    "file": "Q8_0_w256__w_deq.npy",
+    "shape": [
+     5,
+     256
+    ]
+   },
+   "x_raw": {
+    "file": "Q8_0_w256__x_raw.bin",
+    "bytes": 1360
+   },
+   "x_deq": {
+    "file": "Q8_0_w256__x_deq.npy",
+    "shape": [
+     5,
+     256
+    ]
+   },
+   "ref_f64": [
+    0.5255589696316747,
+    -53884.74517726898,
+    -0.002421708108158782,
+    0.0,
+    0.0
+   ],
+   "max_abs_term": [
+    0.22320891683193622,
+    11281.58349609375,
+    0.000560130261874292,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "case": "Q8_0_w5120",
+   "kind": "dot",
+   "ggml_type": "Q8_0",
+   "ggml_type_id": 8,
+   "width": 5120,
+   "rows": [
+    "random",
+    "large_w",
+    "tiny_w",
+    "all_equal_w",
+    "neg_zero_w"
+   ],
+   "w_source": "random rows quantized with gguf-py",
+   "n_rows": 5,
+   "w_raw": {
+    "file": "Q8_0_w5120__w_raw.bin",
+    "bytes": 27200
+   },
+   "w_deq": {
+    "file": "Q8_0_w5120__w_deq.npy",
+    "shape": [
+     5,
+     5120
+    ]
+   },
+   "x_raw": {
+    "file": "Q8_0_w5120__x_raw.bin",
+    "bytes": 27200
+   },
+   "x_deq": {
+    "file": "Q8_0_w5120__x_deq.npy",
+    "shape": [
+     5,
+     5120
+    ]
+   },
+   "ref_f64": [
+    -1.0067070687109663,
+    -115898.33388614655,
+    -0.002720666758250445,
+    0.0,
+    0.0
+   ],
+   "max_abs_term": [
+    0.34385071610449813,
+    24347.133548736572,
+    0.0007266554748639464,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "case": "Q8_0_w17408",
+   "kind": "dot",
+   "ggml_type": "Q8_0",
+   "ggml_type_id": 8,
+   "width": 17408,
+   "rows": [
+    "random",
+    "large_w",
+    "tiny_w",
+    "all_equal_w",
+    "neg_zero_w"
+   ],
+   "w_source": "random rows quantized with gguf-py",
+   "n_rows": 5,
+   "w_raw": {
+    "file": "Q8_0_w17408__w_raw.bin",
+    "bytes": 92480
+   },
+   "w_deq": {
+    "file": "Q8_0_w17408__w_deq.npy",
+    "shape": [
+     5,
+     17408
+    ]
+   },
+   "x_raw": {
+    "file": "Q8_0_w17408__x_raw.bin",
+    "bytes": 92480
+   },
+   "x_deq": {
+    "file": "Q8_0_w17408__x_deq.npy",
+    "shape": [
+     5,
+     17408
+    ]
+   },
+   "ref_f64": [
+    -8.849452462825866,
+    -509.4537525177002,
+    0.014227713938453235,
+    0.0,
+    0.0
+   ],
+   "max_abs_term": [
+    0.44292843219591305,
+    24624.89227294922,
+    0.000832626064948272,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "case": "Q4_K_w256",
+   "kind": "dot",
+   "ggml_type": "Q4_K",
+   "ggml_type_id": 12,
+   "width": 256,
+   "rows": [
+    "real_0",
+    "real_1",
+    "real_2",
+    "hostile_tiled",
+    "hostile_large_scale",
+    "hostile_tiny_scale",
+    "all_equal_w"
+   ],
+   "w_source": "real rows of token_embd.weight + hostile tiled blocks (gguf-py has no K-quant quantizer)",
+   "n_rows": 7,
+   "w_raw": {
+    "file": "Q4_K_w256__w_raw.bin",
+    "bytes": 1008
+   },
+   "w_deq": {
+    "file": "Q4_K_w256__w_deq.npy",
+    "shape": [
+     7,
+     256
+    ]
+   },
+   "x_raw": {
+    "file": "Q4_K_w256__x_raw.bin",
+    "bytes": 1904
+   },
+   "x_deq": {
+    "file": "Q4_K_w256__x_deq.npy",
+    "shape": [
+     7,
+     256
+    ]
+   },
+   "ref_f64": [
+    -0.21972610620014166,
+    3.3430006658891216,
+    0.34396646957611665,
+    0.0,
+    -1890479215329.978,
+    -0.0021679066490136734,
+    -532.4779052734375
+   ],
+   "max_abs_term": [
+    0.13271776301189675,
+    3.374041370116174,
+    0.11500550670461962,
+    0.0,
+    4157899672500.0,
+    0.0006155670360641352,
+    460.31298828125
+   ]
+  },
+  {
+   "case": "Q4_K_w5120",
+   "kind": "dot",
+   "ggml_type": "Q4_K",
+   "ggml_type_id": 12,
+   "width": 5120,
+   "rows": [
+    "real_0",
+    "real_1",
+    "real_2",
+    "hostile_tiled",
+    "hostile_large_scale",
+    "hostile_tiny_scale",
+    "all_equal_w"
+   ],
+   "w_source": "real rows of token_embd.weight + hostile tiled blocks (gguf-py has no K-quant quantizer)",
+   "n_rows": 7,
+   "w_raw": {
+    "file": "Q4_K_w5120__w_raw.bin",
+    "bytes": 20160
+   },
+   "w_deq": {
+    "file": "Q4_K_w5120__w_deq.npy",
+    "shape": [
+     7,
+     5120
+    ]
+   },
+   "x_raw": {
+    "file": "Q4_K_w5120__x_raw.bin",
+    "bytes": 38080
+   },
+   "x_deq": {
+    "file": "Q4_K_w5120__x_deq.npy",
+    "shape": [
+     7,
+     5120
+    ]
+   },
+   "ref_f64": [
+    1.3385310834305528,
+    3.004567041367409,
+    -0.7026255409436999,
+    0.0,
+    -1888786756375.6245,
+    -0.0002919969521641974,
+    5771.060546875
+   ],
+   "max_abs_term": [
+    0.17343930429160537,
+    7.692020643968135,
+    0.6579722282476723,
+    0.0,
+    4157899672500.0,
+    0.0012342319697040693,
+    549.7958984375
+   ]
+  },
+  {
+   "case": "Q4_K_w17408",
+   "kind": "dot",
+   "ggml_type": "Q4_K",
+   "ggml_type_id": 12,
+   "width": 17408,
+   "rows": [
+    "real_0",
+    "real_1",
+    "real_2",
+    "hostile_tiled",
+    "hostile_large_scale",
+    "hostile_tiny_scale",
+    "all_equal_w"
+   ],
+   "w_source": "real rows of blk.8.ffn_down.weight + hostile tiled blocks (gguf-py has no K-quant quantizer)",
+   "n_rows": 7,
+   "w_raw": {
+    "file": "Q4_K_w17408__w_raw.bin",
+    "bytes": 68544
+   },
+   "w_deq": {
+    "file": "Q4_K_w17408__w_deq.npy",
+    "shape": [
+     7,
+     17408
+    ]
+   },
+   "x_raw": {
+    "file": "Q4_K_w17408__x_raw.bin",
+    "bytes": 129472
+   },
+   "x_deq": {
+    "file": "Q4_K_w17408__x_deq.npy",
+    "shape": [
+     7,
+     17408
+    ]
+   },
+   "ref_f64": [
+    0.5166804459549894,
+    -93.43309840996517,
+    -0.7045301507168915,
+    0.0,
+    -1888621473415.56,
+    0.006191841742829496,
+    -9300.785888671875
+   ],
+   "max_abs_term": [
+    0.10029268076687003,
+    2.439334038645029,
+    0.08981633320217952,
+    0.0,
+    4157899672500.0,
+    0.0013747202160629968,
+    665.8818359375
+   ]
+  },
+  {
+   "case": "Q5_K_w256",
+   "kind": "dot",
+   "ggml_type": "Q5_K",
+   "ggml_type_id": 13,
+   "width": 256,
+   "rows": [
+    "real_0",
+    "real_1",
+    "real_2",
+    "hostile_tiled",
+    "hostile_large_scale",
+    "hostile_tiny_scale",
+    "all_equal_w"
+   ],
+   "w_source": "real rows of blk.3.attn_k.weight + hostile tiled blocks (gguf-py has no K-quant quantizer)",
+   "n_rows": 7,
+   "w_raw": {
+    "file": "Q5_K_w256__w_raw.bin",
+    "bytes": 1232
+   },
+   "w_deq": {
+    "file": "Q5_K_w256__w_deq.npy",
+    "shape": [
+     7,
+     256
+    ]
+   },
+   "x_raw": {
+    "file": "Q5_K_w256__x_raw.bin",
+    "bytes": 1904
+   },
+   "x_deq": {
+    "file": "Q5_K_w256__x_deq.npy",
+    "shape": [
+     7,
+     256
+    ]
+   },
+   "ref_f64": [
+    -0.016338612626896065,
+    -5.905592638766393,
+    -0.025273687730077654,
+    0.0,
+    -3402099774854.4814,
+    0.004588818026363128,
+    27.444091796875
+   ],
+   "max_abs_term": [
+    0.07687429152429104,
+    1.3933896580711007,
+    0.15214563568588346,
+    0.0,
+    7560324922500.0,
+    0.001483802950417612,
+    504.248291015625
+   ]
+  },
+  {
+   "case": "Q5_K_w5120",
+   "kind": "dot",
+   "ggml_type": "Q5_K",
+   "ggml_type_id": 13,
+   "width": 5120,
+   "rows": [
+    "real_0",
+    "real_1",
+    "real_2",
+    "hostile_tiled",
+    "hostile_large_scale",
+    "hostile_tiny_scale",
+    "all_equal_w"
+   ],
+   "w_source": "real rows of blk.3.attn_k.weight + hostile tiled blocks (gguf-py has no K-quant quantizer)",
+   "n_rows": 7,
+   "w_raw": {
+    "file": "Q5_K_w5120__w_raw.bin",
+    "bytes": 24640
+   },
+   "w_deq": {
+    "file": "Q5_K_w5120__w_deq.npy",
+    "shape": [
+     7,
+     5120
+    ]
+   },
+   "x_raw": {
+    "file": "Q5_K_w5120__x_raw.bin",
+    "bytes": 38080
+   },
+   "x_deq": {
+    "file": "Q5_K_w5120__x_deq.npy",
+    "shape": [
+     7,
+     5120
+    ]
+   },
+   "ref_f64": [
+    -2.4875082760804617,
+    -13.076480499905301,
+    1.3622694582300028,
+    0.0,
+    -3404762986094.569,
+    -0.0061817769666276945,
+    1237.5311279296875
+   ],
+   "max_abs_term": [
+    0.14044142427155748,
+    5.524970343394671,
+    0.20492447284050286,
+    0.0,
+    7560324922500.0,
+    0.0023112928050181836,
+    626.38037109375
+   ]
+  },
+  {
+   "case": "Q5_K_w6144",
+   "kind": "dot",
+   "ggml_type": "Q5_K",
+   "ggml_type_id": 13,
+   "width": 6144,
+   "rows": [
+    "real_0",
+    "real_1",
+    "real_2",
+    "hostile_tiled",
+    "hostile_large_scale",
+    "hostile_tiny_scale",
+    "all_equal_w"
+   ],
+   "w_source": "real rows of blk.3.attn_output.weight + hostile tiled blocks (gguf-py has no K-quant quantizer)",
+   "n_rows": 7,
+   "w_raw": {
+    "file": "Q5_K_w6144__w_raw.bin",
+    "bytes": 29568
+   },
+   "w_deq": {
+    "file": "Q5_K_w6144__w_deq.npy",
+    "shape": [
+     7,
+     6144
+    ]
+   },
+   "x_raw": {
+    "file": "Q5_K_w6144__x_raw.bin",
+    "bytes": 45696
+   },
+   "x_deq": {
+    "file": "Q5_K_w6144__x_deq.npy",
+    "shape": [
+     7,
+     6144
+    ]
+   },
+   "ref_f64": [
+    0.40672777381269043,
+    0.15026716073043644,
+    -3.27485587256524,
+    0.0,
+    -3399117372018.828,
+    -0.05995202299143543,
+    24297.609375
+   ],
+   "max_abs_term": [
+    0.1274915852027334,
+    3.032794758095406,
+    0.11168561142403632,
+    0.0,
+    7560324922500.0,
+    0.00364501652029503,
+    576.802001953125
+   ]
+  },
+  {
+   "case": "Q6_K_w256",
+   "kind": "dot",
+   "ggml_type": "Q6_K",
+   "ggml_type_id": 14,
+   "width": 256,
+   "rows": [
+    "real_0",
+    "real_1",
+    "real_2",
+    "hostile_tiled",
+    "hostile_large_scale",
+    "hostile_tiny_scale",
+    "all_equal_w"
+   ],
+   "w_source": "real rows of output.weight + hostile tiled blocks (gguf-py has no K-quant quantizer)",
+   "n_rows": 7,
+   "w_raw": {
+    "file": "Q6_K_w256__w_raw.bin",
+    "bytes": 1470
+   },
+   "w_deq": {
+    "file": "Q6_K_w256__w_deq.npy",
+    "shape": [
+     7,
+     256
+    ]
+   },
+   "x_raw": {
+    "file": "Q6_K_w256__x_raw.bin",
+    "bytes": 1904
+   },
+   "x_deq": {
+    "file": "Q6_K_w256__x_deq.npy",
+    "shape": [
+     7,
+     256
+    ]
+   },
+   "ref_f64": [
+    0.3004907969279884,
+    11.747625639545731,
+    0.5436173261332442,
+    0.0,
+    31245472171687.777,
+    -0.002222087161293018,
+    -4096.537673950195
+   ],
+   "max_abs_term": [
+    0.058997175365220755,
+    2.7029064670205116,
+    0.07295163231901824,
+    0.0,
+    18290286000000.0,
+    0.00390013296649272,
+    357.25726318359375
+   ]
+  },
+  {
+   "case": "Q6_K_w5120",
+   "kind": "dot",
+   "ggml_type": "Q6_K",
+   "ggml_type_id": 14,
+   "width": 5120,
+   "rows": [
+    "real_0",
+    "real_1",
+    "real_2",
+    "hostile_tiled",
+    "hostile_large_scale",
+    "hostile_tiny_scale",
+    "all_equal_w"
+   ],
+   "w_source": "real rows of output.weight + hostile tiled blocks (gguf-py has no K-quant quantizer)",
+   "n_rows": 7,
+   "w_raw": {
+    "file": "Q6_K_w5120__w_raw.bin",
+    "bytes": 29400
+   },
+   "w_deq": {
+    "file": "Q6_K_w5120__w_deq.npy",
+    "shape": [
+     7,
+     5120
+    ]
+   },
+   "x_raw": {
+    "file": "Q6_K_w5120__x_raw.bin",
+    "bytes": 38080
+   },
+   "x_deq": {
+    "file": "Q6_K_w5120__x_deq.npy",
+    "shape": [
+     7,
+     5120
+    ]
+   },
+   "ref_f64": [
+    0.5272767220430978,
+    7.982433839992154,
+    -2.9597197211987805,
+    0.0,
+    31239698503421.18,
+    -0.0005709897642169892,
+    11501.39437866211
+   ],
+   "max_abs_term": [
+    0.11793732643127441,
+    3.6513725109398365,
+    0.11541043594479561,
+    0.0,
+    18290286000000.0,
+    0.005101664260109828,
+    454.8908386230469
+   ]
+  },
+  {
+   "case": "Q6_K_w17408",
+   "kind": "dot",
+   "ggml_type": "Q6_K",
+   "ggml_type_id": 14,
+   "width": 17408,
+   "rows": [
+    "real_0",
+    "real_1",
+    "real_2",
+    "hostile_tiled",
+    "hostile_large_scale",
+    "hostile_tiny_scale",
+    "all_equal_w"
+   ],
+   "w_source": "real rows of blk.0.ffn_down.weight + hostile tiled blocks (gguf-py has no K-quant quantizer)",
+   "n_rows": 7,
+   "w_raw": {
+    "file": "Q6_K_w17408__w_raw.bin",
+    "bytes": 99960
+   },
+   "w_deq": {
+    "file": "Q6_K_w17408__w_deq.npy",
+    "shape": [
+     7,
+     17408
+    ]
+   },
+   "x_raw": {
+    "file": "Q6_K_w17408__x_raw.bin",
+    "bytes": 129472
+   },
+   "x_deq": {
+    "file": "Q6_K_w17408__x_deq.npy",
+    "shape": [
+     7,
+     17408
+    ]
+   },
+   "ref_f64": [
+    -1.0661210133403074,
+    4.814860922371736,
+    0.2770755444362294,
+    0.0,
+    31234376477555.24,
+    -0.02582408962363303,
+    -6545.05485534668
+   ],
+   "max_abs_term": [
+    0.09148386772722006,
+    2.434589672833681,
+    0.08886176347732544,
+    0.0,
+    18290286000000.0,
+    0.009341215203676256,
+    541.8506469726562
+   ]
+  },
+  {
+   "case": "F32_w256",
+   "kind": "dot",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "width": 256,
+   "rows": [
+    "random",
+    "large_w",
+    "tiny_w",
+    "all_equal_w",
+    "neg_zero_w"
+   ],
+   "w_source": "random rows quantized with gguf-py",
+   "n_rows": 5,
+   "w_raw": {
+    "file": "F32_w256__w_raw.bin",
+    "bytes": 5120
+   },
+   "w_deq": {
+    "file": "F32_w256__w_deq.npy",
+    "shape": [
+     5,
+     256
+    ]
+   },
+   "x_raw": {
+    "file": "F32_w256__x_raw.bin",
+    "bytes": 1360
+   },
+   "x_deq": {
+    "file": "F32_w256__x_deq.npy",
+    "shape": [
+     5,
+     256
+    ]
+   },
+   "ref_f64": [
+    0.7057106819976954,
+    15529.040219598042,
+    -0.004231550769595882,
+    0.0,
+    0.0
+   ],
+   "max_abs_term": [
+    0.33581396223439697,
+    19590.46570470929,
+    0.0005239671181840322,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "case": "F32_w5120",
+   "kind": "dot",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "width": 5120,
+   "rows": [
+    "random",
+    "large_w",
+    "tiny_w",
+    "all_equal_w",
+    "neg_zero_w"
+   ],
+   "w_source": "random rows quantized with gguf-py",
+   "n_rows": 5,
+   "w_raw": {
+    "file": "F32_w5120__w_raw.bin",
+    "bytes": 102400
+   },
+   "w_deq": {
+    "file": "F32_w5120__w_deq.npy",
+    "shape": [
+     5,
+     5120
+    ]
+   },
+   "x_raw": {
+    "file": "F32_w5120__x_raw.bin",
+    "bytes": 27200
+   },
+   "x_deq": {
+    "file": "F32_w5120__x_deq.npy",
+    "shape": [
+     5,
+     5120
+    ]
+   },
+   "ref_f64": [
+    5.515590422050199,
+    292382.1120580316,
+    -0.01915487411160818,
+    0.0,
+    0.0
+   ],
+   "max_abs_term": [
+    0.33289658161686475,
+    23205.416321754456,
+    0.0008169430844020553,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "case": "F32_w17408",
+   "kind": "dot",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "width": 17408,
+   "rows": [
+    "random",
+    "large_w",
+    "tiny_w",
+    "all_equal_w",
+    "neg_zero_w"
+   ],
+   "w_source": "random rows quantized with gguf-py",
+   "n_rows": 5,
+   "w_raw": {
+    "file": "F32_w17408__w_raw.bin",
+    "bytes": 348160
+   },
+   "w_deq": {
+    "file": "F32_w17408__w_deq.npy",
+    "shape": [
+     5,
+     17408
+    ]
+   },
+   "x_raw": {
+    "file": "F32_w17408__x_raw.bin",
+    "bytes": 92480
+   },
+   "x_deq": {
+    "file": "F32_w17408__x_deq.npy",
+    "shape": [
+     5,
+     17408
+    ]
+   },
+   "ref_f64": [
+    10.649591840631413,
+    -306136.3102432714,
+    0.002678669460515412,
+    0.0,
+    0.0
+   ],
+   "max_abs_term": [
+    0.43652535835281014,
+    25470.313620865345,
+    0.0007906884916835111,
+    0.0,
+    0.0
+   ]
+  }
+ ]
+}

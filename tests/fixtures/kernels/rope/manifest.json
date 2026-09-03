@@ -1,0 +1,156 @@
+{
+ "group": "rope",
+ "torch": "2.14.0+cpu",
+ "f32_eps": 1.1920928955078125e-07,
+ "source": "Qwen3_5TextRotaryEmbedding (84-167) with equal T/H/W position streams + apply_rotary_pos_emb (557-593); see docs/rope.md",
+ "budget_k": 8,
+ "tables_note": "cos/sin are computed by torch in float32: angle = float32(pos) * inv_freq (float32 multiply), then cos/sin in float32",
+ "cases": [
+  {
+   "case": "rope_hd256",
+   "kind": "rope",
+   "head_dim": 256,
+   "rope_dim": 64,
+   "theta": 10000000.0,
+   "mrope_section": [
+    11,
+    11,
+    10
+   ],
+   "positions": [
+    0,
+    1,
+    2,
+    3,
+    1000,
+    262143
+   ],
+   "inv_freq": {
+    "file": "rope_hd256__inv_freq.npy",
+    "shape": [
+     32
+    ]
+   },
+   "cos": {
+    "file": "rope_hd256__cos.npy",
+    "shape": [
+     6,
+     64
+    ]
+   },
+   "sin": {
+    "file": "rope_hd256__sin.npy",
+    "shape": [
+     6,
+     64
+    ]
+   },
+   "q": {
+    "file": "rope_hd256__q.npy",
+    "shape": [
+     4,
+     6,
+     256
+    ]
+   },
+   "k": {
+    "file": "rope_hd256__k.npy",
+    "shape": [
+     2,
+     6,
+     256
+    ]
+   },
+   "q_out": {
+    "file": "rope_hd256__q_out.npy",
+    "shape": [
+     4,
+     6,
+     256
+    ]
+   },
+   "k_out": {
+    "file": "rope_hd256__k_out.npy",
+    "shape": [
+     2,
+     6,
+     256
+    ]
+   },
+   "max_abs": 8.414710033540332e+29
+  },
+  {
+   "case": "rope_hd16",
+   "kind": "rope",
+   "head_dim": 16,
+   "rope_dim": 4,
+   "theta": 10000000.0,
+   "mrope_section": [
+    1,
+    1,
+    0
+   ],
+   "positions": [
+    0,
+    1,
+    2,
+    3,
+    1000,
+    262143
+   ],
+   "inv_freq": {
+    "file": "rope_hd16__inv_freq.npy",
+    "shape": [
+     2
+    ]
+   },
+   "cos": {
+    "file": "rope_hd16__cos.npy",
+    "shape": [
+     6,
+     4
+    ]
+   },
+   "sin": {
+    "file": "rope_hd16__sin.npy",
+    "shape": [
+     6,
+     4
+    ]
+   },
+   "q": {
+    "file": "rope_hd16__q.npy",
+    "shape": [
+     4,
+     6,
+     16
+    ]
+   },
+   "k": {
+    "file": "rope_hd16__k.npy",
+    "shape": [
+     2,
+     6,
+     16
+    ]
+   },
+   "q_out": {
+    "file": "rope_hd16__q_out.npy",
+    "shape": [
+     4,
+     6,
+     16
+    ]
+   },
+   "k_out": {
+    "file": "rope_hd16__k_out.npy",
+    "shape": [
+     2,
+     6,
+     16
+    ]
+   },
+   "max_abs": 9.999999394896025e+29
+  }
+ ]
+}
