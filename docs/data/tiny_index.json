@@ -1,0 +1,2391 @@
+{
+ "file": "tiny-f32.gguf",
+ "file_size": 139735776,
+ "alignment": 32,
+ "data_offset": 10951648,
+ "n_tensors": 138,
+ "tensors": [
+  {
+   "name": "output.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    248320
+   ],
+   "shape_numpy_order": [
+    248320,
+    64
+   ],
+   "n_elements": 15892480,
+   "rel_offset": 0,
+   "byte_offset": 10951648,
+   "byte_size": 63569920,
+   "byte_end": 74521568
+  },
+  {
+   "name": "token_embd.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    248320
+   ],
+   "shape_numpy_order": [
+    248320,
+    64
+   ],
+   "n_elements": 15892480,
+   "rel_offset": 63569920,
+   "byte_offset": 74521568,
+   "byte_size": 63569920,
+   "byte_end": 138091488
+  },
+  {
+   "name": "blk.0.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127139840,
+   "byte_offset": 138091488,
+   "byte_size": 256,
+   "byte_end": 138091744
+  },
+  {
+   "name": "blk.0.ssm_a",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127140096,
+   "byte_offset": 138091744,
+   "byte_size": 24,
+   "byte_end": 138091768
+  },
+  {
+   "name": "blk.0.ssm_conv1d.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    4,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    4
+   ],
+   "n_elements": 640,
+   "rel_offset": 127140128,
+   "byte_offset": 138091776,
+   "byte_size": 2560,
+   "byte_end": 138094336
+  },
+  {
+   "name": "blk.0.ssm_dt.bias",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127142688,
+   "byte_offset": 138094336,
+   "byte_size": 24,
+   "byte_end": 138094360
+  },
+  {
+   "name": "blk.0.ssm_alpha.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127142720,
+   "byte_offset": 138094368,
+   "byte_size": 1536,
+   "byte_end": 138095904
+  },
+  {
+   "name": "blk.0.ssm_beta.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127144256,
+   "byte_offset": 138095904,
+   "byte_size": 1536,
+   "byte_end": 138097440
+  },
+  {
+   "name": "blk.0.attn_qkv.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    64
+   ],
+   "n_elements": 10240,
+   "rel_offset": 127145792,
+   "byte_offset": 138097440,
+   "byte_size": 40960,
+   "byte_end": 138138400
+  },
+  {
+   "name": "blk.0.attn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127186752,
+   "byte_offset": 138138400,
+   "byte_size": 24576,
+   "byte_end": 138162976
+  },
+  {
+   "name": "blk.0.ssm_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 127211328,
+   "byte_offset": 138162976,
+   "byte_size": 64,
+   "byte_end": 138163040
+  },
+  {
+   "name": "blk.0.ssm_out.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127211392,
+   "byte_offset": 138163040,
+   "byte_size": 24576,
+   "byte_end": 138187616
+  },
+  {
+   "name": "blk.0.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127235968,
+   "byte_offset": 138187616,
+   "byte_size": 24576,
+   "byte_end": 138212192
+  },
+  {
+   "name": "blk.0.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127260544,
+   "byte_offset": 138212192,
+   "byte_size": 24576,
+   "byte_end": 138236768
+  },
+  {
+   "name": "blk.0.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127285120,
+   "byte_offset": 138236768,
+   "byte_size": 24576,
+   "byte_end": 138261344
+  },
+  {
+   "name": "blk.0.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127309696,
+   "byte_offset": 138261344,
+   "byte_size": 256,
+   "byte_end": 138261600
+  },
+  {
+   "name": "blk.1.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127309952,
+   "byte_offset": 138261600,
+   "byte_size": 256,
+   "byte_end": 138261856
+  },
+  {
+   "name": "blk.1.ssm_a",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127310208,
+   "byte_offset": 138261856,
+   "byte_size": 24,
+   "byte_end": 138261880
+  },
+  {
+   "name": "blk.1.ssm_conv1d.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    4,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    4
+   ],
+   "n_elements": 640,
+   "rel_offset": 127310240,
+   "byte_offset": 138261888,
+   "byte_size": 2560,
+   "byte_end": 138264448
+  },
+  {
+   "name": "blk.1.ssm_dt.bias",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127312800,
+   "byte_offset": 138264448,
+   "byte_size": 24,
+   "byte_end": 138264472
+  },
+  {
+   "name": "blk.1.ssm_alpha.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127312832,
+   "byte_offset": 138264480,
+   "byte_size": 1536,
+   "byte_end": 138266016
+  },
+  {
+   "name": "blk.1.ssm_beta.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127314368,
+   "byte_offset": 138266016,
+   "byte_size": 1536,
+   "byte_end": 138267552
+  },
+  {
+   "name": "blk.1.attn_qkv.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    64
+   ],
+   "n_elements": 10240,
+   "rel_offset": 127315904,
+   "byte_offset": 138267552,
+   "byte_size": 40960,
+   "byte_end": 138308512
+  },
+  {
+   "name": "blk.1.attn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127356864,
+   "byte_offset": 138308512,
+   "byte_size": 24576,
+   "byte_end": 138333088
+  },
+  {
+   "name": "blk.1.ssm_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 127381440,
+   "byte_offset": 138333088,
+   "byte_size": 64,
+   "byte_end": 138333152
+  },
+  {
+   "name": "blk.1.ssm_out.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127381504,
+   "byte_offset": 138333152,
+   "byte_size": 24576,
+   "byte_end": 138357728
+  },
+  {
+   "name": "blk.1.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127406080,
+   "byte_offset": 138357728,
+   "byte_size": 24576,
+   "byte_end": 138382304
+  },
+  {
+   "name": "blk.1.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127430656,
+   "byte_offset": 138382304,
+   "byte_size": 24576,
+   "byte_end": 138406880
+  },
+  {
+   "name": "blk.1.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127455232,
+   "byte_offset": 138406880,
+   "byte_size": 24576,
+   "byte_end": 138431456
+  },
+  {
+   "name": "blk.1.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127479808,
+   "byte_offset": 138431456,
+   "byte_size": 256,
+   "byte_end": 138431712
+  },
+  {
+   "name": "blk.2.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127480064,
+   "byte_offset": 138431712,
+   "byte_size": 256,
+   "byte_end": 138431968
+  },
+  {
+   "name": "blk.2.ssm_a",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127480320,
+   "byte_offset": 138431968,
+   "byte_size": 24,
+   "byte_end": 138431992
+  },
+  {
+   "name": "blk.2.ssm_conv1d.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    4,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    4
+   ],
+   "n_elements": 640,
+   "rel_offset": 127480352,
+   "byte_offset": 138432000,
+   "byte_size": 2560,
+   "byte_end": 138434560
+  },
+  {
+   "name": "blk.2.ssm_dt.bias",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127482912,
+   "byte_offset": 138434560,
+   "byte_size": 24,
+   "byte_end": 138434584
+  },
+  {
+   "name": "blk.2.ssm_alpha.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127482944,
+   "byte_offset": 138434592,
+   "byte_size": 1536,
+   "byte_end": 138436128
+  },
+  {
+   "name": "blk.2.ssm_beta.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127484480,
+   "byte_offset": 138436128,
+   "byte_size": 1536,
+   "byte_end": 138437664
+  },
+  {
+   "name": "blk.2.attn_qkv.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    64
+   ],
+   "n_elements": 10240,
+   "rel_offset": 127486016,
+   "byte_offset": 138437664,
+   "byte_size": 40960,
+   "byte_end": 138478624
+  },
+  {
+   "name": "blk.2.attn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127526976,
+   "byte_offset": 138478624,
+   "byte_size": 24576,
+   "byte_end": 138503200
+  },
+  {
+   "name": "blk.2.ssm_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 127551552,
+   "byte_offset": 138503200,
+   "byte_size": 64,
+   "byte_end": 138503264
+  },
+  {
+   "name": "blk.2.ssm_out.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127551616,
+   "byte_offset": 138503264,
+   "byte_size": 24576,
+   "byte_end": 138527840
+  },
+  {
+   "name": "blk.2.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127576192,
+   "byte_offset": 138527840,
+   "byte_size": 24576,
+   "byte_end": 138552416
+  },
+  {
+   "name": "blk.2.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127600768,
+   "byte_offset": 138552416,
+   "byte_size": 24576,
+   "byte_end": 138576992
+  },
+  {
+   "name": "blk.2.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127625344,
+   "byte_offset": 138576992,
+   "byte_size": 24576,
+   "byte_end": 138601568
+  },
+  {
+   "name": "blk.2.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127649920,
+   "byte_offset": 138601568,
+   "byte_size": 256,
+   "byte_end": 138601824
+  },
+  {
+   "name": "blk.3.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127650176,
+   "byte_offset": 138601824,
+   "byte_size": 256,
+   "byte_end": 138602080
+  },
+  {
+   "name": "blk.3.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127650432,
+   "byte_offset": 138602080,
+   "byte_size": 24576,
+   "byte_end": 138626656
+  },
+  {
+   "name": "blk.3.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127675008,
+   "byte_offset": 138626656,
+   "byte_size": 24576,
+   "byte_end": 138651232
+  },
+  {
+   "name": "blk.3.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127699584,
+   "byte_offset": 138651232,
+   "byte_size": 24576,
+   "byte_end": 138675808
+  },
+  {
+   "name": "blk.3.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127724160,
+   "byte_offset": 138675808,
+   "byte_size": 256,
+   "byte_end": 138676064
+  },
+  {
+   "name": "blk.3.attn_k_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 127724416,
+   "byte_offset": 138676064,
+   "byte_size": 64,
+   "byte_end": 138676128
+  },
+  {
+   "name": "blk.3.attn_k.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    32
+   ],
+   "shape_numpy_order": [
+    32,
+    64
+   ],
+   "n_elements": 2048,
+   "rel_offset": 127724480,
+   "byte_offset": 138676128,
+   "byte_size": 8192,
+   "byte_end": 138684320
+  },
+  {
+   "name": "blk.3.attn_output.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    64
+   ],
+   "n_elements": 4096,
+   "rel_offset": 127732672,
+   "byte_offset": 138684320,
+   "byte_size": 16384,
+   "byte_end": 138700704
+  },
+  {
+   "name": "blk.3.attn_q_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 127749056,
+   "byte_offset": 138700704,
+   "byte_size": 64,
+   "byte_end": 138700768
+  },
+  {
+   "name": "blk.3.attn_q.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    128
+   ],
+   "shape_numpy_order": [
+    128,
+    64
+   ],
+   "n_elements": 8192,
+   "rel_offset": 127749120,
+   "byte_offset": 138700768,
+   "byte_size": 32768,
+   "byte_end": 138733536
+  },
+  {
+   "name": "blk.3.attn_v.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    32
+   ],
+   "shape_numpy_order": [
+    32,
+    64
+   ],
+   "n_elements": 2048,
+   "rel_offset": 127781888,
+   "byte_offset": 138733536,
+   "byte_size": 8192,
+   "byte_end": 138741728
+  },
+  {
+   "name": "blk.4.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127790080,
+   "byte_offset": 138741728,
+   "byte_size": 256,
+   "byte_end": 138741984
+  },
+  {
+   "name": "blk.4.ssm_a",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127790336,
+   "byte_offset": 138741984,
+   "byte_size": 24,
+   "byte_end": 138742008
+  },
+  {
+   "name": "blk.4.ssm_conv1d.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    4,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    4
+   ],
+   "n_elements": 640,
+   "rel_offset": 127790368,
+   "byte_offset": 138742016,
+   "byte_size": 2560,
+   "byte_end": 138744576
+  },
+  {
+   "name": "blk.4.ssm_dt.bias",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127792928,
+   "byte_offset": 138744576,
+   "byte_size": 24,
+   "byte_end": 138744600
+  },
+  {
+   "name": "blk.4.ssm_alpha.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127792960,
+   "byte_offset": 138744608,
+   "byte_size": 1536,
+   "byte_end": 138746144
+  },
+  {
+   "name": "blk.4.ssm_beta.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127794496,
+   "byte_offset": 138746144,
+   "byte_size": 1536,
+   "byte_end": 138747680
+  },
+  {
+   "name": "blk.4.attn_qkv.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    64
+   ],
+   "n_elements": 10240,
+   "rel_offset": 127796032,
+   "byte_offset": 138747680,
+   "byte_size": 40960,
+   "byte_end": 138788640
+  },
+  {
+   "name": "blk.4.attn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127836992,
+   "byte_offset": 138788640,
+   "byte_size": 24576,
+   "byte_end": 138813216
+  },
+  {
+   "name": "blk.4.ssm_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 127861568,
+   "byte_offset": 138813216,
+   "byte_size": 64,
+   "byte_end": 138813280
+  },
+  {
+   "name": "blk.4.ssm_out.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127861632,
+   "byte_offset": 138813280,
+   "byte_size": 24576,
+   "byte_end": 138837856
+  },
+  {
+   "name": "blk.4.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127886208,
+   "byte_offset": 138837856,
+   "byte_size": 24576,
+   "byte_end": 138862432
+  },
+  {
+   "name": "blk.4.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127910784,
+   "byte_offset": 138862432,
+   "byte_size": 24576,
+   "byte_end": 138887008
+  },
+  {
+   "name": "blk.4.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 127935360,
+   "byte_offset": 138887008,
+   "byte_size": 24576,
+   "byte_end": 138911584
+  },
+  {
+   "name": "blk.4.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127959936,
+   "byte_offset": 138911584,
+   "byte_size": 256,
+   "byte_end": 138911840
+  },
+  {
+   "name": "blk.5.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 127960192,
+   "byte_offset": 138911840,
+   "byte_size": 256,
+   "byte_end": 138912096
+  },
+  {
+   "name": "blk.5.ssm_a",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127960448,
+   "byte_offset": 138912096,
+   "byte_size": 24,
+   "byte_end": 138912120
+  },
+  {
+   "name": "blk.5.ssm_conv1d.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    4,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    4
+   ],
+   "n_elements": 640,
+   "rel_offset": 127960480,
+   "byte_offset": 138912128,
+   "byte_size": 2560,
+   "byte_end": 138914688
+  },
+  {
+   "name": "blk.5.ssm_dt.bias",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 127963040,
+   "byte_offset": 138914688,
+   "byte_size": 24,
+   "byte_end": 138914712
+  },
+  {
+   "name": "blk.5.ssm_alpha.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127963072,
+   "byte_offset": 138914720,
+   "byte_size": 1536,
+   "byte_end": 138916256
+  },
+  {
+   "name": "blk.5.ssm_beta.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 127964608,
+   "byte_offset": 138916256,
+   "byte_size": 1536,
+   "byte_end": 138917792
+  },
+  {
+   "name": "blk.5.attn_qkv.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    64
+   ],
+   "n_elements": 10240,
+   "rel_offset": 127966144,
+   "byte_offset": 138917792,
+   "byte_size": 40960,
+   "byte_end": 138958752
+  },
+  {
+   "name": "blk.5.attn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128007104,
+   "byte_offset": 138958752,
+   "byte_size": 24576,
+   "byte_end": 138983328
+  },
+  {
+   "name": "blk.5.ssm_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 128031680,
+   "byte_offset": 138983328,
+   "byte_size": 64,
+   "byte_end": 138983392
+  },
+  {
+   "name": "blk.5.ssm_out.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128031744,
+   "byte_offset": 138983392,
+   "byte_size": 24576,
+   "byte_end": 139007968
+  },
+  {
+   "name": "blk.5.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128056320,
+   "byte_offset": 139007968,
+   "byte_size": 24576,
+   "byte_end": 139032544
+  },
+  {
+   "name": "blk.5.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128080896,
+   "byte_offset": 139032544,
+   "byte_size": 24576,
+   "byte_end": 139057120
+  },
+  {
+   "name": "blk.5.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128105472,
+   "byte_offset": 139057120,
+   "byte_size": 24576,
+   "byte_end": 139081696
+  },
+  {
+   "name": "blk.5.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128130048,
+   "byte_offset": 139081696,
+   "byte_size": 256,
+   "byte_end": 139081952
+  },
+  {
+   "name": "blk.6.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128130304,
+   "byte_offset": 139081952,
+   "byte_size": 256,
+   "byte_end": 139082208
+  },
+  {
+   "name": "blk.6.ssm_a",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 128130560,
+   "byte_offset": 139082208,
+   "byte_size": 24,
+   "byte_end": 139082232
+  },
+  {
+   "name": "blk.6.ssm_conv1d.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    4,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    4
+   ],
+   "n_elements": 640,
+   "rel_offset": 128130592,
+   "byte_offset": 139082240,
+   "byte_size": 2560,
+   "byte_end": 139084800
+  },
+  {
+   "name": "blk.6.ssm_dt.bias",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 128133152,
+   "byte_offset": 139084800,
+   "byte_size": 24,
+   "byte_end": 139084824
+  },
+  {
+   "name": "blk.6.ssm_alpha.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 128133184,
+   "byte_offset": 139084832,
+   "byte_size": 1536,
+   "byte_end": 139086368
+  },
+  {
+   "name": "blk.6.ssm_beta.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 128134720,
+   "byte_offset": 139086368,
+   "byte_size": 1536,
+   "byte_end": 139087904
+  },
+  {
+   "name": "blk.6.attn_qkv.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    64
+   ],
+   "n_elements": 10240,
+   "rel_offset": 128136256,
+   "byte_offset": 139087904,
+   "byte_size": 40960,
+   "byte_end": 139128864
+  },
+  {
+   "name": "blk.6.attn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128177216,
+   "byte_offset": 139128864,
+   "byte_size": 24576,
+   "byte_end": 139153440
+  },
+  {
+   "name": "blk.6.ssm_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 128201792,
+   "byte_offset": 139153440,
+   "byte_size": 64,
+   "byte_end": 139153504
+  },
+  {
+   "name": "blk.6.ssm_out.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128201856,
+   "byte_offset": 139153504,
+   "byte_size": 24576,
+   "byte_end": 139178080
+  },
+  {
+   "name": "blk.6.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128226432,
+   "byte_offset": 139178080,
+   "byte_size": 24576,
+   "byte_end": 139202656
+  },
+  {
+   "name": "blk.6.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128251008,
+   "byte_offset": 139202656,
+   "byte_size": 24576,
+   "byte_end": 139227232
+  },
+  {
+   "name": "blk.6.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128275584,
+   "byte_offset": 139227232,
+   "byte_size": 24576,
+   "byte_end": 139251808
+  },
+  {
+   "name": "blk.6.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128300160,
+   "byte_offset": 139251808,
+   "byte_size": 256,
+   "byte_end": 139252064
+  },
+  {
+   "name": "blk.7.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128300416,
+   "byte_offset": 139252064,
+   "byte_size": 256,
+   "byte_end": 139252320
+  },
+  {
+   "name": "blk.7.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128300672,
+   "byte_offset": 139252320,
+   "byte_size": 24576,
+   "byte_end": 139276896
+  },
+  {
+   "name": "blk.7.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128325248,
+   "byte_offset": 139276896,
+   "byte_size": 24576,
+   "byte_end": 139301472
+  },
+  {
+   "name": "blk.7.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128349824,
+   "byte_offset": 139301472,
+   "byte_size": 24576,
+   "byte_end": 139326048
+  },
+  {
+   "name": "blk.7.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128374400,
+   "byte_offset": 139326048,
+   "byte_size": 256,
+   "byte_end": 139326304
+  },
+  {
+   "name": "blk.7.attn_k_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 128374656,
+   "byte_offset": 139326304,
+   "byte_size": 64,
+   "byte_end": 139326368
+  },
+  {
+   "name": "blk.7.attn_k.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    32
+   ],
+   "shape_numpy_order": [
+    32,
+    64
+   ],
+   "n_elements": 2048,
+   "rel_offset": 128374720,
+   "byte_offset": 139326368,
+   "byte_size": 8192,
+   "byte_end": 139334560
+  },
+  {
+   "name": "blk.7.attn_output.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    64
+   ],
+   "n_elements": 4096,
+   "rel_offset": 128382912,
+   "byte_offset": 139334560,
+   "byte_size": 16384,
+   "byte_end": 139350944
+  },
+  {
+   "name": "blk.7.attn_q_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 128399296,
+   "byte_offset": 139350944,
+   "byte_size": 64,
+   "byte_end": 139351008
+  },
+  {
+   "name": "blk.7.attn_q.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    128
+   ],
+   "shape_numpy_order": [
+    128,
+    64
+   ],
+   "n_elements": 8192,
+   "rel_offset": 128399360,
+   "byte_offset": 139351008,
+   "byte_size": 32768,
+   "byte_end": 139383776
+  },
+  {
+   "name": "blk.7.attn_v.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    32
+   ],
+   "shape_numpy_order": [
+    32,
+    64
+   ],
+   "n_elements": 2048,
+   "rel_offset": 128432128,
+   "byte_offset": 139383776,
+   "byte_size": 8192,
+   "byte_end": 139391968
+  },
+  {
+   "name": "blk.8.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128440320,
+   "byte_offset": 139391968,
+   "byte_size": 256,
+   "byte_end": 139392224
+  },
+  {
+   "name": "blk.8.ssm_a",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 128440576,
+   "byte_offset": 139392224,
+   "byte_size": 24,
+   "byte_end": 139392248
+  },
+  {
+   "name": "blk.8.ssm_conv1d.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    4,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    4
+   ],
+   "n_elements": 640,
+   "rel_offset": 128440608,
+   "byte_offset": 139392256,
+   "byte_size": 2560,
+   "byte_end": 139394816
+  },
+  {
+   "name": "blk.8.ssm_dt.bias",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    6
+   ],
+   "shape_numpy_order": [
+    6
+   ],
+   "n_elements": 6,
+   "rel_offset": 128443168,
+   "byte_offset": 139394816,
+   "byte_size": 24,
+   "byte_end": 139394840
+  },
+  {
+   "name": "blk.8.ssm_alpha.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 128443200,
+   "byte_offset": 139394848,
+   "byte_size": 1536,
+   "byte_end": 139396384
+  },
+  {
+   "name": "blk.8.ssm_beta.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    6
+   ],
+   "shape_numpy_order": [
+    6,
+    64
+   ],
+   "n_elements": 384,
+   "rel_offset": 128444736,
+   "byte_offset": 139396384,
+   "byte_size": 1536,
+   "byte_end": 139397920
+  },
+  {
+   "name": "blk.8.attn_qkv.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    160
+   ],
+   "shape_numpy_order": [
+    160,
+    64
+   ],
+   "n_elements": 10240,
+   "rel_offset": 128446272,
+   "byte_offset": 139397920,
+   "byte_size": 40960,
+   "byte_end": 139438880
+  },
+  {
+   "name": "blk.8.attn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128487232,
+   "byte_offset": 139438880,
+   "byte_size": 24576,
+   "byte_end": 139463456
+  },
+  {
+   "name": "blk.8.ssm_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 128511808,
+   "byte_offset": 139463456,
+   "byte_size": 64,
+   "byte_end": 139463520
+  },
+  {
+   "name": "blk.8.ssm_out.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128511872,
+   "byte_offset": 139463520,
+   "byte_size": 24576,
+   "byte_end": 139488096
+  },
+  {
+   "name": "blk.8.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128536448,
+   "byte_offset": 139488096,
+   "byte_size": 24576,
+   "byte_end": 139512672
+  },
+  {
+   "name": "blk.8.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128561024,
+   "byte_offset": 139512672,
+   "byte_size": 24576,
+   "byte_end": 139537248
+  },
+  {
+   "name": "blk.8.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128585600,
+   "byte_offset": 139537248,
+   "byte_size": 24576,
+   "byte_end": 139561824
+  },
+  {
+   "name": "blk.8.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128610176,
+   "byte_offset": 139561824,
+   "byte_size": 256,
+   "byte_end": 139562080
+  },
+  {
+   "name": "output_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128610432,
+   "byte_offset": 139562080,
+   "byte_size": 256,
+   "byte_end": 139562336
+  },
+  {
+   "name": "blk.9.nextn.eh_proj.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    128,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    128
+   ],
+   "n_elements": 8192,
+   "rel_offset": 128610688,
+   "byte_offset": 139562336,
+   "byte_size": 32768,
+   "byte_end": 139595104
+  },
+  {
+   "name": "blk.9.attn_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128643456,
+   "byte_offset": 139595104,
+   "byte_size": 256,
+   "byte_end": 139595360
+  },
+  {
+   "name": "blk.9.ffn_down.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    96,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    96
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128643712,
+   "byte_offset": 139595360,
+   "byte_size": 24576,
+   "byte_end": 139619936
+  },
+  {
+   "name": "blk.9.ffn_gate.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128668288,
+   "byte_offset": 139619936,
+   "byte_size": 24576,
+   "byte_end": 139644512
+  },
+  {
+   "name": "blk.9.ffn_up.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    96
+   ],
+   "shape_numpy_order": [
+    96,
+    64
+   ],
+   "n_elements": 6144,
+   "rel_offset": 128692864,
+   "byte_offset": 139644512,
+   "byte_size": 24576,
+   "byte_end": 139669088
+  },
+  {
+   "name": "blk.9.post_attention_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128717440,
+   "byte_offset": 139669088,
+   "byte_size": 256,
+   "byte_end": 139669344
+  },
+  {
+   "name": "blk.9.attn_k_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 128717696,
+   "byte_offset": 139669344,
+   "byte_size": 64,
+   "byte_end": 139669408
+  },
+  {
+   "name": "blk.9.attn_k.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    32
+   ],
+   "shape_numpy_order": [
+    32,
+    64
+   ],
+   "n_elements": 2048,
+   "rel_offset": 128717760,
+   "byte_offset": 139669408,
+   "byte_size": 8192,
+   "byte_end": 139677600
+  },
+  {
+   "name": "blk.9.attn_output.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    64
+   ],
+   "shape_numpy_order": [
+    64,
+    64
+   ],
+   "n_elements": 4096,
+   "rel_offset": 128725952,
+   "byte_offset": 139677600,
+   "byte_size": 16384,
+   "byte_end": 139693984
+  },
+  {
+   "name": "blk.9.attn_q_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    16
+   ],
+   "shape_numpy_order": [
+    16
+   ],
+   "n_elements": 16,
+   "rel_offset": 128742336,
+   "byte_offset": 139693984,
+   "byte_size": 64,
+   "byte_end": 139694048
+  },
+  {
+   "name": "blk.9.attn_q.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    128
+   ],
+   "shape_numpy_order": [
+    128,
+    64
+   ],
+   "n_elements": 8192,
+   "rel_offset": 128742400,
+   "byte_offset": 139694048,
+   "byte_size": 32768,
+   "byte_end": 139726816
+  },
+  {
+   "name": "blk.9.attn_v.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64,
+    32
+   ],
+   "shape_numpy_order": [
+    32,
+    64
+   ],
+   "n_elements": 2048,
+   "rel_offset": 128775168,
+   "byte_offset": 139726816,
+   "byte_size": 8192,
+   "byte_end": 139735008
+  },
+  {
+   "name": "blk.9.nextn.shared_head_norm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128783360,
+   "byte_offset": 139735008,
+   "byte_size": 256,
+   "byte_end": 139735264
+  },
+  {
+   "name": "blk.9.nextn.enorm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128783616,
+   "byte_offset": 139735264,
+   "byte_size": 256,
+   "byte_end": 139735520
+  },
+  {
+   "name": "blk.9.nextn.hnorm.weight",
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "shape_gguf_order": [
+    64
+   ],
+   "shape_numpy_order": [
+    64
+   ],
+   "n_elements": 64,
+   "rel_offset": 128783872,
+   "byte_offset": 139735520,
+   "byte_size": 256,
+   "byte_end": 139735776
+  }
+ ]
+}
