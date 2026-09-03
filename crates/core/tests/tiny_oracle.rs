@@ -8,10 +8,7 @@ mod common;
 
 use aqueduct_core::kernels::matvec::{matvec, Act, WeightMat};
 use aqueduct_core::kernels::rmsnorm::rmsnorm;
-use aqueduct_core::layers::gated_deltanet::GatedDeltaNet;
-use aqueduct_core::layers::gqa_attention::GqaAttention;
-use aqueduct_core::layers::mlp::Mlp;
-use aqueduct_core::layers::{DecoderLayer, Mixer, MixerState, TensorSource};
+use aqueduct_core::layers::{DecoderLayer, MixerState, TensorSource};
 use aqueduct_core::{arch_consts, Gguf, ModelConfig};
 
 const EPS: f64 = f32::EPSILON as f64;
@@ -32,27 +29,7 @@ impl Oracle {
         let vocab = cfg.vocab_size as usize;
         let src: &dyn TensorSource = g;
         let embed = src.vec("token_embd.weight", vocab * hidden).unwrap();
-        let mut layers = Vec::new();
-        for i in 0..cfg.n_layer {
-            let p = format!("blk.{i}.");
-            let mixer = if cfg.full_attention_layers.contains(&i) {
-                Mixer::Attention(
-                    GqaAttention::load(src, &p, hidden, cfg.n_head as usize, cfg.n_head_kv as usize, cfg.head_dim_k as usize, cfg.rope_dim as usize, cfg.rope_freq_base, cfg.rms_norm_eps).unwrap(),
-                )
-            } else {
-                Mixer::DeltaNet(
-                    GatedDeltaNet::load(src, &p, hidden, cfg.dn_n_k_heads as usize, cfg.dn_n_v_heads as usize, cfg.dn_head_dim_k as usize, cfg.dn_head_dim_v as usize, cfg.dn_conv_kernel as usize, cfg.rms_norm_eps).unwrap(),
-                )
-            };
-            layers.push(DecoderLayer {
-                index: i,
-                attn_norm: src.vec(&format!("{p}attn_norm.weight"), hidden).unwrap(),
-                post_attention_norm: src.vec(&format!("{p}post_attention_norm.weight"), hidden).unwrap(),
-                mixer,
-                mlp: Mlp::load(src, &p, hidden, cfg.intermediate_size as usize).unwrap(),
-                eps: cfg.rms_norm_eps,
-            });
-        }
+        let layers: Vec<DecoderLayer> = (0..cfg.n_layer).map(|i| DecoderLayer::load(src, &cfg, i).unwrap()).collect();
         let output_norm = src.vec("output_norm.weight", hidden).unwrap();
         let lm_head = src.mat("output.weight", vocab, hidden).unwrap();
         Oracle { cfg, embed, layers, output_norm, lm_head }

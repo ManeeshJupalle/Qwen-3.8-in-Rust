@@ -7,6 +7,7 @@ pub mod gated_deltanet;
 pub mod gqa_attention;
 pub mod mlp;
 
+use crate::config::ModelConfig;
 use crate::gguf::{GgmlType, Gguf};
 use crate::kernels::matvec::{matvec_f32_in, WeightMat};
 use crate::kernels::rmsnorm::rmsnorm;
@@ -88,6 +89,7 @@ pub enum Mixer {
 }
 
 /// Per-layer carried state.
+#[derive(Clone)]
 pub enum MixerState {
     DeltaNet(gated_deltanet::DeltaState),
     Attention(gqa_attention::KvCache),
@@ -104,6 +106,29 @@ pub struct DecoderLayer {
 }
 
 impl DecoderLayer {
+    /// Load layer `index` (`blk.{index}.*`) with the sizes and layer schedule from the GGUF config.
+    pub fn load(src: &dyn TensorSource, cfg: &ModelConfig, index: u32) -> Result<DecoderLayer> {
+        let p = format!("blk.{index}.");
+        let hidden = cfg.hidden_size as usize;
+        let mixer = if cfg.full_attention_layers.contains(&index) {
+            Mixer::Attention(gqa_attention::GqaAttention::load(
+                src, &p, hidden, cfg.n_head as usize, cfg.n_head_kv as usize, cfg.head_dim_k as usize, cfg.rope_dim as usize, cfg.rope_freq_base, cfg.rms_norm_eps,
+            )?)
+        } else {
+            Mixer::DeltaNet(gated_deltanet::GatedDeltaNet::load(
+                src, &p, hidden, cfg.dn_n_k_heads as usize, cfg.dn_n_v_heads as usize, cfg.dn_head_dim_k as usize, cfg.dn_head_dim_v as usize, cfg.dn_conv_kernel as usize, cfg.rms_norm_eps,
+            )?)
+        };
+        Ok(DecoderLayer {
+            index,
+            attn_norm: src.vec(&format!("{p}attn_norm.weight"), hidden)?,
+            post_attention_norm: src.vec(&format!("{p}post_attention_norm.weight"), hidden)?,
+            mixer,
+            mlp: mlp::Mlp::load(src, &p, hidden, cfg.intermediate_size as usize)?,
+            eps: cfg.rms_norm_eps,
+        })
+    }
+
     pub fn new_state(&self) -> MixerState {
         match &self.mixer {
             Mixer::DeltaNet(d) => MixerState::DeltaNet(d.new_state()),
