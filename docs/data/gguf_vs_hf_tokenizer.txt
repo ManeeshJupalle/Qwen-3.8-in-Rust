@@ -1,0 +1,18 @@
+# GGUF tokenizer/template vs HF files; tools/gguf_meta_checks.py
+
+chat template identical to HF chat_template.jinja: True (gguf 8952 chars, hf 8952 chars)
+
+gguf tokens: 248320 ; hf vocab: 248044 ; hf added_tokens: 33 ; hf max id+1: 248077
+ids where gguf token != hf token (by id): 243
+  of which hf has no token (padding ids): 243, range 248077..248319, gguf strings e.g. ['[PAD248077]', '[PAD248078]', '[PAD248079]']
+  real mismatches: 0 []
+token_type histogram: {1: 248044, 3: 27, 4: 6, 5: 243}
+ids with token_type != 1 (first 40): [(248044, 3, '<|endoftext|>'), (248045, 3, '<|im_start|>'), (248046, 3, '<|im_end|>'), (248047, 3, '<|object_ref_start|>'), (248048, 3, '<|object_ref_end|>'), (248049, 3, '<|box_start|>'), (248050, 3, '<|box_end|>'), (248051, 3, '<|quad_start|>'), (248052, 3, '<|quad_end|>'), (248053, 3, '<|vision_start|>'), (248054, 3, '<|vision_end|>'), (248055, 3, '<|vision_pad|>'), (248056, 3, '<|image_pad|>'), (248057, 3, '<|video_pad|>'), (248058, 4, '<tool_call>'), (248059, 4, '</tool_call>'), (248060, 3, '<|fim_prefix|>'), (248061, 3, '<|fim_middle|>'), (248062, 3, '<|fim_suffix|>'), (248063, 3, '<|fim_pad|>'), (248064, 3, '<|repo_name|>'), (248065, 3, '<|file_sep|>'), (248066, 4, '<tool_response>'), (248067, 4, '</tool_response>'), (248068, 4, '<think>'), (248069, 4, '</think>'), (248070, 3, '<|audio_start|>'), (248071, 3, '<|audio_end|>'), (248072, 3, '<tts_pad>'), (248073, 3, '<tts_text_bos>'), (248074, 3, '<tts_text_eod>'), (248075, 3, '<tts_text_bos_single>'), (248076, 3, '<|audio_pad|>'), (248077, 5, '[PAD248077]'), (248078, 5, '[PAD248078]'), (248079, 5, '[PAD248079]'), (248080, 5, '[PAD248080]'), (248081, 5, '[PAD248081]'), (248082, 5, '[PAD248082]'), (248083, 5, '[PAD248083]')]
+
+tokenizer.* keys present: ['tokenizer.ggml.model', 'tokenizer.ggml.pre', 'tokenizer.ggml.tokens', 'tokenizer.ggml.token_type', 'tokenizer.ggml.merges', 'tokenizer.ggml.eos_token_id', 'tokenizer.ggml.padding_token_id', 'tokenizer.ggml.bos_token_id', 'tokenizer.ggml.add_bos_token', 'tokenizer.chat_template']
+tokenizer.ggml.add_bos_token present: True = False
+tokenizer.ggml.add_eos_token present: False
+tokenizer.ggml.add_space_prefix present: False
+bos=248044 eos=248046 pad=248044
+merges: gguf 247587 vs hf 247587; identical: True
+tokenizer.ggml.model=gpt2 pre=qwen35

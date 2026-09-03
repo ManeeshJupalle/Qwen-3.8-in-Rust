@@ -255,6 +255,20 @@ largest layer 0 at 269,681,536 bytes (257.2 MiB), smallest layer 11 at 214,018,0
 269 MiB in the UD file. The pinned set is unchanged (output Q6_K + token_embd Q4_K + norm = 1,676.7 MiB) plus a
 253.7 MiB MTP block (Q4_0). Ring slot for this file: 257.2 MiB.
 
+Metadata differences between the two GGUFs (`docs/data/gguf_metadata_summary.txt` vs `docs/data/ud/...`):
+
+| key | bartowski | Unsloth UD |
+|---|---|---|
+| `tokenizer.chat_template` | byte-identical to HF `chat_template.jinja` (8,952 chars) | Unsloth-modified (9,993 chars), see item 9 |
+| `tokenizer.ggml.add_bos_token` | present, `false` | absent |
+| `tokenizer.ggml.padding_token_id` | 248044 `<\|endoftext\|>` (matches `tokenizer_config.json`) | 248055 `<\|vision_pad\|>` |
+| `general.name` | `Qwen3.8 27B` | `Qwen3.8-27B` |
+| `quantize.imatrix.*` | bartowski calibration-v6, 582 chunks | Unsloth imatrix, 1251 chunks |
+| vocab, merges, token types | identical to HF (243 `[PADn]` filler ids, types 3/4/5 as in item 11) | same |
+
+So the earlier items 8 and 9 (pad = vision pad, modified template, missing add_bos key) are Unsloth-specific; with
+bartowski's file the GGUF and HF tokenizer metadata agree except for the padded vocab rows.
+
 ## 23. The separate MTP GGUF holds the same weights as `blk.64` of the main file
 
 `docs/data/ud/mtp_blk64_diff.txt` (`tools/mtp_blk64_diff.py`; 38 MB of the MTP file fetched by range request):
