@@ -52,7 +52,7 @@ from transformers.models.qwen3_5.modeling_qwen3_5 import (
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIX = os.path.join(ROOT, "tests", "fixtures")
 PREFIX = "model.language_model."
-GGUF_DEFAULT = os.path.join(ROOT, "models", "Qwen3.8-27B-GGUF-bartowski", "Qwen3.8-27B-Q4_K_M.gguf")
+GGUF_DEFAULT = os.environ.get("AQUEDUCT_GGUF", r"C:\models\Qwen3.8-27B-Q4_K_M.gguf")  # on the SSD since Phase 3 (finding 34)
 LM_HEAD_CHUNK_ROWS = 16384
 
 sys.path.insert(0, os.path.join(ROOT, "tools", "fixtures"))

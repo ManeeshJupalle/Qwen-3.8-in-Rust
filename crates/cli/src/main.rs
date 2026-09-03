@@ -12,7 +12,8 @@ const DEFAULT_TOKENIZER: &str = "models/Qwen3.8-27B/tokenizer.json";
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage:\n  aqueduct info <model.gguf>\n  aqueduct tok [--tokenizer <tokenizer.json>] encode <text>\n  aqueduct tok [--tokenizer <tokenizer.json>] decode <id,id,...>\n  aqueduct bench kernels [--threads N] [--rows R] [--cols C] [--reps N]"
+        "usage:\n  aqueduct info <model.gguf>\n  aqueduct tok [--tokenizer <tokenizer.json>] encode <text>\n  aqueduct tok [--tokenizer <tokenizer.json>] decode <id,id,...>\n  aqueduct bench kernels [--threads N] [--rows R] [--cols C] [--reps N]
+  aqueduct bench membw [--gib 2] [--runs 5] [--threads N]"
     );
     ExitCode::from(2)
 }
@@ -21,6 +22,13 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("info") if args.len() == 2 => match info(&args[1]) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("bench") if args.get(1).map(String::as_str) == Some("membw") => match bench::membw(&args[2..]) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");

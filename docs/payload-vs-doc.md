@@ -425,6 +425,14 @@ kernels (45 s per layer over 48 prompt tokens, 95 s per lm_head pass); with AVX2
 5 s per layer (`docs/data/phase2b_parity_0_7_avx2.log`). The reference and the engine cannot both fit next to
 the user's other processes (about 22 GB of the 32 GB were taken), which is why both stream one layer at a time.
 
+**Phase 3 update (2026-09-03):** the bartowski GGUF was moved off the HDD to the SSD at
+`C:\models\Qwen3.8-27B-Q4_K_M.gguf` (C: is the NVMe, D: the SATA HDD); `models/Qwen3.8-27B-GGUF-bartowski/`
+is now empty. Every path that named it follows: `crates/core/tests/common/mod.rs::gguf_path` (constant
+`DEFAULT_GGUF`, overridable with `AQUEDUCT_GGUF`), `tools/ref_forward.py` (`GGUF_DEFAULT`),
+`tools/fixtures/gen_kernels.py` (`GGUF_PATH`) and the CLI default for `aqueduct run`. The bf16 shards,
+the tiny oracle and the llama.cpp checkout stay under `models/` on D:. Phase 3 load times are therefore SSD
+numbers (`docs/data/phase3_timing.txt`) and not comparable with the disk timings above.
+
 ## 35. Quantisation noise floor: the published bf16 model and the Q4_K_M file differ by 0.5 to 0.7 in raw logits; the two Q8 engines differ by the same amount from each other
 
 `docs/data/quant_noise_floor.txt` (`tools/noise_floor.py`): HF in float32 on the bf16 shards versus HF in

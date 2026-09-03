@@ -36,7 +36,7 @@ np.random.seed(20260903)
 DEN = 1e-40  # float32 subnormal
 EPS = 1e-6
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GGUF_PATH = os.path.join(ROOT, "models", "Qwen3.8-27B-GGUF-bartowski", "Qwen3.8-27B-Q4_K_M.gguf")
+GGUF_PATH = os.environ.get("AQUEDUCT_GGUF", r"C:\models\Qwen3.8-27B-Q4_K_M.gguf")  # on the SSD since Phase 3 (finding 34)
 DEQ_DIR = os.path.join(ROOT, "tests", "fixtures", "dequant")
 _reader = None
 

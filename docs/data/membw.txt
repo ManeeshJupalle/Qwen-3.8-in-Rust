@@ -1,0 +1,20 @@
+# aqueduct bench membw, 2026-09-03, i7-9750H (6 cores / 12 threads), 2 x 16 GB DDR4 at 2667 MT/s (dual channel, 42.7 GB/s theoretical), Windows 11, release build
+# 2 GiB u64 buffer, sum-reduce with AVX2 loads (every byte read once, nothing written), contiguous chunk per thread, best of 5 with all 5 listed.
+# This is the ceiling every matvec is judged against: a kernel streaming weight bytes at 50% of the all-threads number is memory-bound enough.
+# Laptop caveat: after hours of load the machine throttles (docs/data/kernels_bench.txt); the run below was taken on a cool machine, the first run of the session.
+#
+# first run of the session (the one filed above the fold):
+# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 5; hardware threads 12
+# fill + first pass: 1.70 s
+threads   best GB/s worst GB/s   runs (GB/s)
+1             14.38      11.47   11.47 13.27 13.88 13.46 14.38
+6             28.68      25.90   28.68 28.49 25.90 27.45 27.40
+12            28.92      26.39   26.39 28.71 28.92 28.15 28.79
+#
+# second run, immediately after:
+# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 5; hardware threads 12
+# fill + first pass: 1.53 s
+threads   best GB/s worst GB/s   runs (GB/s)
+1             14.86      12.24   14.20 13.50 12.24 14.86 14.55
+6             27.01      26.74   26.83 27.01 26.80 26.74 26.75
+12            26.69      21.51   24.92 21.51 24.10 26.69 25.85

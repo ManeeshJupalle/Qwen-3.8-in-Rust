@@ -16,12 +16,15 @@ pub fn fixture(name: &str) -> PathBuf {
     fixtures().join(name)
 }
 
-/// The primary GGUF (bartowski Q4_K_M). Tests that need it fail loudly if it is absent.
+/// The primary GGUF (bartowski Q4_K_M). It lives on the SSD at `C:\models` since Phase 3 (finding 34);
+/// `AQUEDUCT_GGUF` overrides the path. Tests that need it fail loudly if it is absent.
+pub const DEFAULT_GGUF: &str = r"C:\models\Qwen3.8-27B-Q4_K_M.gguf";
+
 pub fn gguf_path() -> PathBuf {
-    let p = root().join("models").join("Qwen3.8-27B-GGUF-bartowski").join("Qwen3.8-27B-Q4_K_M.gguf");
+    let p = std::env::var_os("AQUEDUCT_GGUF").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(DEFAULT_GGUF));
     assert!(
         p.exists(),
-        "primary GGUF missing at {}\nrun: hf download bartowski/Qwen3.8-27B-GGUF Qwen3.8-27B-Q4_K_M.gguf --local-dir models/Qwen3.8-27B-GGUF-bartowski",
+        "primary GGUF missing at {}\nrun: hf download bartowski/Qwen3.8-27B-GGUF Qwen3.8-27B-Q4_K_M.gguf --local-dir C:\models (or set AQUEDUCT_GGUF)",
         p.display()
     );
     p
