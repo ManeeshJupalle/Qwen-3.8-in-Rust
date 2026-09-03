@@ -86,6 +86,11 @@ def gen_deltanet_layer(fx, cfg):
         y = mod(x, cache_params=cache, attention_mask=mask)
     conv_state = cache.layers[0].conv_states[0].clone()  # (1, conv_dim, kernel-1)
     rec_state = cache.layers[0].recurrent_states[0].clone()  # (1, heads, dk, dv)
+    # the same prefill fed one token at a time (recurrent rule), to bound chunk-vs-recurrent rounding
+    cache_seq = DynamicCache(config=cfg)
+    with torch.no_grad():
+        y_seq = torch.cat([mod(x[:, i:i + 1], cache_params=cache_seq, attention_mask=None) for i in range(t)], dim=1)
+    rec_state_seq = cache_seq.layers[0].recurrent_states[0].clone()
     x1 = hostile_x(1, cfg.hidden_size)
     with torch.no_grad():
         y1 = mod(x1, cache_params=cache, attention_mask=None)
@@ -105,7 +110,9 @@ def gen_deltanet_layer(fx, cfg):
            head_v=cfg.linear_value_head_dim, conv_kernel=cfg.linear_conv_kernel_dim, eps=cfg.rms_norm_eps, t=t,
            weights=add_arrays(fx, c, gg),
            prefill=dict(x=fx.array(c, "x", x[0]), y=fx.array(c, "y", y[0]), conv_state=fx.array(c, "conv_state", conv_gguf(conv_state)),
-                        rec_state=fx.array(c, "rec_state", rec_gguf(rec_state)), max_abs=float(y.abs().max())),
+                        rec_state=fx.array(c, "rec_state", rec_gguf(rec_state)), max_abs=float(y.abs().max()),
+                        y_seq=fx.array(c, "y_seq", y_seq[0]), rec_state_seq=fx.array(c, "rec_state_seq", rec_gguf(rec_state_seq)),
+                        chunk_vs_seq_max_diff=float((y - y_seq).abs().max())),
            step=dict(x=fx.array(c, "x1", x1[0]), y=fx.array(c, "y1", y1[0]), conv_state=fx.array(c, "conv_state1", conv_gguf(conv_state1)),
                      rec_state=fx.array(c, "rec_state1", rec_gguf(rec_state1)), max_abs=float(y1.abs().max())),
            state_note="states are in GGUF head order (V heads re-tiled: position p = v_in_group * num_k + k)")

@@ -4,6 +4,8 @@
 pub mod arch;
 pub mod config;
 pub mod gguf;
+pub mod kernels;
+pub mod layers;
 pub mod quant;
 pub mod tok;
 

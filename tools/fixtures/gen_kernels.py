@@ -144,11 +144,11 @@ def gen_q8():
     fx = Fixture("q8_quantize")
     fx.meta["source"] = "gguf.quants.quantize(x, Q8_0) == ggml quantize_row_q8_0_ref: d = amax/127 (f32) -> f16; id = 1/d (f32, from the unrounded d); q = round-half-away(x*id)"
     fx.meta["exact"] = True
-    fx.meta["note"] = "an all-denormal row is NOT generated: amax/127 underflows f16 to 0 while id overflows, and ggml's int8 conversion of inf is undefined; |x| > 127*65504 overflows the f16 scale likewise"
+    fx.meta["note"] = "every 32-block gets one normal value: an all-denormal block is NOT generated: amax/127 underflows f16 to 0 while id overflows, and ggml's int8 conversion of inf is undefined; |x| > 127*65504 overflows the f16 scale likewise"
     for width in (32, 64, 5120):
         rows = [
             ("random", rnd(width)),
-            ("denormal_mixed", torch.cat([torch.tensor([DEN, -DEN, 1.0]), torch.full((width - 3,), DEN)])),
+            ("denormal_mixed", torch.cat([torch.tensor([DEN, -DEN, 1.0]), torch.full((width - 3,), DEN)]).index_fill_(0, torch.arange(0, width, 32), 1.0)),
             ("large", rnd(width, scale=1e6)),
             ("neg_zero", torch.full((width,), -0.0)),
             ("all_equal", torch.full((width,), 3.0)),
@@ -397,7 +397,7 @@ def gen_deltanet():
         c = "step_h%d_dk%d" % (heads, dk)
         fx.add(c, kind="deltanet_step", heads=heads, dk=dk, dv=dv,
                q=fx.array(c, "q", q[0, 0]), k=fx.array(c, "k", k[0, 0]), v=fx.array(c, "v", v[0, 0]),
-               a=fx.array(c, "a", a[0, 0]), b=fx.array(c, "b", b[0, 0]), A=fx.array(c, "A", A), dt_bias=fx.array(c, "dt_bias", dt_bias),
+               a=fx.array(c, "a", a[0, 0]), b=fx.array(c, "b", b[0, 0]), ssm_a=fx.array(c, "ssm_a", A), dt_bias=fx.array(c, "dt_bias", dt_bias),
                g=fx.array(c, "g", g[0, 0]), beta=fx.array(c, "beta", beta[0, 0]),
                state=fx.array(c, "state", state[0]), out=fx.array(c, "out", out[0, 0]), new_state=fx.array(c, "new_state", new_state[0]),
                max_abs=float(max(out.abs().max(), new_state.abs().max())))

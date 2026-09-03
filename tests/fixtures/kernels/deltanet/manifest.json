@@ -45,8 +45,8 @@
      6
     ]
    },
-   "A": {
-    "file": "step_h6_dk8__A.npy",
+   "ssm_a": {
+    "file": "step_h6_dk8__ssm_a.npy",
     "shape": [
      6
     ]
@@ -133,8 +133,8 @@
      3
     ]
    },
-   "A": {
-    "file": "step_h3_dk128__A.npy",
+   "ssm_a": {
+    "file": "step_h3_dk128__ssm_a.npy",
     "shape": [
      3
     ]

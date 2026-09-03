@@ -4,7 +4,7 @@
  "f32_eps": 1.1920928955078125e-07,
  "source": "gguf.quants.quantize(x, Q8_0) == ggml quantize_row_q8_0_ref: d = amax/127 (f32) -> f16; id = 1/d (f32, from the unrounded d); q = round-half-away(x*id)",
  "exact": true,
- "note": "an all-denormal row is NOT generated: amax/127 underflows f16 to 0 while id overflows, and ggml's int8 conversion of inf is undefined; |x| > 127*65504 overflows the f16 scale likewise",
+ "note": "every 32-block gets one normal value: an all-denormal block is NOT generated: amax/127 underflows f16 to 0 while id overflows, and ggml's int8 conversion of inf is undefined; |x| > 127*65504 overflows the f16 scale likewise",
  "cases": [
   {
    "case": "q8_w32",

@@ -148,7 +148,23 @@
       8
      ]
     },
-    "max_abs": 0.959038257598877
+    "max_abs": 0.959038257598877,
+    "y_seq": {
+     "file": "deltanet_layer__y_seq.npy",
+     "shape": [
+      6,
+      64
+     ]
+    },
+    "rec_state_seq": {
+     "file": "deltanet_layer__rec_state_seq.npy",
+     "shape": [
+      6,
+      8,
+      8
+     ]
+    },
+    "chunk_vs_seq_max_diff": 4.591420292854309e-07
    },
    "step": {
     "x": {
