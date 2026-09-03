@@ -293,3 +293,37 @@ to 0.95 (mean 0.09 to 0.17) and the 39-token prompt's greedy continuation diverg
 over cliffs" vs "glaciers once shaped the landscape"). "Q4_K_M" is therefore not one model: ARCHITECTURE.md's
 "Same tokens at every budget" contract can only be stated per GGUF file, and the parity target must name the
 file (bartowski's, from this addendum on).
+
+# Phase 1 findings (reading the model from the GGUF alone)
+
+## 25. Five values the engine needs exist in config.json but have no GGUF metadata key
+
+`ModelConfig` (crates/core/src/config.rs) is built only from GGUF KV metadata and tensor shapes. These
+config.json values could not be sourced from the GGUF and were therefore NOT put into the contract
+(`docs/config-mapping.md`, last table):
+
+| HF path | value | GGUF | consequence |
+|---|---|---|---|
+| `text_config.hidden_act` | `silu` | no key | llama.cpp hardcodes SiLU for the `qwen35` architecture |
+| `text_config.output_gate_type` | `swish` | no key | DeltaNet output gate activation is implied by the architecture |
+| `text_config.mamba_ssm_dtype` | `float32` | no key | recurrent-state precision is an implementation choice |
+| `text_config.rope_parameters.mrope_interleaved` | `true` | no key (`rope.dimension_sections` exists, the interleave flag does not) | irrelevant for text-only positions |
+| `text_config.rope_parameters.rope_type` / scaling | `default` | no `rope.scaling.*` keys | llama.cpp assumes freq_scale 1 when absent |
+
+Open question for the user: carry these as architecture-implied constants keyed on `general.architecture == qwen35`
+(what llama.cpp does), or refuse to run without them. Phase 2 cannot start the MLP or DeltaNet gate without a decision.
+
+## 26. Smaller Phase 1 findings
+
+- The GGUF names one EOS (`tokenizer.ggml.eos_token_id = 248046`, `<|im_end|>`); `generation_config.json` stops on
+  `[248046, 248044]`. 248044 (`<|endoftext|>`) is the GGUF's bos and pad id, so a GGUF-only engine would not stop on
+  it unless it treats bos as a stop token. There is no `tokenizer.ggml.eot_token_id` key in either GGUF.
+- `general.alignment` is absent from both GGUFs; the reader applies the GGUF specification's 32 (a format rule,
+  documented in `docs/config-mapping.md`), not a model default.
+- `text_config.eos_token_id` (248044) in config.json is not the conversational EOS; `tokenizer_config.json`'s
+  `eos_token` (`<|im_end|>` = 248046) is. `tokenizer_config.json` has no BOS token at all, while the GGUF names
+  248044 as bos with `add_bos_token = false`.
+- The GGUF's `{arch}.rope.dimension_sections` has four entries `[11, 11, 10, 0]` versus three in config.json;
+  the trailing 0 is a fourth mRoPE axis llama.cpp reserves. `2 * (11 + 11 + 10) = 64 = rope.dimension_count`.
+- The `tokenizers` Rust crate reproduces the HF Python tokenizer on all 45 cases and 3 prompts with the
+  `fancy-regex` backend (no C dependency); the same crate version is what the Python fixtures used (0.23.1).

@@ -1,3 +1,11 @@
 [workspace]
 resolver = "2"
 members = ["crates/core", "crates/cli"]
+
+# Debug builds of the header parser and the scalar dequant loops are too slow for the
+# open-time and full-tensor parity tests; light optimisation keeps `cargo test` under a minute.
+[profile.dev]
+opt-level = 1
+
+[profile.test]
+opt-level = 1

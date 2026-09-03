@@ -1,0 +1,318 @@
+{
+ "gguf": "Qwen3.8-27B-Q4_K_M.gguf",
+ "gguf_bytes": 17772537440,
+ "spec": "gguf-py quants.dequantize (gguf package 0.19.0)",
+ "digest": "crc32 = zlib.crc32 over the float32 little-endian byte stream",
+ "head_values": 4096,
+ "raw_limit_bytes": 8388608,
+ "types": {
+  "F32": {
+   "ggml_type": "F32",
+   "ggml_type_id": 0,
+   "block_size": 1,
+   "type_size": 4,
+   "n_tensors": 456,
+   "full": {
+    "tensor": "blk.0.ssm_a",
+    "shape_numpy": [
+     48
+    ],
+    "n_elements": 48,
+    "byte_size": 192,
+    "abs_offset": 2003248736,
+    "head_npy": "F32_full_head.npy",
+    "digest": {
+     "crc32": 3223449471,
+     "sum_f64": -2.308873753529042,
+     "max_abs": 0.3375851511955261,
+     "n": 48
+    },
+    "raw_bin": "F32_full.bin"
+   },
+   "prefix": {
+    "tensor": "blk.9.ssm_beta.weight",
+    "n_blocks": 3,
+    "n_elements": 3,
+    "raw_bin": "F32_prefix.bin",
+    "npy": "F32_prefix.npy",
+    "abs_offset": 4339453856
+   }
+  },
+  "Q4_0": {
+   "ggml_type": "Q4_0",
+   "ggml_type_id": 2,
+   "block_size": 32,
+   "type_size": 18,
+   "n_tensors": 8,
+   "full": {
+    "tensor": "blk.64.attn_k.weight",
+    "shape_numpy": [
+     1024,
+     5120
+    ],
+    "n_elements": 5242880,
+    "byte_size": 2949120,
+    "abs_offset": 17533554272,
+    "head_npy": "Q4_0_full_head.npy",
+    "digest": {
+     "crc32": 1757363470,
+     "sum_f64": -38.48222351074219,
+     "max_abs": 0.2734375,
+     "n": 5242880
+    },
+    "raw_bin": "Q4_0_full.bin"
+   },
+   "prefix": {
+    "tensor": "blk.64.ffn_up.weight",
+    "n_blocks": 3,
+    "n_elements": 96,
+    "raw_bin": "Q4_0_prefix.bin",
+    "npy": "Q4_0_prefix.npy",
+    "abs_offset": 17692829280
+   }
+  },
+  "Q4_K": {
+   "ggml_type": "Q4_K",
+   "ggml_type_id": 12,
+   "block_size": 256,
+   "type_size": 144,
+   "n_tensors": 249,
+   "full": {
+    "tensor": "blk.11.attn_v.weight",
+    "shape_numpy": [
+     1024,
+     5120
+    ],
+    "n_elements": 5242880,
+    "byte_size": 2949120,
+    "abs_offset": 4688621024,
+    "head_npy": "Q4_K_full_head.npy",
+    "digest": {
+     "crc32": 2233465260,
+     "sum_f64": -60.03041070699692,
+     "max_abs": 0.2559051513671875,
+     "n": 5242880
+    },
+    "raw_bin": "Q4_K_full.bin"
+   },
+   "prefix": {
+    "tensor": "token_embd.weight",
+    "n_blocks": 3,
+    "n_elements": 768,
+    "raw_bin": "Q4_K_prefix.bin",
+    "npy": "Q4_K_prefix.npy",
+    "abs_offset": 1053959776
+   }
+  },
+  "Q5_K": {
+   "ggml_type": "Q5_K",
+   "ggml_type_id": 13,
+   "block_size": 256,
+   "type_size": 176,
+   "n_tensors": 32,
+   "full": {
+    "tensor": "blk.11.attn_k.weight",
+    "shape_numpy": [
+     1024,
+     5120
+    ],
+    "n_elements": 5242880,
+    "byte_size": 3604480,
+    "abs_offset": 4627977696,
+    "head_npy": "Q5_K_full_head.npy",
+    "digest": {
+     "crc32": 1733801196,
+     "sum_f64": 34.09969013929367,
+     "max_abs": 0.28310394287109375,
+     "n": 5242880
+    },
+    "raw_bin": "Q5_K_full.bin"
+   },
+   "prefix": {
+    "tensor": "blk.7.attn_output.weight",
+    "n_blocks": 3,
+    "n_elements": 768,
+    "raw_bin": "Q5_K_prefix.bin",
+    "npy": "Q5_K_prefix.npy",
+    "abs_offset": 3645405024
+   }
+  },
+  "Q6_K": {
+   "ggml_type": "Q6_K",
+   "ggml_type_id": 14,
+   "block_size": 256,
+   "type_size": 210,
+   "n_tensors": 97,
+   "full": {
+    "tensor": "blk.19.attn_v.weight",
+    "shape_numpy": [
+     1024,
+     5120
+    ],
+    "n_elements": 5242880,
+    "byte_size": 4300800,
+    "abs_offset": 6596137696,
+    "head_npy": "Q6_K_full_head.npy",
+    "digest": {
+     "crc32": 4083569959,
+     "sum_f64": 29.23270356655121,
+     "max_abs": 0.2421875,
+     "n": 5242880
+    },
+    "raw_bin": "Q6_K_full.bin"
+   },
+   "prefix": {
+    "tensor": "output.weight",
+    "n_blocks": 3,
+    "n_elements": 768,
+    "raw_bin": "Q6_K_prefix.bin",
+    "npy": "Q6_K_prefix.npy",
+    "abs_offset": 10995296
+   }
+  },
+  "Q8_0": {
+   "ggml_type": "Q8_0",
+   "ggml_type_id": 8,
+   "block_size": 32,
+   "type_size": 34,
+   "n_tensors": 24,
+   "full": {
+    "tensor": "blk.0.ssm_out.weight",
+    "shape_numpy": [
+     5120,
+     6144
+    ],
+    "n_elements": 31457280,
+    "byte_size": 33423360,
+    "abs_offset": 2005379552,
+    "head_npy": "Q8_0_full_head.npy",
+    "digest": {
+     "crc32": 3923236380,
+     "sum_f64": 433.9534280896187,
+     "max_abs": 1.3516616821289062,
+     "n": 31457280
+    },
+    "raw_bin": null,
+    "raw_note": "raw bytes exceed 8388608; the test reads them from the GGUF at abs_offset"
+   },
+   "prefix": {
+    "tensor": "blk.62.ssm_out.weight",
+    "n_blocks": 3,
+    "n_elements": 96,
+    "raw_bin": "Q8_0_prefix.bin",
+    "npy": "Q8_0_prefix.npy",
+    "abs_offset": 17245562464
+   }
+  }
+ },
+ "hostile": [
+  {
+   "label": "q4_0",
+   "ggml_type": "Q4_0",
+   "n_elements": 32,
+   "raw_bin": "hostile_q4_0.bin",
+   "npy": "hostile_q4_0.npy",
+   "description": "d=1.5, low/high nibbles distinct permutations",
+   "values_head": [
+    -7.5,
+    3.0,
+    -10.5,
+    0.0,
+    10.5,
+    -3.0,
+    7.5,
+    -6.0
+   ]
+  },
+  {
+   "label": "q8_0",
+   "ggml_type": "Q8_0",
+   "n_elements": 32,
+   "raw_bin": "hostile_q8_0.bin",
+   "npy": "hostile_q8_0.npy",
+   "description": "d=0.75, int8 values incl -128, 127",
+   "values_head": [
+    -96.0,
+    95.25,
+    -40.5,
+    -12.75,
+    15.0,
+    42.75,
+    70.5,
+    -93.75
+   ]
+  },
+  {
+   "label": "q4_k",
+   "ggml_type": "Q4_K",
+   "n_elements": 256,
+   "raw_bin": "hostile_q4_k.bin",
+   "npy": "hostile_q4_k.npy",
+   "description": "d=1.5 dmin=0.25 sc=[63, 1, 2, 4, 8, 16, 32, 33] m=[62, 3, 5, 9, 17, 31, 47, 60], nibbles distinct",
+   "values_head": [
+    79.0,
+    551.5,
+    1024.0,
+    -15.5,
+    457.0,
+    929.5,
+    1402.0,
+    362.5
+   ]
+  },
+  {
+   "label": "q5_k",
+   "ggml_type": "Q5_K",
+   "n_elements": 256,
+   "raw_bin": "hostile_q5_k.bin",
+   "npy": "hostile_q5_k.npy",
+   "description": "d=1.5 dmin=0.25 same scales; qh bits vary per byte; ql distinct",
+   "values_head": [
+    1685.5,
+    1024.0,
+    1874.5,
+    1213.0,
+    2063.5,
+    1402.0,
+    2252.5,
+    79.0
+   ]
+  },
+  {
+   "label": "q6_k",
+   "ggml_type": "Q6_K",
+   "n_elements": 256,
+   "raw_bin": "hostile_q6_k.bin",
+   "npy": "hostile_q6_k.npy",
+   "description": "d=0.5, int8 scales [127, -128, 1, -1, 2, -3, 5, -8, 13, -21, 34, -55, 89, -100, 64, -64], ql/qh distinct patterns",
+   "values_head": [
+    63.5,
+    1524.0,
+    -1079.5,
+    -635.0,
+    825.5,
+    1270.0,
+    -1333.5,
+    -889.0
+   ]
+  },
+  {
+   "label": "f32",
+   "ggml_type": "F32",
+   "n_elements": 8,
+   "raw_bin": "hostile_f32.bin",
+   "npy": "hostile_f32.npy",
+   "description": "special float32 values incl inf and subnormal",
+   "values_head": [
+    0.0,
+    -0.0,
+    1.0,
+    -1.5,
+    3.3999999521443642e+38,
+    1.401298464324817e-45,
+    "inf",
+    "-inf"
+   ]
+  }
+ ]
+}
