@@ -1,0 +1,79 @@
+{
+ "tokenizer_json_sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+ "add_special_tokens": false,
+ "bos_prepended": false,
+ "prompts": [
+  {
+   "name": "capital",
+   "text": "The capital of France is",
+   "text_utf8_hex": "546865206361706974616c206f66204672616e6365206973",
+   "ids": [
+    760,
+    6511,
+    314,
+    9338,
+    369
+   ],
+   "n_ids": 5
+  },
+  {
+   "name": "fib",
+   "text": "def fibonacci(n):",
+   "text_utf8_hex": "646566206669626f6e61636369286e293a",
+   "ids": [
+    727,
+    73111,
+    1393,
+    1590
+   ],
+   "n_ids": 4
+  },
+  {
+   "name": "sentence",
+   "text": "Rivers carve valleys slowly over thousands of years, carrying sediment downstream until it settles in deltas where the water finally meets the sea, building new land while the tides push back against the shore.",
+   "text_utf8_hex": "5269766572732063617276652076616c6c65797320736c6f776c79206f7665722074686f7573616e6473206f662079656172732c206361727279696e6720736564696d656e7420646f776e73747265616d20756e74696c20697420736574746c657320696e2064656c746173207768657265207468652077617465722066696e616c6c79206d6565747320746865207365612c206275696c64696e67206e6577206c616e64207768696c65207468652074696465732070757368206261636b20616761696e7374207468652073686f72652e",
+   "ids": [
+    49,
+    1878,
+    76892,
+    82446,
+    13569,
+    888,
+    8765,
+    314,
+    1578,
+    11,
+    14885,
+    56084,
+    49625,
+    2980,
+    424,
+    88749,
+    303,
+    87470,
+    1332,
+    279,
+    2919,
+    5326,
+    19417,
+    279,
+    9117,
+    11,
+    4599,
+    491,
+    4128,
+    1345,
+    279,
+    259,
+    3232,
+    4336,
+    1142,
+    2272,
+    279,
+    29199,
+    13
+   ],
+   "n_ids": 39
+  }
+ ]
+}

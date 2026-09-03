@@ -1,0 +1,5 @@
+/models/
+/.venv/
+/target/
+*.gguf
+*.safetensors

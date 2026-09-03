@@ -1,0 +1,838 @@
+# Text extract of https://unsloth.ai/docs/models/qwen3.8 fetched 2026-09-02 (tags stripped)
+
+Qwen3.8 - How to Run Locally | Unsloth Documentation
+Introducing Unsloth Desktop: the first local app to run & train models
+✨
+Read more
+⌘
+Ctrl
+k
+Reddit
+Discord
+GitHub
+Newsletter
+More
+🇺🇸 English
+🇺🇸 English
+🦥
+Homepage
+✨
+Introducing Unsloth Desktop
+Get Started
+📥
+Installation
+🔮
+Models
+🌱
+Beginner?
+📒
+Unsloth Notebooks
+🧬
+Fine-tuning Guide
+💡
+Reinforcement Learning
+New
+Unsloth Updates
+Dynamic 3.0 GGUFs
+🦥
+Unsloth Studio
+Models
+Qwen3.8-Flash-Next
+GLM-5.3-Flash
+Qwen3.8-27B
+Fine-tune Qwen3.8
+GLM-5.3
+DeepSeek-V4-Flash
+Complete LLM Directory
+Meta Muse Glimmer
+🌘
+Kimi K3
+💜
+Qwen3.6
+✨
+Gemma 4
+🪽
+Run MTP Models
+💜
+Qwen3.5
+Basics
+🦥
+Dynamic 3.0 GGUFs
+Unsloth Start
+Generate Images Diffusion
+Unsloth API
+Serve Models with HTTPS
+Serve Models over LAN
+🖥️
+Inference & Deployment
+OpenAI Codex
+🦥
+Unsloth Dynamic NVFP4
+AMD
+MCP Server
+Multi-GPU Training
+🔎
+Embedding Fine-tuning
+💎
+Faster MoE Training
+🔊
+Text-to-Speech Fine-tuning
+Tool Calling Guide
+👁️
+Vision Fine-tuning
+⚠️
+Troubleshooting & FAQs
+💬
+Chat Templates
+♻️
+Continued Pretraining
+Integrations
+Unsloth Start
+Connect a Provider
+Hermes Agent
+OpenClaw
+OpenCode
+Python SDK
+Curl & HTTP
+VS Code
+OpenAI Codex
+Blog
+⚡
+New 3x Faster Training
+500K Context Training
+Quantization-Aware Training
+DGX Station
+Unsloth Docker Guide
+DGX Spark and Unsloth
+Blackwell, RTX 50 and Unsloth
+Powered by GitBook
+On this page
+For the complete documentation index, see
+llms.txt
+. This page is also available as
+Markdown
+.
+Copy
+On this page
+Models
+Qwen3.8 - How to Run Locally
+Guide to running Qwen3.8 quants including Qwen3.8-27B on your local setup.
+Qwen3.8 is Qwen’s new model family, featuring Qwen3.8-
+27B
+, Qwen3.8-
+2.4T-A95B
+and Qwen3.8-
+Max
+. Qwen3.8-27B has
+vision
+and reasoning capabilities, a
+256K context
+window, and runs locally on
+17GB RAM/VRAM
+setups. Qwen3.8 excels at agentic coding, vision and chat tasks, and can now run via Unsloth GGUFs, NVFP4 and
+Unsloth Desktop
+. Qwen3.8-2.4T-A95B is a 2.4T parameter (95B active) model with rivaling GPT-5.6 Sol.
+Aug 19 Update:
+Qwen3.8-27B GGUFs now use
+Unsloth Dynamic V3.0
+for 10% more accuracy at the same size, largely outperforming others.
+Run Qwen3.8 Guide
+Download Unsloth
+Thank you Qwen for day zero access. Unsloth quants also include:
+Developer Role Support
+for agentic tools like Codex
+MTP enabled
+for fast inference
+Tool calling:
+Improved parsing nested objects to make tools succeed more
+Full-precision Qwen3.8-2.4T-A95B requires 4.9TB of storage and 1-bit
+Unsloth
+Dynamic GGUFs takes
+397GB (91% smaller)
+, and larger IQ1_S takes 508GB.
+Dynamic 4-bit Qwen3.8-27B in Unsloth Desktop
+Unsloth quants:
+Qwen3.8-
+27B
+-GGUF
+Qwen3.8-27B-
+NVFP4
+⚙️
+Usage Guide
+Qwen3.8-27B Requirements:
+Qwen3.8-
+27B
+4-bit quants work on 16-19GB VRAM like RTX 5080, 4090 or a Mac with 24GB RAM.
+Table: Hardware requirements
+(units = total memory: RAM + VRAM, or unified memory)
+1-bit
+2-bit
+3-bit
+4-bit
+6-bit
+8-bit
+BF16
+7-8 GB
+9-11 GB
+12-14 GB
+16-19 GB
+23-26 GB
+31 GB
+56 GB
+If you want to use
+MTP
+for faster inference, prepare to have 1-2GB extra headroom.
+Qwen3.8-
+2.4T
+Requirements:
+Qwen3.8-
+2.4T-A95B
+-GGUF
+Dynamic 1-bit XXXS
+Dynamic 1-bit Standard
+Dynamic 2-bit
+Q8_0
+BF16 (Lossless)
+397GB
+508GB
+657 GB
+2.6 TB
+4.9 TB
+Recommended Settings
+Qwen3.8-
+27B Settings:
+Qwen3.8-27B is a
+hybrid thinking
+model with different default settings for thinking and non-thinking modes. Extra high is enabled by default so if you want shorter thinking traces, you can
+adjust the thinking effort
+:
+Parameter
+Thinking Mode
+Instruct (non-thinking) Mode
+temperature
+1.0
+0.7
+top_p
+0.95
+0.80
+top_k
+20
+20
+min_p
+0.0
+0.0
+presence_penalty
+0.0
+1.5
+repetition_penalty
+1.0
+1.0
+Maximum context window:
+262,144
+(can be extended to 1M via YaRN)
+Thinking Mode:
+temperature=1.0
+,
+top_p=0.95
+,
+top_k=20
+,
+min_p=0.0
+,
+presence_penalty=0.0
+,
+repetition_penalty=1.0
+Instruct (or non-thinking) mode:
+temperature=0.7
+,
+top_p=0.80
+,
+top_k=20
+,
+min_p=0.0
+,
+presence_penalty=1.5
+,
+repetition_penalty=1.0
+Qwen3.8-
+2.4T Settings:
+Qwen3.8-2.4T is
+thinking-only
+, while Qwen3.8-Max is hybrid.
+Default
+temperature = 1.0
+top_p = 0.95
+top_k = 20
+min_p = 0.0
+presence_penalty = 0.0
+Context length = up to
+1,010,000
+temperature=1.0
+,
+top_p=0.95
+,
+top_k=20
+,
+min_p=0.0
+,
+presence_penalty=0.0
+,
+repetition_penalty=1.0
+If the model fits, you will get ~20 tokens/s generation when using B200s and >120 tokens / s throughput. Best rule of thumb: RAM+VRAM ≈ the quant size; otherwise it’ll still work, just much slower due to disk offloading.
+💡 Thinking + Preserve Thinking
+Qwen3.8 has
+Preserve Thinking
+which leaves the thinking trace from the previous conversation. This increases the number of tokens you use, but could increase accuracy in continued conversations.
+Unsloth
+has 'Think' and Preserved Thinking toggles for Qwen3.8 (see right):
+Qwen3.8-27B comes with support for
+reasoning_effort
+, which can be used to adjust reasoning depth and control cost. These toggles are automatically enabled in Unsloth:
+xhigh
+(default): for complex tasks demanding thorough analysis
+medium
+: balancing accuracy and speed
+low
+: efficient reasoning optimizing for speed and cost
+none
+To change
+thinking / reasoning
+effort in
+unsloth run
+or
+llama-server
+, use
+--chat-template-kwargs '{"reasoning_effort":"medium"}'
+If you're on
+Windows
+Powershell, use:
+--chat-template-kwargs "{\"reasoning_effort\":\"medium\"}"
+Change
+medium
+to your desired reasoning level.
+Run Qwen3.8 Guide
+You can now run Qwen3.8 in llama.cpp and Unsloth Desktop. For the large Qwen3.8-2.T model, we will be utilizing the 397GB
+IQ1_XXXS
+quant (named Q1_0) for best results in terms of accessibility and accuracy and it will require at least 450GB RAM. Feel free to change quantization type.
+Hugging Face:
+Qwen3.8-27B-
+GGUF
+•
+Qwen3.8-27B-
+NVFP4
+ModelScope:
+Qwen3.8-27B-
+GGUF
+•
+Qwen3.8-27B-
+NVFP4
+2.4T-A95B:
+Qwen3.8-
+2.4T-A95B
+-GGUF
+Run in Unsloth Desktop
+Run in llama.cpp
+NVFP4 Guide
+🦥 Run Qwen3.8 in Unsloth Desktop
+Qwen3.8 can run in
+Unsloth Desktop
+, an open-source UI app for local AI.
+Unsloth automatically offloads to RAM and detects multiGPU setups
+. With Unsloth Desktop, you can run models locally on
+MacOS, Windows
+, Linux and:
+Search, download,
+run GGUFs
+, MLX and safetensor models
+Self-healing
+tool calling
++
+web search
+Code execution
+(Python, Bash)
+Automatic inference
+parameter tuning (temp, top-p, etc.)
+Fast CPU + GPU inference via MLX and llama.cpp
+Train LLMs
+2x faster with 70% less VRAM
+1
+Install Unsloth
+The easiest way to get started is by downloading the
+Unsloth Desktop app
+. Works on
+macOS
+,
+Windows
+, and
+Linux
+.
+Download Unsloth
+Download for macOS
+Download for Windows
+Download for Linux
+Or, if you prefer to install manually:
+MacOS, Linux, WSL:
+Windows PowerShell:
+2
+Search and download Qwen3.8
+Go to
+Unsloth Chat
+or Model hub and search for Qwen3.8 in the search bar and download your desired model and quant.
+3
+Run Qwen3.8
+Inference parameters should be auto-set when using Unsloth, however you can still change it manually. You can also edit the context length, chat template and other settings.
+For more information, you can view our
+Unsloth inference guide
+.
+For example using Unsloth Desktop with the 397GB Qwen3.8 (-91% smaller) allows you to toggle thinking modes, allow inline canvas, web search and code execution and much more.
+Dynamic 1-bit 397GB 91% smaller GGUF of Qwen3.8 2.4T in Unsloth Desktop
+4
+Serve Qwen3.8 with Unsloth API
+You can use
+unsloth run
+command and serve Qwen3.8 via an API using
+llama-server
+runtime flags, including context sizing, GPU layers, threading, sampling, networking, and tool configuration. For more info see our
+API docs
+or
+unsloth start
+.
+5
+Unsloth is now ready
+You can also do many other things with Qwen3.8 via Unsloth Desktop like:
+Connect tools:
+,
+Codex
+,
+web search
+,
+MCP
+and more
+Train models:
+Fine-tune text, diffusion,
+embedding
+, and more
+Generate media:
+Create and train
+images
+, video,
+TTS
+locally
+Qwen3.8-2.4T-A95B New 1-bit data-types
+We extended IQ1_S in llama.cpp which is 1.5625 bits per weight to 1.1875 bpw by reducing the number of entries in the codebook - we found this works well for large models, and can still retain a lot of accuracy - we also found these new data-types to be fine for post training quantization (PTQ) without the need for QAT or QAD (quantization aware training / distillation).
+Qwen3.8-
+2.4T-A95B
+-GGUF
+Due to naming issues, we used TQ2_0, TQ1_0 and Q1_0 otherwise it won't pop up in the HF repo.
+Dtype
+Naming
+BPW
+# entries
+Index bits
+Block
+IQ1_S
+IQ1_S
+1.5625
+2048
+11
+50 B
+UD-IQ1_XS
+TQ2_0
+1.4375
+1024
+10
+46 B
+UD-IQ1_XXS
+TQ1_0
+1.3125
+512
+9
+42 B
+UD-IQ1_XXXS
+Q1_0
+1.1875
+256
+8
+38 B
+We are still running benchmarks for the new data-types, but for other large models, we get
+good results without any QAT / QAD
+:
+Dtype
+GiB
+PPL
+KLD
+top-p
+IQ1_S
+553.204
+2.578876
+0.564553
+78.882
+UD-IQ1_XS
+513.583
+2.931261
+0.690161
+75.726
+UD-IQ1_XXS
+473.961
+3.540383
+0.876007
+71.284
+UD-IQ1_XXXS
+434.340
+4.488796
+1.109944
+66.257
+🦙
+Run Qwen3.8 in llama.cpp
+1
+We need to use the specific IQ1_XXXS branch
+here
+. You can follow the build instructions below as well. Change
+-DGGML_CUDA=ON
+to
+-DGGML_CUDA=OFF
+if you don't have a GPU or just want CPU inference.
+For Apple Mac / Metal devices
+, set
+-DGGML_CUDA=OFF
+then continue as usual - Metal support is on by default.
+2
+If you just want to run the standard
+IQ1_S
+and other quants, then compile llama.cpp normally:
+3
+Download the model via (after installing
+pip install huggingface_hub
+). You can choose
+Q1_0
+for
+IQ1_XXXS
+or other quantized versions like
+Q8_0
+. If downloads get stuck, see:
+Hugging Face Hub, XET debugging
+Qwen3.8-27B:
+Qwen3.8-2.4T:
+4
+To run the model in llama-cli, follow the code snippets below:
+Remember to
+change settings
+according to your use-case.
+Qwen3.8-27B:
+Qwen3.8-2.4T:
+5
+To run the general UD-IQ1_S you can do:
+Qwen3.8-2.4T:
+6
+Then to run it:
+⚡️NVFP4
+Like Qwen3.6, we’re also releasing new
+dynamic NVFP4 Qwen3.8
+-27B quants that run
+~1.5× faster
+than BF16 checkpoints, with
+better performance
+and comparable file sizes. Run Qwen3.8-27B NVFP4
+1.5x faster
+on
+24GB VRAM.
+We also added
+FP8 KV cache calibration
+for 2x longer context lengths! NVFP4 requires NVIDIA's Blackwell GPUs like RTX 50X, DGX Spark (see
+Qwen3.8-27B
+), B200, B300 GPUs. For older GPUs, our GGUFs work well! You can run NVFP4 quants in
+vLLM
+only for now (SGLang is not supported).
+Qwen3.8-27B-
+NVFP4
+quant
+batch
+BF16 total tok/s
+NVFP4 total tok/s
+speedup
+BF16 per-user
+NVFP4 per-user
+1
+89.8
+133.7
+1.49x
+89.8
+133.7
+8
+649.4
+938.8
+1.45x
+81.2
+117.3
+32
+1983.0
+2787.0
+1.41x
+62.0
+87.1
+64
+3048.5
+4407.2
+1.45x
+47.6
+68.9
+See below for previous benchmarks conducted for Qwen3.6 as well comparing to other NVFP4 implementations which use 16bit activations vs our NVFP4 activations:
+All benchmarks use 1x B200 128 concurrency. Higher concurrency can boost 35B to 17,561 tokens / s.
+For accuracy benchmarks we ran KLD and Top-1% agreement over Code, Chat and many domains. NVFP4 is consistency 92% to 97% accuracy recovery vs BF16
+corpus
+KLD mean
+top-1 agreement
+zh
+0.01628
+93.55%
+code
+0.02600
+96.68%
+refgen
+0.03993
+94.46%
+chat
+0.05818
+92.15%
+ja / ko / ru / es
+0.0124-0.0155
+94-95%
+For accuracy benchmarks For Qwen 3.6, we conducted MMLU-Pro, AIME 2025, GPQA for FP8, BF16, NVIDIA's NVFP4 and our NVFP4s - we show our faster quants do similarly on all:
+For more information, you can read our
+Dynamic NVFP4 quants blog
+.
+To run NVFP4 quants, see below for commands to run Qwen3.8-27B in
+vLLM
+or
+SGLang
+:
+vLLM:
+To install vLLM in a separate venv:
+Then to serve the 27B variant:
+To enable MTP / speculative decoding (faster decode but somewhat less throughput), use:
+If you get Torchcodec issues, be sure to do the below then relaunch vllm.
+SGLang:
+If using SGLang, you must use
+SGLang from MAIN
+otherwise it will not work since we quantize the lm_head to FP8.
+vLLM has a
+CompressedTensorsW8A8Fp8
+kernel which supports this, whilst SGLang cannot load the FP8 lm_head.
+🤯
+Quantization Analysis
+NVFP4 quants are 1.5x faster than BF16 and retains 92 to 97% top-1% accuracy.
+We used
+Dynamic 3.0 GGUFs
+to make Qwen3.8-27B much better!
+Top-1% accuracy plot as shown in UD-3 fro Qwen3.8-27B:
+And mean KLD for Qwen3.8:
+📊 Benchmarks
+For GGUF quantization benchmarks you can see above for our
+quantization analysis
+or
+Dynamic V3.0 article
+.
+Qwen3.8-
+27B
+See further below for table benchmarks:
+Text Performance
+Benchmark
+Qwen3.8-27B
+Qwen3.6-27B
+Qwen3.7-Plus
+Muse Glimmer-30B
+Opus4.6 Max
+Coding
+Agentic terminal codingTerminal Bench 2.1 (Terminus)
+73.0
+63.4
+64.0
+51.7
+78.2
+Agentic codingSWE-bench Pro
+61.7
+53.5
+57.6
+51.2
+53.4
+Repo-level code generationNL2Repo-Bench
+42.3
+36.2
+41.1
+--
+47.6
+Agentic codingDeepSWE 1.1
+42.2
+13.3
+14.2
+--
+--
+Software engineeringQwenSWEBench
+79.0
+49.3
+59.2
+--
+63.8
+Agent
+Long-horizon office workCoWorkBench
+70.7
+61.0
+65.1
+--
+68.2
+Professional job tasksJobBench
+33.4
+21.8
+27.6
+--
+--
+Frontier agentic tasksAgents' Last Exam
+Pass@1
+20.4
+Score
+42.9
+Pass@110.6Score27.3
+Pass@113.2Score33.6
+--
+--
+General
+Instruction followingIFBench
+79.5
+69.1
+79.1
+77.0
+62.5
+Scientific reasoningGPQA Diamond
+89.2
+87.8
+90.3
+83.5
+91.3
+Multidisciplinary reasoningHLE
+30.8
+24.0
+34.7
+22.0
+40.0
+Competitive codingLiveCodeBench v6
+90.3
+83.9
+89.6
+--
+88.8
+Qwen3.8-
+2.4T-A95B
+Previous
+GLM-5.3-Flash
+Next
+Fine-tune Qwen3.8
+Last updated
+10 hours ago
+Was this helpful?
+Community
+Reddit r/unsloth
+Twitter (X)
+LinkedIn
+Resources
+Tutorials
+Download
+Hugging Face
+Company
+Unsloth Desktop
+Contact
+x-twitter
+linkedin
+discord
+bluesky
+reddit
+© Unsloth, 2026
+⚙️
+Usage Guide
+Recommended Settings
+💡 Thinking + Preserve Thinking
+Run Qwen3.8 Guide
+🦥 Run Qwen3.8 in Unsloth Desktop
+Qwen3.8-2.4T-A95B New 1-bit data-types
+🦙
+Run Qwen3.8 in llama.cpp
+⚡️NVFP4
+🤯
+Quantization Analysis
+📊 Benchmarks
+Was this helpful?
+Copy
+curl -fsSL https://unsloth.ai/install.sh | sh
+Copy
+irm https://unsloth.ai/install.ps1 | iex
+Copy
+unsloth run --model unsloth/qwen3.8-27B-GGUF:UD-Q4_K_XL
+--temp 1.0 \
+--top-p 0.95 \
+--top-k 20 \
+--min-p 0.0 \
+--reasoning-effort medium
+Copy
+apt-get update
+apt-get install pciutils build-essential cmake curl libcurl4-openssl-dev -y
+git clone --branch iq1-narrow https://github.com/unslothai/llama.cpp
+cmake llama.cpp -B llama.cpp/build \
+-DBUILD_SHARED_LIBS=OFF -DGGML_CUDA=ON
+cmake --build llama.cpp/build --config Release -j --clean-first --target llama-cli llama-mtmd-cli llama-server llama-gguf-split
+cp llama.cpp/build/bin/llama-* llama.cpp
+Copy
+apt-get update
+apt-get install pciutils build-essential cmake curl libcurl4-openssl-dev -y
+git clone https://github.com/ggml-org/llama.cpp
+cmake llama.cpp -B llama.cpp/build \
+-DBUILD_SHARED_LIBS=OFF -DGGML_CUDA=ON
+cmake --build llama.cpp/build --config Release -j --clean-first --target llama-cli llama-mtmd-cli llama-server llama-gguf-split
+cp llama.cpp/build/bin/llama-* llama.cpp
+Copy
+pip install -U "huggingface_hub[cli]"
+hf download unsloth/Qwen3.8-27B-GGUF \
+--local-dir unsloth/Qwen3.8-27B-GGUF \
+--include "*UD-Q4_K_XL*" # Use "*UD-Q3_K_XL*" for 3-bit
+Copy
+pip install -U "huggingface_hub[cli]"
+hf download unsloth/Qwen3.8-2.4T-A95B-GGUF \
+--local-dir unsloth/Qwen3.8-2.4T-A95B-GGUF \
+--include "*Q1_0*" # Use "*IQ2_XXS*" for 2-bit
+Copy
+./llama.cpp/llama-cli \
+--model unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf \
+--temp 1.0 \
+--top-p 0.95 \
+--top-k 20 \
+--min-p 0.0
+Copy
+./llama.cpp/llama-cli \
+--model unsloth/Qwen3.8-2.4T-A95B-GGUF/UD-Q1_0/Qwen3.8-2.4T-A95B-UD-Q1_0-00001-of-00010.gguf \
+--temp 1.0 \
+--top-p 0.95 \
+--top-k 20 \
+--min-p 0.0
+Copy
+pip install -U "huggingface_hub[cli]"
+hf download unsloth/Qwen3.8-2.4T-A95B-GGUF \
+--local-dir unsloth/Qwen3.8-2.4T-A95B-GGFF \
+--include "*IQ1_S*" # Use "*IQ2_XXS*" for 2-bit
+Copy
+./llama.cpp/llama-cli \
+--model unsloth/Qwen3.8-2.4T-A95B-GGUF/UD-IQ1_S/Qwen3.8-2.4T-A95B-UD-IQ1_S-00001-of-00012.gguf \
+--temp 1.0 \
+--top-p 0.95 \
+--top-k 20 \
+--min-p 0.0
+Copy
+uv venv unsloth-nvfp4-env --python 3.13
+source unsloth-nvfp4-env/bin/activate
+uv pip install "vllm>=0.25.0" "flashinfer-python>=0.6.13" "nvidia-cutlass-dsl>=4.5.2" \
+--torch-backend=auto
+Copy
+vllm serve unsloth/Qwen3.8-27B-NVFP4
+Copy
+vllm serve unsloth/Qwen3.8-27B-NVFP4
+--speculative-config '{"method": "mtp", "num_speculative_tokens": 2}'
+Copy
+sudo apt-get update
+sudo apt-get install -y ffmpeg

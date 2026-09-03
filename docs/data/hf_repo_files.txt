@@ -1,0 +1,36 @@
+# repo: Qwen/Qwen3.8-27B
+# size_bytes  path
+            1570  .gitattributes
+           11544  LICENSE
+           65012  README.md
+            8952  chat_template.jinja
+            4312  config.json
+             238  crc32.txt
+             202  generation_config.json
+         3353259  merges.txt
+      3966730552  model-00001-of-00018.safetensors
+      3043080328  model-00002-of-00018.safetensors
+      2542796952  model-00003-of-00018.safetensors
+      3988973152  model-00004-of-00018.safetensors
+      2099339864  model-00005-of-00018.safetensors
+      3979553696  model-00006-of-00018.safetensors
+      2108759344  model-00007-of-00018.safetensors
+      3979553696  model-00008-of-00018.safetensors
+      2108759344  model-00009-of-00018.safetensors
+      3979553696  model-00010-of-00018.safetensors
+      2108759344  model-00011-of-00018.safetensors
+      3979553696  model-00012-of-00018.safetensors
+      2108759344  model-00013-of-00018.safetensors
+      3979553696  model-00014-of-00018.safetensors
+      2108759344  model-00015-of-00018.safetensors
+      3979564040  model-00016-of-00018.safetensors
+      2108759344  model-00017-of-00018.safetensors
+      3392197344  model-00018-of-00018.safetensors
+          112216  model.safetensors.index.json
+             390  preprocessor_config.json
+        12809320  tokenizer.json
+           17928  tokenizer_config.json
+             385  video_preprocessor_config.json
+         6722759  vocab.json
+                  ---
+     55586114863  TOTAL bytes (51.77 GiB), 32 entries

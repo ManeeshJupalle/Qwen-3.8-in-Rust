@@ -1,0 +1,400 @@
+# Text extract of https://recipes.vllm.ai/Qwen/Qwen3.8-27B fetched 2026-09-02 (tags stripped)
+
+Qwen/Qwen3.8-27B | vLLM Recipes
+/
+Recipes
+Browse
+Docs
+GitHub
+Providers
+Arcee AI
+Ernie (Baidu)
+Boson AI
+Seed (ByteDance)
+DeepSeek
+Dots
+Fish Audio
+Google
+i
+ibm-granite
+IFM
+inclusionAI
+IndexTeam
+InternLM
+JetBrains
+Jina AI
+Lightricks
+Liquid AI
+LongCat (Meituan)
+Meta
+Muse (Meta)
+Microsoft
+MindLab Research
+MiniMax
+Mistral AI
+Moonshot AI
+NVIDIA
+OpenAI
+MiniCPM (OpenBMB)
+InternVL (OpenGVLab)
+OpenMOSS
+PaddlePaddle
+Preferred Networks
+Poolside
+Qwen
+Qwen3.8-Flash-Next
+Qwen3.8-2.4T-A95B
+Qwen3.8-27B
+Qwen3.6-27B
+Qwen3.6-35B-A3B
+Qwen3.5-0.8B
+Qwen3.5-2B
+Qwen3.5-4B
+Qwen3.5-9B
+Qwen3.5-122B-A10B
+Qwen3.5-27B
+Qwen3.5-35B-A3B
+Qwen3.5-397B-A17B
+Qwen3-ASR-1.7B
+Qwen3-TTS-12Hz-1.7B-CustomVoice
+Qwen3-VL-30B-A3B-Instruct
+Qwen3Guard-Gen-8B
+Qwen3-VL-235B-A22B-Instruct
+Qwen3-Next-80B-A3B-Instruct
+Qwen-Image
+Qwen3-Coder-480B-A35B-Instruct
+Qwen3-235B-A22B-Instruct-2507
+Qwen3-32B
+Qwen3-30B-A3B
+Qwen3-14B
+Qwen3-8B
+Qwen3-4B
+Qwen3-1.7B
+QwQ-32B
+Qwen2.5-VL-72B-Instruct
+Qwen2.5-VL-7B-Instruct
+Qwen2.5-32B
+Stability AI
+StepFun
+Hunyuan (Tencent)
+Thinking Machines Lab
+Wan (Alibaba)
+MiMo (Xiaomi)
+GLM (Z-AI)
+Qwen
+/
+Qwen3.8-27B
+27B-parameter dense hybrid-attention model with linear attention on 48 of 64 layers, a vision tower, a built-in MTP draft head, 262K native context window and extensible to 1M context
+Fits one Blackwell GPU in every precision: NVFP4 in 24.6 GiB, 6.6M KV tokens at 1M context
+View on HuggingFace
+dense
+27B
+262,144
+ctx
+vLLM
+0.17.0
++
+multimodal
+text
+Guide
+Overview
+Qwen3.8-27B is the 27-billion-parameter dense member of the Qwen3.8 family, on the same
+hybrid-attention backbone as the 2.4T MoE flagship.
+The layer mix is the interesting part.
+Only 16 of the 64 layers run full attention
+(
+full_attention_interval: 4
+); the other 48 run linear attention with a constant
+recurrent state. Unlike the 2.4T this is a multimodal model: the architecture is
+Qwen3_5ForConditionalGeneration
+and
+config.json
+carries a
+vision_config
+. Text
+serving is what this recipe covers and what has been verified.
+Prerequisites
+transformers >= 5.8.0
+, matching the version
+config.json
+was written by. vLLM parses
+the config with its own
+Qwen3_5Config
+, so this is really about the Qwen3-VL processor.
+Launch commands
+Low latency
+NVFP4, TP1:
+vllm serve Inferact/Qwen3.8-27B-NVFP4 \
+--tensor-parallel-size 1 \
+--max-model-len 262144 \
+--kv-cache-dtype fp8 \
+--reasoning-parser qwen3 \
+--enable-auto-tool-choice --tool-call-parser qwen3_coder
+FP8, TP4 (one GB300 tray) for the largest KV cache:
+vllm serve Qwen/Qwen3.8-27B-FP8 \
+--tensor-parallel-size 4 \
+--max-model-len 262144 \
+--kv-cache-dtype fp8 \
+--reasoning-parser qwen3
+Add
+--speculative-config '{"method":"mtp","num_speculative_tokens":3}'
+for MTP.
+2x RTX 5090 (consumer Blackwell, sm120)
+Verified on vLLM
+0.26.1rc1.dev608+g99a10304d
+, TP2 across two cards.
+NVFP4 uses the real kernel here.
+vLLM selects
+FlashInferCutlassNvFp4LinearKernel for NVFP4 GEMM
+on sm120 — a cutlass path, not an
+emulation fallback — for both the
+Inferact
+build above and
+unsloth/Qwen3.8-27B-NVFP4
+.
+The block-scaled FP8 checkpoint needs no workaround.
+vLLM auto-disables DeepGemm for
+model_type=qwen3_5_text
+on Blackwell and falls back to CUTLASS, so it loads unaided.
+Verified by running
+without
+VLLM_USE_DEEP_GEMM=0
+: identical 377,456-token KV pool.
+vllm serve unsloth/Qwen3.8-27B-NVFP4 \
+--tensor-parallel-size 2 \
+--max-model-len 262144 \
+--kv-cache-dtype fp8 \
+--reasoning-parser qwen3 \
+--enable-auto-tool-choice --tool-call-parser qwen3_coder
+At 262,144 context, GPU KV cache size as reported at startup:
+precision
+KV tokens
+weights/GPU
+MTP acceptance
+FP8
+377,456
+14.28 GiB
+0.771
+NVFP4 (Inferact)
+445,875
+12.02 GiB
+0.897
+NVFP4 (unsloth)
+920,517
+10.64 GiB
+0.788
+The two NVFP4 builds are not interchangeable on 32 GB cards:
+unsloth
+is
+mixed-precision (FP8 channel-wise alongside the 4-bit groups) and leaves room for roughly
+twice the KV cache, while the uniform-W4A4
+Inferact
+build drafts better. Both serve
+correctly.
+The in-checkpoint MTP head works in every precision above. Acceptance is measured from
+vllm:spec_decode_num_{accepted,draft}_tokens_total
+, since throughput alone cannot
+distinguish a working drafter from one that loaded and was ignored.
+1x RTX 5090 — NVFP4 needs
+--enforce-eager
+One card has
+31.4 GiB usable
+, not 32, and NVFP4 fits only with CUDA graphs off:
+vllm serve Inferact/Qwen3.8-27B-NVFP4 \
+--tensor-parallel-size 1 \
+--max-model-len 32768 \
+--kv-cache-dtype fp8 \
+--enforce-eager \
+--reasoning-parser qwen3
+Without
+--enforce-eager
+, startup dies in CUDA graph capture with
+torch.OutOfMemoryError: Tried to allocate 784.00 MiB
+.
+Raising or lowering
+--gpu-memory-utilization
+does not help
+— 0.80 and 0.93 both leave the same 47.06 MiB
+free, because that budget covers weights and KV while graph capture allocates outside it.
+KV pool at 32K context: 91,022 tokens with
+--enforce-eager
+alone; 135,926 adding
+--language-model-only
+; 152,917 also capping
+--max-num-seqs 8
+; 76,458 with bf16 KV
+instead of fp8 — so fp8 KV is a choice here, not a requirement. The MTP head still fits
+(90,112 tokens, 0.754 acceptance). Those two flags are levers for a bigger pool, not fixes
+for the OOM: only
+--enforce-eager
+decides whether the server starts.
+Huawei Ascend 950PR-w8a8 (vLLM Ascend)
+Verified on a single 950PR, TP1, vLLM Ascend 0.23.0 from the
+quay.io/ascend/vllm-ascend:qwen3.8-a5
+image.
+The ModelSlim INT8 build is the checkpoint to use here.
+--quantization ascend
+is what
+selects the ModelSlim scheme — without it the loader treats the weights as float. The MTP
+head inside the checkpoint works and is spelled
+qwen3_5_mtp
+on this backend.
+Both the weight and the image come from ModelScope, not HuggingFace: set
+VLLM_USE_MODELSCOPE=True
+or pass a local path.
+export VLLM_USE_MODELSCOPE=True
+export PYTORCH_NPU_ALLOC_CONF=expandable_segments:True
+export HCCL_BUFFSIZE=512
+export OMP_PROC_BIND=false
+export OMP_NUM_THREADS=1
+vllm serve Eco-Tech/Qwen3.8-27B-w8a8 \
+--tensor-parallel-size 1 \
+--quantization ascend \
+--max-num-batched-tokens 16384 \
+--enable-prefix-caching \
+--reasoning-parser qwen3 \
+--tool-call-parser qwen3_coder \
+--mm-encoder-tp-mode data \
+--speculative-config '{"method":"qwen3_5_mtp","num_speculative_tokens":3,"enforce_eager":true}' \
+--compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY"}' \
+--additional-config '{"enable_cpu_binding":true}'
+--reasoning-parser qwen3
+is not optional in practice: the chat template opens every
+assistant turn with
+<think>
+, so without it the entire reasoning block lands in
+message.content
+and a 2048-token budget can be spent before the answer starts.
+Measured single-stream decode: 64 tok/s (2048-token completion, one request, MTP on).
+Read MTP acceptance from
+vllm:spec_decode_num_{accepted,draft}_tokens_total
+before
+tuning
+num_speculative_tokens
+— throughput alone cannot tell a working drafter from
+one that loaded and was ignored.
+Huawei Ascend 950PR-Native block-scaled FP8 (vLLM Ascend)
+Verified on a single 950PR, TP1, vLLM Ascend 0.23.0 from the
+quay.io/ascend/vllm-ascend:nightly-main-a5
+image.
+The official
+Qwen/Qwen3.8-27B-FP8
+checkpoint serves directly on a 950PR — no offline
+re-quantization and
+no
+--quantization ascend
+. vLLM Ascend reads
+quant_method: fp8
+and
+weight_block_size
+straight from the checkpoint, expands the
+weight_scale_inv
+tiles at load time and re-quantizes to MXFP8 on 950.
+Requires a vLLM Ascend build that includes
+vllm-ascend#14852
+(merged
+2026-08-26); no tagged release carries it yet. The W8A8 path above is unaffected.
+vllm serve Qwen/Qwen3.8-27B-FP8 \
+--tensor-parallel-size 1 \
+--max-model-len 128000 \
+--max-num-seqs 16 \
+--gpu-memory-utilization 0.85 \
+--trust-remote-code \
+--enable-prefix-caching \
+--reasoning-parser qwen3 \
+--tool-call-parser qwen3_coder \
+--mm-encoder-tp-mode data \
+--speculative-config '{"method": "qwen3_5_mtp", "num_speculative_tokens": 3, "enforce_eager": true}'
+DFlash2 (opt-in)
+DFlash2 is not a standalone model. Serve
+Qwen/Qwen3.8-27B
+and attach
+incoai/Qwen3.8-27B-DFlash2
+as the drafter. Requires vLLM >=0.28.0, which shipped
+vllm#52816
+.
+vllm serve Qwen/Qwen3.8-27B \
+--speculative-config '{"method":"dflash","model":"incoai/Qwen3.8-27B-DFlash2","num_speculative_tokens":7}'
+Client usage
+generation_config.json
+ships
+temperature: 1.0
+,
+top_p: 0.95
+,
+top_k: 20
+.
+from openai import OpenAI
+client = OpenAI(api_key="EMPTY", base_url="http://localhost:8000/v1", timeout=3600)
+resp = client.chat.completions.create(
+model="Qwen/Qwen3.8-27B",
+messages=[{"role": "user", "content": "Give me three primes above 100."}],
+temperature=1.0, top_p=0.95, max_tokens=2048,
+)
+print(resp.choices[0].message.content)
+Thinking modes
+The model supports no-think and adaptive thinking through
+chat_template_kwargs
+, per
+request or server-wide via
+--default-chat-template-kwargs
+:
+{"enable_thinking": false}
+— no thinking, the model answers directly.
+{"reasoning_effort": "low"}
+— adaptive thinking.
+xhigh
+(default),
+medium
+,
+low
+.
+Processing Ultra-Long Texts
+The model has 262k native context length and it can be extended to 1M with --max-model-len
+flag. The best value can be picked based on the use case and GPU ram usage tradeoff.
+For example, to enable full 1M context length on this model:
+vllm serve Qwen/Qwen3.8-27B \
+--max-model-len 1010000 \
+--hf-overrides '{"text_config": {"max_position_embeddings": 1010000}}' \
+...
+Note the override is nested under
+text_config
+here, where the 2.4T takes it flat.
+Troubleshooting
+MXFP4 does not load on Nvidia devices.
+The vLLM MXFP4 implementation on Nvidia device is
+currently missing linear method support so it doesn't run as intended. Use NVFP4 quantization
+on Nvidia instead.
+References
+Model card:
+https://huggingface.co/Qwen/Qwen3.8-27B
+FP8 checkpoint:
+https://huggingface.co/Qwen/Qwen3.8-27B-FP8
+NVFP4 build (NVIDIA):
+https://huggingface.co/Inferact/Qwen3.8-27B-NVFP4
+Ascend INT8 checkpoint (ModelScope):
+https://www.modelscope.cn/models/Eco-Tech/Qwen3.8-27B-w8a8
+vLLM documentation:
+https://docs.vllm.ai/
+vLLM Ascend tutorial:
+https://docs.vllm.ai/projects/ascend/en/latest/tutorials/models/Qwen3.8-27B.html
+DFlash2 draft:
+https://huggingface.co/incoai/Qwen3.8-27B-DFlash2
+DFlash2 blog:
+https://inco.ai/blog/dflash2/
+vLLM DFlash2 PR:
+https://github.com/vllm-project/vllm/pull/52816
+Native FP8 support on Ascend:
+https://github.com/vllm-project/vllm-ascend/pull/14852
+Updated
+2026-08-27
+Edit recipe
+Report issue
+Related:
+Qwen3.8-2.4T-A95B
+GitHub
+Request a recipe
+Documentation
+Supported Models & Hardware
+Install vLLM
+JSON API
