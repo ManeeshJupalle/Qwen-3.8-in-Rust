@@ -1,0 +1,7 @@
+# quant noise floor: llama.cpp bartowski Q4_K_M (tests/fixtures/ref_llamacpp) vs llama.cpp Unsloth UD-Q4_K_M (tests/fixtures/ud/ref_llamacpp)
+
+capital   argmax MATCH: 11751 vs 11751 | top10 overlap 9/10 | raw max|diff| 0.9244 mean|diff| 0.16510 | logsoftmax max|diff| 0.8928 mean|diff| 0.17260 | top1 logprob -0.4236 vs -0.4680
+fib       argmax MATCH: 198 vs 198 | top10 overlap 10/10 | raw max|diff| 0.8250 mean|diff| 0.09420 | logsoftmax max|diff| 0.7297 mean|diff| 0.12261 | top1 logprob -0.0448 vs -0.0419
+sentence  argmax MATCH: 733 vs 733 | top10 overlap 9/10 | raw max|diff| 0.9451 mean|diff| 0.12792 | logsoftmax max|diff| 0.8684 mean|diff| 0.11944 | top1 logprob -1.3984 vs -1.4499
+
+argmax match: 3/3   worst raw max|diff|: 0.9451

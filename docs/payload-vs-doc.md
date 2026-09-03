@@ -223,11 +223,13 @@ consistent with the in-file layout found in item 3.
 
 ## 21. Reference timing on this machine (for planning, not a divergence)
 
-`tests/fixtures/ref_llamacpp/summary.txt`: llama.cpp CPU (llama-cpp-python 0.3.35, 6 threads, i7-9750H, 32 GB,
-model mmap-resident after a first cold run): load 69 s, prompt eval 7 to 37 s for 4 to 39 tokens, greedy decode
-3.8 to 4.0 s per token at short context and 9.1 s per token after the 39-token prompt. ARCHITECTURE.md's cost
-model (`20 ms x GB_ram` = about 0.3 s/token for 15 GB in RAM) is more than 10x more optimistic than llama.cpp on
-this CPU; the target table's "32 GB: fits fully, reference" row should be measured, not assumed.
+`tests/fixtures/ref_llamacpp/summary.txt` (bartowski Q4_K_M) and `tests/fixtures/ud/ref_llamacpp/summary.txt`
+(Unsloth UD): llama.cpp CPU, llama-cpp-python 0.3.35, 6 threads, i7-9750H, 32 GB. Cold load of the 16.5 GiB
+bartowski file 294 s, first prompt eval 220 s (page-in), then 9 to 19 s for 4 to 39 prompt tokens; greedy decode
+4.2 to 4.7 s per token at short context and 6.4 s per token after the 39-token prompt (UD file: 3.8 to 4.0 s and
+9.1 s). ARCHITECTURE.md's cost model (`20 ms x GB_ram` = about 0.3 s/token for 16 GB in RAM) is more than 10x
+more optimistic than llama.cpp on this CPU; the target table's "32 GB: fits fully, reference" row should be
+measured, not assumed.
 
 # Addendum (same day): second GGUF source, MTP identity
 
@@ -282,3 +284,12 @@ The same holds for bartowski's `blk.64` (`docs/data/mtp_blk64_diff.txt`, `docs/d
 identical names and shapes, F32 tensors bit-identical to both Unsloth files, quantised tensors at cosine 0.9953 to
 0.9964 against Unsloth's copies. bartowski stores the MTP block's matrices as Q4_0 (relative RMS error about 9%
 against Q8_0/Q6_K), the noisiest of the three copies; Unsloth's main file keeps them at Q6_K/Q8_0.
+
+## 24. Two Q4_K_M recipes of the same model disagree on greedy text after four tokens
+
+`docs/data/llamacpp_bartowski_vs_ud.txt`: same engine (llama.cpp), same prompts, bartowski Q4_K_M vs Unsloth
+UD-Q4_K_M. Argmax matches on all three prompts and the top-10 overlaps 9 to 10 of 10, but raw logits differ by up
+to 0.95 (mean 0.09 to 0.17) and the 39-token prompt's greedy continuation diverges at token 5 ("rivers plunge
+over cliffs" vs "glaciers once shaped the landscape"). "Q4_K_M" is therefore not one model: ARCHITECTURE.md's
+"Same tokens at every budget" contract can only be stated per GGUF file, and the parity target must name the
+file (bartowski's, from this addendum on).

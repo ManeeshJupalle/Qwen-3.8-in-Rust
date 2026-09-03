@@ -4,7 +4,7 @@ docs/data/quant_noise_floor.txt.
 For each prompt: argmax match, top-10 overlap (|A intersect B| / 10), max|diff|, mean|diff|, plus the same
 numbers after log-softmax (so the comparison is invariant to a per-position logit offset).
 
-Usage: python tools/cmp_logits.py <dir_a> <dir_b> [--label-a llamacpp --label-b hf]
+Usage: python tools/cmp_logits.py <dir_a> <dir_b> [--label-a llamacpp --label-b hf] [--out FILE]
 Each dir holds <name>.logits.npy and <name>.json written by tools/ref_llamacpp.py / tools/ref_forward.py.
 """
 import argparse
@@ -30,6 +30,7 @@ def main():
     ap.add_argument("dir_b")
     ap.add_argument("--label-a", default="A")
     ap.add_argument("--label-b", default="B")
+    ap.add_argument("--out", default=OUT)
     a = ap.parse_args()
     prompts = json.load(open(os.path.join(FIX, "prompts.json")))["prompts"]
     L = ["# quant noise floor: %s (%s) vs %s (%s)" % (a.label_a, a.dir_a, a.label_b, a.dir_b), ""]
@@ -58,7 +59,7 @@ def main():
                      dl.max(), dl.mean(), lx[ax], ly[ay]))
     L.append("")
     L.append("argmax match: %d/%d   worst raw max|diff|: %.4f" % (n_argmax, len(prompts), worst_max))
-    with open(OUT, "w", encoding="utf-8") as fh:
+    with open(a.out, "w", encoding="utf-8") as fh:
         fh.write("\n".join(L) + "\n")
     print("\n".join(L))
 

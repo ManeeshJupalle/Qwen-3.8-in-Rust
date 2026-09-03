@@ -1,28 +1,42 @@
 # Quantisation noise floor: llama.cpp (Q4_K_M GGUF) vs HF transformers bf16
-# Phase 0, 2026-09-02
+# Phase 0 + addendum, 2026-09-02
 
-STATUS: HF bf16 reference SKIPPED. The comparison has NOT been computed.
+STATUS: HF bf16 reference NOT RUN. The llama.cpp-vs-bf16 comparison has NOT been computed.
 
-Why: the per-layer HF reference (tools/ref_forward.py) needs the 18 bf16 safetensors shards
-(55,586,114,863 bytes = 51.77 GiB). The task requires explicit approval before that download and the session
-ran unattended, so nothing was downloaded. tools/ref_forward.py is written but has never been executed.
+Why: tools/ref_forward.py needs the 18 bf16 safetensors shards (55,586,114,863 bytes = 51.77 GiB). The
+addendum delegated the download decision; the attempt (`hf download Qwen/Qwen3.8-27B --include "*.safetensors"`)
+was blocked by the session's permission system, which requires an explicit user approval for a download of that
+size. No shard was fetched. tools/ref_forward.py itself is validated: tools/ref_forward_selftest.py reproduces the
+full transformers forward bit-exactly (float32 and bfloat16, eager attention) on a tiny random Qwen3_5 model.
 
-What exists on the llama.cpp side (tests/fixtures/ref_llamacpp/, produced by tools/ref_llamacpp.py,
-llama-cpp-python 0.3.35 CPU wheel, 6 threads, raw prompt ids, no BOS, no chat template):
+Primary llama.cpp reference (tests/fixtures/ref_llamacpp/, bartowski/Qwen3.8-27B-GGUF Qwen3.8-27B-Q4_K_M.gguf,
+llama-cpp-python 0.3.35 CPU, 6 threads, raw prompt ids, no BOS, no chat template):
 
-  prompt    n_ids  argmax  argmax_text  top-1 logit  greedy (16 tokens)
-  capital       5   11751  ' Paris'          17.454  ' Paris.\nThe capital of Germany is Berlin.\nThe capital of Italy is'
-  fib           4     198  '\n'              19.891  '\n    if n <= 0:\n        return 0\n    elif'
-  sentence     39     733  ' In'             16.526  ' In the highlands, glaciers once shaped the landscape, leaving behind U-shaped valleys'
+  prompt    n_ids  argmax  argmax_text  greedy (16 tokens)
+  capital       5   11751  ' Paris'     ' Paris.\nThe capital of Germany is Berlin.\nThe capital of Italy is'
+  fib           4     198  '\n'         '\n    if n <= 0:\n        return 0\n    elif'
+  sentence     39     733  ' In'        ' In the highlands, rivers plunge over cliffs and through narrow gorges, their'
 
-  full float32 logits (248,320 entries) per prompt: <name>.logits.npy ; top-10 ids/logits/text in <name>.json
+Secondary llama.cpp reference (tests/fixtures/ud/ref_llamacpp/, unsloth Qwen3.8-27B-UD-Q4_K_M.gguf): same argmax
+on all three prompts; greedy text identical for capital and fib; sentence diverges after 4 tokens
+(' In the highlands, glaciers once shaped the landscape, leaving behind U-shaped valleys').
 
-How to finish this file once the shards are approved and downloaded into models/Qwen3.8-27B/:
+Interim proxy (docs/data/llamacpp_bartowski_vs_ud.txt): the two Q4_K_M recipes against each other, same engine.
+This is a LOWER BOUND on the Q4-vs-bf16 gap, not the noise floor itself:
+
+  prompt    argmax  top10 overlap  raw max|diff|  mean|diff|  logsoftmax max|diff|
+  capital   match   9/10           0.9244         0.1651      0.8928
+  fib       match   10/10          0.8250         0.0942      0.7297
+  sentence  match   9/10           0.9451         0.1279      0.8684
+
+Reading: two honest Q4 quantisations of the same weights differ by up to ~0.95 in raw logits and ~0.1-0.17 on
+average. An engine matching llama.cpp on the SAME file should sit far below this (same weights, same math up to
+accumulation order); parity against llama.cpp on the same GGUF is the Phase 3 gate, and the bf16 distance is
+what this file will hold once the shards are approved.
+
+How to finish this file once the shards are downloaded into models/Qwen3.8-27B/:
   .venv\Scripts\python tools\ref_forward.py models\Qwen3.8-27B --prompt fib        (report wall time first)
   .venv\Scripts\python tools\ref_forward.py models\Qwen3.8-27B --prompt capital --prompt sentence
   .venv\Scripts\python tools\cmp_logits.py tests\fixtures\ref_llamacpp tests\fixtures\ref_hf --label-a llamacpp --label-b hf
 tools/cmp_logits.py overwrites this file with, per prompt: argmax match, top-10 overlap, max|diff|, mean|diff|
 (raw and after log-softmax).
-
-Until then there is NO tolerance number for the engine. Parity claims against ref_llamacpp alone measure
-"same as llama.cpp on the same quantised weights", not distance from the bf16 model.

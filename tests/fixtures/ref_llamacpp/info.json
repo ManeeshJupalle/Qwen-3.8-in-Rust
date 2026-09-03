@@ -1,0 +1,11 @@
+{
+ "llama_cpp_python": "0.3.35",
+ "gguf": "Qwen3.8-27B-Q4_K_M.gguf",
+ "gguf_bytes": 17772537440,
+ "n_vocab": 248320,
+ "n_ctx": 512,
+ "threads": 6,
+ "load_seconds": 293.68,
+ "greedy_tokens": 16,
+ "note": "raw ids fed with Llama.eval (no BOS, no template); logits read from llama_get_logits (last evaluated position); greedy = argmax of the returned logits, appended one token at a time with KV cache"
+}
