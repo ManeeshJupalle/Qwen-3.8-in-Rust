@@ -1,42 +1,224 @@
-# Quantisation noise floor: llama.cpp (Q4_K_M GGUF) vs HF transformers bf16
-# Phase 0 + addendum, 2026-09-02
+# Quantisation noise floor: HF reference from bf16 shards vs HF reference from the dequantised bartowski Q4_K_M GGUF
+# tools/noise_floor.py; sources: tools/ref_forward.py --weights bf16 --dtype f32 (models/Qwen3.8-27B) and --weights gguf (Qwen3.8-27B-Q4_K_M.gguf)
+# both float32 compute, eager attention, raw prompt ids; per layer: max|bf16 - gguf| over all positions, relative to max|bf16|, and
+# the RMS of the difference relative to the RMS of the bf16 hidden state (rms_rel); 'cos' is the cosine between the two hidden states
 
-STATUS: HF bf16 reference NOT RUN. The llama.cpp-vs-bf16 comparison has NOT been computed.
+== prompt capital (5 ids) ==
+  layer type              max|diff|   max|bf16|   rel      rms_rel   cos
+      0 linear_attention     0.0698     20.047  3.48e-03  1.07e-02  0.999946
+      1 linear_attention     0.4038     30.770  1.31e-02  1.52e-02  0.999934
+      2 linear_attention     0.5605     44.708  1.25e-02  1.66e-02  0.999933
+      3 full_attention       0.6133     51.629  1.19e-02  1.62e-02  0.999945
+      4 linear_attention     0.6562     54.936  1.19e-02  1.77e-02  0.999929
+      5 linear_attention     0.7310     57.562  1.27e-02  1.93e-02  0.999910
+      6 linear_attention     0.8686     68.567  1.27e-02  1.98e-02  0.999876
+      7 full_attention       0.9510     67.749  1.40e-02  2.07e-02  0.999852
+      8 linear_attention     0.8809     73.557  1.20e-02  2.22e-02  0.999812
+      9 linear_attention     0.9413     85.450  1.10e-02  2.41e-02  0.999790
+     10 linear_attention     0.9968    111.611  8.93e-03  2.21e-02  0.999816
+     11 full_attention       1.0293    108.344  9.50e-03  2.27e-02  0.999791
+     12 linear_attention     1.0719    109.644  9.78e-03  2.50e-02  0.999745
+     13 linear_attention     1.0634    116.149  9.16e-03  2.54e-02  0.999723
+     14 linear_attention     1.0481    142.959  7.33e-03  2.44e-02  0.999733
+     15 full_attention       1.1197    137.602  8.14e-03  2.61e-02  0.999696
+     16 linear_attention     1.0881    133.430  8.16e-03  2.74e-02  0.999661
+     17 linear_attention     1.1478    133.902  8.57e-03  2.89e-02  0.999616
+     18 linear_attention     1.0893    170.293  6.40e-03  2.70e-02  0.999668
+     19 full_attention       0.9704    147.017  6.60e-03  3.03e-02  0.999568
+     20 linear_attention     0.9820    126.384  7.77e-03  3.49e-02  0.999418
+     21 linear_attention     1.7509    180.834  9.68e-03  3.08e-02  0.999542
+     22 linear_attention     1.7619    183.171  9.62e-03  3.04e-02  0.999553
+     23 full_attention       1.7641    185.702  9.50e-03  3.36e-02  0.999455
+     24 linear_attention     1.7690    186.247  9.50e-03  3.54e-02  0.999396
+     25 linear_attention     2.0193    202.009  1.00e-02  3.45e-02  0.999433
+     26 linear_attention     2.0079    204.251  9.83e-03  3.49e-02  0.999425
+     27 full_attention       1.9905    204.412  9.74e-03  3.73e-02  0.999340
+     28 linear_attention     1.9941    204.058  9.77e-03  3.83e-02  0.999300
+     29 linear_attention     1.9955    203.804  9.79e-03  3.95e-02  0.999252
+     30 linear_attention     2.0013    205.186  9.75e-03  3.87e-02  0.999278
+     31 full_attention       2.0009    204.680  9.78e-03  3.93e-02  0.999257
+     32 linear_attention     2.0002    204.356  9.79e-03  4.08e-02  0.999201
+     33 linear_attention     1.9953    203.955  9.78e-03  3.98e-02  0.999239
+     34 linear_attention     1.9506    205.121  9.51e-03  3.81e-02  0.999309
+     35 full_attention       1.9733    204.026  9.67e-03  4.03e-02  0.999230
+     36 linear_attention     1.9747    203.575  9.70e-03  4.03e-02  0.999230
+     37 linear_attention     1.9708    203.075  9.70e-03  4.08e-02  0.999213
+     38 linear_attention     1.9823    203.160  9.76e-03  4.04e-02  0.999223
+     39 full_attention       1.9667    199.875  9.84e-03  4.24e-02  0.999135
+     40 linear_attention     1.9421    197.044  9.86e-03  4.12e-02  0.999182
+     41 linear_attention     1.9417    196.968  9.86e-03  4.17e-02  0.999165
+     42 linear_attention     1.8384    193.719  9.49e-03  4.18e-02  0.999154
+     43 full_attention       1.8449    189.744  9.72e-03  4.27e-02  0.999112
+     44 linear_attention     1.8575    187.358  9.91e-03  4.38e-02  0.999066
+     45 linear_attention     1.8471    185.901  9.94e-03  4.44e-02  0.999033
+     46 linear_attention     1.9955    181.856  1.10e-02  4.39e-02  0.999052
+     47 full_attention       1.9136    159.244  1.20e-02  4.87e-02  0.998826
+     48 linear_attention     2.0776    140.074  1.48e-02  5.36e-02  0.998587
+     49 linear_attention     2.0956    137.696  1.52e-02  5.47e-02  0.998517
+     50 linear_attention     2.0337    146.215  1.39e-02  5.09e-02  0.998715
+     51 full_attention       1.6741     83.197  2.01e-02  6.25e-02  0.998055
+     52 linear_attention     1.7477     81.468  2.15e-02  6.10e-02  0.998139
+     53 linear_attention     1.7581     84.023  2.09e-02  6.20e-02  0.998091
+     54 linear_attention     3.9597    373.821  1.06e-02  4.64e-02  0.998941
+     55 full_attention       3.1130    248.257  1.25e-02  5.43e-02  0.998538
+     56 linear_attention     2.7666    258.418  1.07e-02  5.46e-02  0.998518
+     57 linear_attention     2.7773    291.677  9.52e-03  5.29e-02  0.998607
+     58 linear_attention     4.9592    577.409  8.59e-03  4.16e-02  0.999138
+     59 full_attention       3.2044    195.486  1.64e-02  6.14e-02  0.998113
+     60 linear_attention     3.2867    228.847  1.44e-02  5.60e-02  0.998434
+     61 linear_attention     2.6060    220.103  1.18e-02  5.66e-02  0.998396
+     62 linear_attention     2.4024    223.836  1.07e-02  5.42e-02  0.998531
+     63 full_attention       7.3632    149.081  4.94e-02  5.08e-02  0.998712
+  final norm: max|diff| 1.4723 max|bf16| 38.651 rel 3.81e-02 rms_rel 5.47e-02
+  logits bf16 vs gguf-dequant  argmax MATCH (11751 vs 11751) | top10 overlap  9/10 | raw max|diff| 0.6533 mean|diff| 0.10982 | logsoftmax max|diff| 0.6655 mean|diff| 0.10863
+  logits bf16 vs llama.cpp     argmax MATCH (11751 vs 11751) | top10 overlap 10/10 | raw max|diff| 0.6557 mean|diff| 0.10391 | logsoftmax max|diff| 0.7453 mean|diff| 0.13549
+  logits gguf-dequant vs llama.cpp argmax MATCH (11751 vs 11751) | top10 overlap  9/10 | raw max|diff| 0.3714 mean|diff| 0.06491 | logsoftmax max|diff| 0.3628 mean|diff| 0.06054
 
-Why: tools/ref_forward.py needs the 18 bf16 safetensors shards (55,586,114,863 bytes = 51.77 GiB). The
-addendum delegated the download decision; the attempt (`hf download Qwen/Qwen3.8-27B --include "*.safetensors"`)
-was blocked by the session's permission system, which requires an explicit user approval for a download of that
-size. No shard was fetched. tools/ref_forward.py itself is validated: tools/ref_forward_selftest.py reproduces the
-full transformers forward bit-exactly (float32 and bfloat16, eager attention) on a tiny random Qwen3_5 model.
+== prompt fib (4 ids) ==
+  layer type              max|diff|   max|bf16|   rel      rms_rel   cos
+      0 linear_attention     0.2901     25.090  1.16e-02  1.33e-02  0.999930
+      1 linear_attention     0.7101     36.533  1.94e-02  1.81e-02  0.999908
+      2 linear_attention     0.7117     42.243  1.68e-02  2.02e-02  0.999874
+      3 full_attention       0.7864     53.986  1.46e-02  1.71e-02  0.999922
+      4 linear_attention     0.8848     58.001  1.53e-02  1.71e-02  0.999918
+      5 linear_attention     0.9137     61.246  1.49e-02  1.70e-02  0.999904
+      6 linear_attention     1.0188     69.991  1.46e-02  1.76e-02  0.999892
+      7 full_attention       0.9109     69.175  1.32e-02  1.70e-02  0.999891
+      8 linear_attention     0.8022     72.371  1.11e-02  1.85e-02  0.999874
+      9 linear_attention     0.9711     74.879  1.30e-02  1.99e-02  0.999850
+     10 linear_attention     0.8179     92.638  8.83e-03  1.81e-02  0.999869
+     11 full_attention       0.7107     86.464  8.22e-03  1.89e-02  0.999850
+     12 linear_attention     0.6779     87.339  7.76e-03  2.01e-02  0.999827
+     13 linear_attention     0.7848     92.098  8.52e-03  2.06e-02  0.999821
+     14 linear_attention     0.9805    119.071  8.23e-03  1.96e-02  0.999842
+     15 full_attention       0.9886    113.829  8.68e-03  2.05e-02  0.999826
+     16 linear_attention     0.9420    107.995  8.72e-03  2.14e-02  0.999810
+     17 linear_attention     0.8779    106.628  8.23e-03  2.29e-02  0.999775
+     18 linear_attention     0.9305    143.883  6.47e-03  2.18e-02  0.999787
+     19 full_attention       0.8292    122.631  6.76e-03  2.53e-02  0.999704
+     20 linear_attention     0.8337    105.469  7.91e-03  3.13e-02  0.999536
+     21 linear_attention     0.8520    144.325  5.90e-03  2.87e-02  0.999606
+     22 linear_attention     0.8979    146.499  6.13e-03  2.79e-02  0.999635
+     23 full_attention       0.8832    148.842  5.93e-03  3.00e-02  0.999567
+     24 linear_attention     1.1349    149.322  7.60e-03  3.08e-02  0.999550
+     25 linear_attention     1.2404    157.124  7.89e-03  3.06e-02  0.999561
+     26 linear_attention     1.1933    159.157  7.50e-03  3.10e-02  0.999543
+     27 full_attention       1.3515    159.195  8.49e-03  3.38e-02  0.999462
+     28 linear_attention     1.3155    158.935  8.28e-03  3.38e-02  0.999455
+     29 linear_attention     1.2488    158.709  7.87e-03  3.41e-02  0.999443
+     30 linear_attention     1.2038    160.071  7.52e-03  3.36e-02  0.999457
+     31 full_attention       1.2014    159.577  7.53e-03  3.39e-02  0.999447
+     32 linear_attention     1.1901    159.361  7.47e-03  3.45e-02  0.999423
+     33 linear_attention     1.1501    159.080  7.23e-03  3.48e-02  0.999418
+     34 linear_attention     1.4928    160.648  9.29e-03  3.35e-02  0.999466
+     35 full_attention       1.6017    159.547  1.00e-02  3.69e-02  0.999344
+     36 linear_attention     1.6081    158.861  1.01e-02  3.89e-02  0.999266
+     37 linear_attention     1.6092    158.455  1.02e-02  4.04e-02  0.999201
+     38 linear_attention     1.6875    158.754  1.06e-02  4.06e-02  0.999200
+     39 full_attention       1.6375    155.880  1.05e-02  4.37e-02  0.999061
+     40 linear_attention     1.4415    153.141  9.41e-03  4.34e-02  0.999063
+     41 linear_attention     1.4695    150.864  9.74e-03  4.45e-02  0.999012
+     42 linear_attention     1.3182    147.768  8.92e-03  4.54e-02  0.998973
+     43 full_attention       1.4237    144.247  9.87e-03  4.68e-02  0.998909
+     44 linear_attention     1.5181    141.856  1.07e-02  4.81e-02  0.998848
+     45 linear_attention     1.4045    140.502  1.00e-02  4.93e-02  0.998788
+     46 linear_attention     1.3669    137.387  9.95e-03  4.71e-02  0.998894
+     47 full_attention       1.5123    117.399  1.29e-02  5.12e-02  0.998689
+     48 linear_attention     1.4028     90.170  1.56e-02  5.66e-02  0.998398
+     49 linear_attention     1.4109     87.078  1.62e-02  5.70e-02  0.998372
+     50 linear_attention     2.2444    128.082  1.75e-02  5.03e-02  0.998751
+     51 full_attention       3.5260     57.921  6.09e-02  6.39e-02  0.997963
+     52 linear_attention     3.7700     52.992  7.11e-02  6.34e-02  0.997996
+     53 linear_attention     3.4283     60.411  5.67e-02  6.45e-02  0.997932
+     54 linear_attention    12.6843    267.283  4.75e-02  5.18e-02  0.998841
+     55 full_attention       7.3187    163.641  4.47e-02  6.04e-02  0.998248
+     56 linear_attention     6.5457    169.425  3.86e-02  5.93e-02  0.998287
+     57 linear_attention     7.0154    203.255  3.45e-02  5.80e-02  0.998369
+     58 linear_attention    19.2208    502.698  3.82e-02  4.23e-02  0.999277
+     59 full_attention       1.6608    144.177  1.15e-02  6.09e-02  0.998147
+     60 linear_attention     2.2664    119.206  1.90e-02  6.15e-02  0.998113
+     61 linear_attention     2.6167    139.490  1.88e-02  6.06e-02  0.998171
+     62 linear_attention     4.9343    126.401  3.90e-02  5.44e-02  0.998520
+     63 full_attention       7.8407    207.798  3.77e-02  4.92e-02  0.998791
+  final norm: max|diff| 0.8421 max|bf16| 38.270 rel 2.20e-02 rms_rel 5.05e-02
+  logits bf16 vs gguf-dequant  argmax MATCH (198 vs 198) | top10 overlap 10/10 | raw max|diff| 0.5158 mean|diff| 0.06802 | logsoftmax max|diff| 0.5195 mean|diff| 0.06832
+  logits bf16 vs llama.cpp     argmax MATCH (198 vs 198) | top10 overlap 10/10 | raw max|diff| 0.6254 mean|diff| 0.08069 | logsoftmax max|diff| 0.5601 mean|diff| 0.09962
+  logits gguf-dequant vs llama.cpp argmax MATCH (198 vs 198) | top10 overlap 10/10 | raw max|diff| 0.3053 mean|diff| 0.04374 | logsoftmax max|diff| 0.3642 mean|diff| 0.08539
 
-Primary llama.cpp reference (tests/fixtures/ref_llamacpp/, bartowski/Qwen3.8-27B-GGUF Qwen3.8-27B-Q4_K_M.gguf,
-llama-cpp-python 0.3.35 CPU, 6 threads, raw prompt ids, no BOS, no chat template):
+== prompt sentence (39 ids) ==
+  layer type              max|diff|   max|bf16|   rel      rms_rel   cos
+      0 linear_attention     0.0968     16.912  5.72e-03  9.93e-03  0.999951
+      1 linear_attention     0.2106     23.846  8.83e-03  1.11e-02  0.999944
+      2 linear_attention     0.2187     31.999  6.83e-03  1.54e-02  0.999891
+      3 full_attention       0.7730     37.173  2.08e-02  1.53e-02  0.999909
+      4 linear_attention     1.2153     43.183  2.81e-02  1.80e-02  0.999879
+      5 linear_attention     1.4213     46.482  3.06e-02  1.99e-02  0.999854
+      6 linear_attention     1.2857     54.027  2.38e-02  2.13e-02  0.999807
+      7 full_attention       1.3953     54.515  2.56e-02  2.17e-02  0.999794
+      8 linear_attention     1.1462     63.404  1.81e-02  2.32e-02  0.999756
+      9 linear_attention     1.5745     73.590  2.14e-02  2.55e-02  0.999704
+     10 linear_attention     1.3398    100.933  1.33e-02  2.52e-02  0.999703
+     11 full_attention       1.5964     96.489  1.65e-02  2.52e-02  0.999705
+     12 linear_attention     1.1410     97.620  1.17e-02  2.61e-02  0.999679
+     13 linear_attention     1.0112    105.339  9.60e-03  2.70e-02  0.999655
+     14 linear_attention     0.8655    133.715  6.47e-03  2.78e-02  0.999628
+     15 full_attention       0.9971    127.517  7.82e-03  2.88e-02  0.999600
+     16 linear_attention     1.2744    122.129  1.04e-02  2.93e-02  0.999585
+     17 linear_attention     1.2092    122.131  9.90e-03  3.14e-02  0.999519
+     18 linear_attention     0.9805    160.009  6.13e-03  3.30e-02  0.999467
+     19 full_attention       0.7818    136.195  5.74e-03  3.61e-02  0.999364
+     20 linear_attention     0.8059    119.103  6.77e-03  4.10e-02  0.999167
+     21 linear_attention     1.1940    179.156  6.66e-03  4.15e-02  0.999146
+     22 linear_attention     1.0494    181.695  5.78e-03  4.10e-02  0.999162
+     23 full_attention       0.8634    184.184  4.69e-03  4.56e-02  0.998964
+     24 linear_attention     1.2238    184.698  6.63e-03  4.80e-02  0.998852
+     25 linear_attention     1.3413    198.840  6.75e-03  4.73e-02  0.998887
+     26 linear_attention     1.3809    201.013  6.87e-03  4.67e-02  0.998916
+     27 full_attention       1.0809    201.201  5.37e-03  4.92e-02  0.998797
+     28 linear_attention     0.9447    200.870  4.70e-03  4.97e-02  0.998771
+     29 linear_attention     0.9330    200.618  4.65e-03  5.06e-02  0.998725
+     30 linear_attention     1.1878    201.868  5.88e-03  5.06e-02  0.998721
+     31 full_attention       1.0756    201.317  5.34e-03  5.16e-02  0.998670
+     32 linear_attention     1.0505    200.972  5.23e-03  5.34e-02  0.998577
+     33 linear_attention     0.8367    200.537  4.17e-03  5.33e-02  0.998582
+     34 linear_attention     1.0092    201.488  5.01e-03  5.20e-02  0.998654
+     35 full_attention       1.0764    200.315  5.37e-03  5.55e-02  0.998460
+     36 linear_attention     1.1480    199.812  5.75e-03  5.77e-02  0.998336
+     37 linear_attention     1.2806    199.208  6.43e-03  5.82e-02  0.998309
+     38 linear_attention     1.4137    199.061  7.10e-03  5.69e-02  0.998383
+     39 full_attention       1.7419    195.698  8.90e-03  6.03e-02  0.998188
+     40 linear_attention     1.9865    193.219  1.03e-02  5.80e-02  0.998325
+     41 linear_attention     1.9824    191.987  1.03e-02  5.73e-02  0.998362
+     42 linear_attention     1.1357    188.570  6.02e-03  5.54e-02  0.998475
+     43 full_attention       1.0031    184.537  5.44e-03  5.47e-02  0.998508
+     44 linear_attention     1.0485    181.780  5.77e-03  5.55e-02  0.998463
+     45 linear_attention     1.0390    180.168  5.77e-03  5.62e-02  0.998424
+     46 linear_attention     1.2519    173.501  7.22e-03  5.57e-02  0.998462
+     47 full_attention       1.3160    150.703  8.73e-03  5.83e-02  0.998306
+     48 linear_attention     1.4937    124.427  1.20e-02  6.15e-02  0.998118
+     49 linear_attention     1.4079    120.398  1.17e-02  6.26e-02  0.998048
+     50 linear_attention     2.3084    128.360  1.80e-02  6.28e-02  0.998028
+     51 full_attention       1.9717     92.581  2.13e-02  6.78e-02  0.997704
+     52 linear_attention     2.4532     94.269  2.60e-02  6.74e-02  0.997730
+     53 linear_attention     2.6305     92.016  2.86e-02  6.87e-02  0.997638
+     54 linear_attention     5.8586    339.121  1.73e-02  6.58e-02  0.997836
+     55 full_attention       4.9858    206.537  2.41e-02  6.85e-02  0.997654
+     56 linear_attention     5.0699    223.452  2.27e-02  6.76e-02  0.997711
+     57 linear_attention     5.4490    249.609  2.18e-02  6.69e-02  0.997759
+     58 linear_attention    12.6331    556.240  2.27e-02  6.23e-02  0.998061
+     59 full_attention       5.8232    131.345  4.43e-02  6.87e-02  0.997641
+     60 linear_attention     6.2027    136.267  4.55e-02  6.77e-02  0.997709
+     61 linear_attention     6.1231    142.841  4.29e-02  6.78e-02  0.997701
+     62 linear_attention     9.8793    151.352  6.53e-02  6.77e-02  0.997707
+     63 full_attention       9.0788    213.989  4.24e-02  6.40e-02  0.997954
+  final norm: max|diff| 1.2424 max|bf16| 34.394 rel 3.61e-02 rms_rel 6.54e-02
+  logits bf16 vs gguf-dequant  argmax MATCH (733 vs 733) | top10 overlap  9/10 | raw max|diff| 0.6788 mean|diff| 0.10557 | logsoftmax max|diff| 0.5836 mean|diff| 0.08949
+  logits bf16 vs llama.cpp     argmax MATCH (733 vs 733) | top10 overlap  9/10 | raw max|diff| 0.6639 mean|diff| 0.12012 | logsoftmax max|diff| 0.6646 mean|diff| 0.11333
+  logits gguf-dequant vs llama.cpp argmax MATCH (733 vs 733) | top10 overlap 10/10 | raw max|diff| 0.3759 mean|diff| 0.05200 | logsoftmax max|diff| 0.3816 mean|diff| 0.06065
 
-  prompt    n_ids  argmax  argmax_text  greedy (16 tokens)
-  capital       5   11751  ' Paris'     ' Paris.\nThe capital of Germany is Berlin.\nThe capital of Italy is'
-  fib           4     198  '\n'         '\n    if n <= 0:\n        return 0\n    elif'
-  sentence     39     733  ' In'        ' In the highlands, rivers plunge over cliffs and through narrow gorges, their'
+worst relative max|diff| per layer over the 3 prompts (bf16 vs gguf-dequant):
+  0:1.2e-02 1:1.9e-02 2:1.7e-02 3:2.1e-02 4:2.8e-02 5:3.1e-02 6:2.4e-02 7:2.6e-02 8:1.8e-02 9:2.1e-02 10:1.3e-02 11:1.7e-02 12:1.2e-02 13:9.6e-03 14:8.2e-03 15:8.7e-03 16:1.0e-02 17:9.9e-03 18:6.5e-03 19:6.8e-03 20:7.9e-03 21:9.7e-03 22:9.6e-03 23:9.5e-03 24:9.5e-03 25:1.0e-02 26:9.8e-03 27:9.7e-03 28:9.8e-03 29:9.8e-03 30:9.8e-03 31:9.8e-03 32:9.8e-03 33:9.8e-03 34:9.5e-03 35:1.0e-02 36:1.0e-02 37:1.0e-02 38:1.1e-02 39:1.1e-02 40:1.0e-02 41:1.0e-02 42:9.5e-03 43:9.9e-03 44:1.1e-02 45:1.0e-02 46:1.1e-02 47:1.3e-02 48:1.6e-02 49:1.6e-02 50:1.8e-02 51:6.1e-02 52:7.1e-02 53:5.7e-02 54:4.7e-02 55:4.5e-02 56:3.9e-02 57:3.5e-02 58:3.8e-02 59:4.4e-02 60:4.6e-02 61:4.3e-02 62:6.5e-02 63:4.9e-02
 
-Secondary llama.cpp reference (tests/fixtures/ud/ref_llamacpp/, unsloth Qwen3.8-27B-UD-Q4_K_M.gguf): same argmax
-on all three prompts; greedy text identical for capital and fib; sentence diverges after 4 tokens
-(' In the highlands, glaciers once shaped the landscape, leaving behind U-shaped valleys').
-
-Interim proxy (docs/data/llamacpp_bartowski_vs_ud.txt): the two Q4_K_M recipes against each other, same engine.
-This is a LOWER BOUND on the Q4-vs-bf16 gap, not the noise floor itself:
-
-  prompt    argmax  top10 overlap  raw max|diff|  mean|diff|  logsoftmax max|diff|
-  capital   match   9/10           0.9244         0.1651      0.8928
-  fib       match   10/10          0.8250         0.0942      0.7297
-  sentence  match   9/10           0.9451         0.1279      0.8684
-
-Reading: two honest Q4 quantisations of the same weights differ by up to ~0.95 in raw logits and ~0.1-0.17 on
-average. An engine matching llama.cpp on the SAME file should sit far below this (same weights, same math up to
-accumulation order); parity against llama.cpp on the same GGUF is the Phase 3 gate, and the bf16 distance is
-what this file will hold once the shards are approved.
-
-How to finish this file once the shards are downloaded into models/Qwen3.8-27B/:
-  .venv\Scripts\python tools\ref_forward.py models\Qwen3.8-27B --prompt fib        (report wall time first)
-  .venv\Scripts\python tools\ref_forward.py models\Qwen3.8-27B --prompt capital --prompt sentence
-  .venv\Scripts\python tools\cmp_logits.py tests\fixtures\ref_llamacpp tests\fixtures\ref_hf --label-a llamacpp --label-b hf
-tools/cmp_logits.py overwrites this file with, per prompt: argmax match, top-10 overlap, max|diff|, mean|diff|
-(raw and after log-softmax).
+Reading: this is the distance between the published bf16 model and the Q4_K_M file the engine loads, computed with
+identical float32 code. An engine reading the GGUF should sit far inside these numbers against ref_gguf (its parity
+target) and about here against the bf16 model; matching bf16 more closely than this is impossible with these weights.

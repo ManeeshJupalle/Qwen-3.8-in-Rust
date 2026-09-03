@@ -1,0 +1,22 @@
+{
+ "weights": "bf16",
+ "dtype": "f32",
+ "source": {
+  "weights": "bf16",
+  "hf_dir": "models/Qwen3.8-27B",
+  "shards": 18,
+  "shard_bytes": 55563006776
+ },
+ "transformers": "5.16.1",
+ "torch": "2.14.0+cpu",
+ "n_layers": 64,
+ "prompts": [
+  "capital",
+  "fib",
+  "sentence"
+ ],
+ "dump_hidden": true,
+ "note": "per-layer dumps from tools/ref_forward.py; logits recomputed from the final-norm dump by tools/ref_logits_from_dump.py (float32 matmul, lm_head in row chunks); raw prompt ids, no BOS, no template; eager attention",
+ "dump_bytes": 67886208,
+ "dump_files": 201
+}

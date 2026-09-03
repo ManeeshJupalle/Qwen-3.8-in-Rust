@@ -90,9 +90,11 @@ class ShardStore:
         return self.get(PREFIX + "norm.weight")
 
     def lm_head_chunks(self, vocab):
-        sl = self._shard("lm_head.weight").get_slice("lm_head.weight")
+        # the whole bf16 tensor (2.5 GB) is loaded once and sliced here: safetensors get_slice on it
+        # terminated the process silently on Windows during the first bf16 run
+        w = self.get("lm_head.weight")
         for a in range(0, vocab, LM_HEAD_CHUNK_ROWS):
-            yield a, sl[a:min(a + LM_HEAD_CHUNK_ROWS, vocab)]
+            yield a, w[a:min(a + LM_HEAD_CHUNK_ROWS, vocab)]
 
     def describe(self):
         shards = sorted(set(self.weight_map.values()))
