@@ -88,3 +88,11 @@ algebraic rearrangement of the same recurrence).
   `kv_mem[v]` and `out[v]` are plain left-to-right sums over k).
 - `kernels::rmsnorm::rmsnorm_gated` for step 7.
 Parallelism is over V heads (48 independent states).
+
+## Verified (Phase 2a, `docs/data/phase2a_tests.txt`)
+
+`crates/core/tests/kernels.rs::deltanet_step_matches_hf` and `tests/layers.rs::gated_deltanet_prefill_and_step`
+reproduce `torch_recurrent_gated_delta_rule` and the full `Qwen3_5GatedDeltaNet` module (prefill through the
+chunk kernel, then a cached step) within k = 16 budgets; measured max diffs are ~4e-7 on outputs of order 1.
+HF's chunked prefill and its sequential recurrence differ from each other by 4.6e-7 (fixture field
+`chunk_vs_seq_max_diff`). HF's cache keeps 4 conv samples per channel; only the last 3 are used.

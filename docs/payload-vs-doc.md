@@ -327,3 +327,46 @@ Open question for the user: carry these as architecture-implied constants keyed 
   the trailing 0 is a fourth mRoPE axis llama.cpp reserves. `2 * (11 + 11 + 10) = 64 = rope.dimension_count`.
 - The `tokenizers` Rust crate reproduces the HF Python tokenizer on all 45 cases and 3 prompts with the
   `fancy-regex` backend (no C dependency); the same crate version is what the Python fixtures used (0.23.1).
+
+# Phase 2a findings (kernels and the tiny oracle)
+
+## 27. The GGUF DeltaNet tensors are re-tiled and transformed by the converter; HF layout is not the on-disk layout
+
+llama.cpp `conversion/qwen.py` (commit 67a17c1, `_LinearAttentionVReorderBase`, `Qwen3NextModel.modify_tensors`):
+V heads move from HF's grouped order (head `k*3+v`) to tiled order (position `v*16+k`) in the V rows of
+`attn_qkv`, in `attn_gate`, `ssm_alpha`, `ssm_beta`, `ssm_a`, `ssm_dt.bias`, the V channels of `ssm_conv1d`,
+and the input columns of `ssm_out`; `ssm_a` stores `-exp(A_log)`, not `A_log`; every `*norm.weight` gets `+1`
+except `linear_attn.norm.weight` (the gated norm is ones-initialised, the others are zero-centered);
+`conv1d.weight` is squeezed from `[C, 1, 4]` to `[C, 4]`. Attention tensors are untouched (Qwen2 path: no q/k
+permutation), so `attn_q` keeps HF's per-head `[q | gate]` packing. Full table in `docs/deltanet.md`.
+Engine consequence: V head `p` reads K head `p % 16`; nothing in the engine reproduces HF order.
+
+## 28. HF facts captured for the kernels (docs/rope.md, docs/deltanet.md)
+
+- RoPE rotates only the first 64 of 256 head dims, rotate-half pairing `(i, i+32)`, after q/k RMSNorm; for
+  text the three mRoPE streams are equal, so `mrope_interleaved` is a no-op. The converter warns
+  "Unknown RoPE type: default" and writes no scaling keys.
+- DeltaNet op order is decay, read, delta write, read, with `l2norm(q)`, `l2norm(k)` (eps 1e-6) and
+  `q *= 1/sqrt(128)` before the step; `g = ssm_a * softplus(a + dt_bias)`, `beta = sigmoid(b)`; the output norm
+  is `weight * rmsnorm(out)` then `* silu(z)`.
+- HF's `DynamicCache` keeps 4 conv samples per channel but only the last 3 feed the next step; our state keeps 3.
+- HF prefill uses the chunked delta rule; its output differs from the sequential recurrence by at most
+  4.6e-7 on outputs of magnitude 0.96 (`tests/fixtures/layers/layers/manifest.json`, `chunk_vs_seq_max_diff`),
+  so a sequential prefill matches within the derived budgets.
+
+## 29. Tiny oracle: converter path succeeded with two forced deviations
+
+`tools/make_tiny_checkpoint.py` -> `models/tiny/tiny-f32.gguf` (138 tensors, 133 MB) via the real
+`convert_hf_to_gguf.py` (Qwen3_5ForCausalLM path). The converter hashes the tokenizer to choose
+`tokenizer.ggml.pre` and asserts the vocab fits `vocab_size`, so the tiny model reuses the real tokenizer
+and the real 248,320 vocab instead of 512; and it asserts on `mtp_num_hidden_layers = 1` without `mtp.*`
+tensors, so a random MTP block is included (it becomes `blk.9.*`, ignored by the oracle). Everything else
+is as specified: 9 layers, interval 4, hidden 64, 2 KV heads, DeltaNet 2 K x 6 V heads of 16.
+Result: 60/60 greedy tokens, per-layer hidden states at 1% of budget, logits within 3.6e-7 of HF
+(`docs/data/phase2a_tests.txt`).
+
+## 30. gguf-py cannot quantise K-quants
+
+`gguf.quants.quantize` implements only Q4_0 and Q8_0 (plus F32/F16 pass-through). K-quant dot-kernel
+fixtures therefore use rows sliced from the real bartowski GGUF plus hostile blocks tiled from the Phase 1
+dequant fixtures with rewritten f16 scales (`tools/fixtures/gen_kernels.py`).

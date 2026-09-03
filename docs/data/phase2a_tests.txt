@@ -1,0 +1,150 @@
+# cargo test --workspace -- --nocapture, 2026-09-03T05:34Z, filtered to results and error-vs-budget lines
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test arch::tests::unknown_architecture_is_named_in_the_error ... ok
+test arch::tests::stop_set_is_union_in_order ... ok
+test quant::tests::crc32_known_vector ... ok
+test quant::tests::scale_min_unpack_matches_ggml_packing ... ok
+test gguf::tests::layer_names ... ok
+test gguf::tests::unknown_ggml_type_is_an_error ... ok
+test quant::tests::f16_roundtrip_exact ... ok
+test quant::tests::length_errors_are_reported ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test other_architectures_are_refused ... ok
+test qwen35_constants_match_config_fixtures ... ok
+test runtime_stop_set_is_gguf_eos_union_arch_extras ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test mapping_table_is_documented ... ok
+test missing_key_is_a_hard_error_naming_the_key ... ok
+test config_from_gguf_matches_config_json_by_path ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s
+test wrong_unpack_is_caught_by_hostile_q4_k ... ok
+test hostile_blocks_bit_exact ... ok
+prefix bit-exact: ["F32", "Q4_0", "Q4_K", "Q5_K", "Q6_K", "Q8_0"]
+test prefix_blocks_bit_exact ... ok
+test full_smallest_tensor_bit_exact_via_digest ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.03s
+open: 252.7 ms, bytes read on open 10995277, header_end 10995277, data_offset 10995296
+test layer_spans_are_contiguous_and_read_raw_counts_bytes ... ok
+test index_matches_fixture_and_open_reads_no_tensor_bytes ... ok
+test metadata_matches_fixture ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.33s
+test info_numbers_match_phase0_layout_report ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+silu: worst element at 0.17 of its budget
+conv_step_c16: max diff 1.192e-7 <= budget 1.619e12
+softmax_w5: worst row 4 diff 3.725e-9 vs budget 1.454e-6
+"rope_hd256": inv_freq max diff 0.000e0, max ulp distance 0
+softmax_w32: worst row 4 diff 2.980e-8 vs budget 1.563e-6
+"q8_w32": 8 rows bit-exact
+"rope_hd256": cos/sin tables (torch inv_freq) max diff 5.960e-8 vs budget 9.537e-7
+conv_prefill_c16: max diff 4.768e-7 <= budget 7.751e-6
+softmax_w100: worst row 4 diff 2.980e-8 vs budget 1.141e-6
+"q8_w64": 8 rows bit-exact
+rope_hd256 q: max diff 0.000e0 <= budget 1.135e24
+softmax_w512: worst row 4 diff 1.676e-8 vs budget 5.638e-7
+rope_hd256 k: max diff 0.000e0 <= budget 1.135e24
+causal_t1: worst row 0 diff 0.000e0 vs budget 0.000e0
+"rope_hd16": inv_freq max diff 0.000e0, max ulp distance 0
+"rope_hd16": cos/sin tables (torch inv_freq) max diff 5.960e-8 vs budget 9.537e-7
+rmsnorm_w64: worst row 2 diff 2.384e-7 vs budget 2.150e-5
+rope_hd16 q: max diff 0.000e0 <= budget 1.349e24
+rmsnorm_w100: worst row 0 diff 0.000e0 vs budget 0.000e0
+rmsnorm_w256: worst row 2 diff 3.576e-7 vs budget 4.519e-5
+swiglu: worst element at 0.22 of its budget
+test act_matches_torch ... causal_t7: worst row 6 diff 1.490e-8 vs budget 1.248e-6
+step_h6_dk8 g: max diff 0.000e0 <= budget 2.639e-5
+conv_step_c10240: max diff 7.153e-7 <= budget 1.071e12
+"q8_w5120": 8 rows bit-exact
+rope_hd16 k: max diff 0.000e0 <= budget 1.349e24
+step_h6_dk8 beta: max diff 0.000e0 <= budget 1.907e-6
+rmsnorm_w5120: worst row 0 diff 1.431e-6 vs budget 2.862e-4
+step_h6_dk8 out: max diff 1.953e-3 <= budget 3.890e-1
+step_h6_dk8 state: max diff 4.883e-4 <= budget 3.890e-1
+closest to budget: Q4_K_w17408 row 1 (real_1): diff 6.046e-5 budget 3.069e-4
+closest to budget: Q8_0_w17408 row 2 (tiny_w): diff 1.535e-8 budget 1.048e-7
+closest to budget: Q4_0_w17408 row 2 (tiny_w): diff 1.422e-8 budget 1.049e-7
+closest to budget: Q4_K_w5120 row 6 (all_equal_w): diff 4.883e-3 budget 3.752e-2
+closest to budget: Q4_K_w17408 row 2 (real_2): diff 1.402e-6 budget 1.130e-5
+closest to budget: Q5_K_w5120 row 0 (real_0): diff 9.746e-7 budget 9.584e-6
+causal_t40: worst row 29 diff 2.384e-7 vs budget 4.813e-6
+test rope_tables_and_rotation_match_hf ... ok
+test q8_quantize_is_bit_exact_with_ggml ... ok
+test softmax_matches_torch ... ok
+test dot_kernels_within_budget ... ok
+rmsnorm_gated_w8: worst row 0 diff 0.000e0 vs budget 0.000e0
+rmsnorm_gated_w128: worst row 0 diff 1.490e-8 vs budget 5.225e-5
+step_h3_dk128 g: max diff 0.000e0 <= budget 7.077e-5
+step_h3_dk128 beta: max diff 0.000e0 <= budget 1.907e-6
+conv_prefill_c10240: max diff 7.153e-7 <= budget 1.264e-5
+step_h3_dk128 out: max diff 1.164e-10 <= budget 1.873e-5
+test rmsnorm_matches_hf ... ok
+test conv1d_step_and_prefill_match_hf ... ok
+step_h3_dk128 state: max diff 6.617e-24 <= budget 1.873e-5
+test deltanet_step_matches_hf ... ok
+"Q4_0_r16_w256": 16 rows ok, thread-invariant
+"Q4_0_r24_w5120": 24 rows ok, thread-invariant
+"Q8_0_r16_w256": 16 rows ok, thread-invariant
+"Q8_0_r24_w5120": 24 rows ok, thread-invariant
+"Q4_K_r16_w256": 16 rows ok, thread-invariant
+"Q4_K_r24_w5120": 24 rows ok, thread-invariant
+"Q5_K_r16_w256": 16 rows ok, thread-invariant
+"Q5_K_r24_w5120": 24 rows ok, thread-invariant
+"Q6_K_r16_w256": 16 rows ok, thread-invariant
+"Q6_K_r24_w5120": 24 rows ok, thread-invariant
+"F32_r16_w256": 16 rows ok, thread-invariant
+"F32_r24_w5120": 24 rows ok, thread-invariant
+test matvec_within_budget_and_thread_invariant ... ok
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+decoder linear_attention prefill (threads 1): max diff 3.576e-5 vs budget 9.131e-4
+deltanet prefill vs HF chunk kernel (threads 1): max diff 3.576e-7 vs budget 1.463e-5
+deltanet prefill vs HF sequential recurrence: max diff 5.364e-7 vs budget 1.463e-5
+deltanet prefill recurrent state: max diff 3.576e-7 vs budget 9.951e-6
+deltanet prefill conv window: max diff 1.431e-6 vs budget 1.249e-4
+decoder linear_attention step (threads 1): max diff 3.767e-5 vs budget 4.925e-4
+deltanet step with carried state (threads 1): max diff 2.384e-7 vs budget 2.716e-5
+deltanet step recurrent state: max diff 2.384e-7 vs budget 2.875e-5
+deltanet step conv window: max diff 1.907e-6 vs budget 1.659e-4
+attention prefill (threads 1): max diff 2.861e-6 vs budget 2.056e-4
+attention K cache (post-RoPE): max diff 7.153e-7 vs budget 4.676e-5
+attention V cache: max diff 1.431e-6 vs budget 1.176e-4
+attention step with KV cache (threads 1): max diff 1.490e-6 vs budget 6.191e-5
+mlp: max diff 2.289e-5 vs budget 9.439e-4
+test mlp_matches_hf ... ok
+attention prefill (threads 4): max diff 2.861e-6 vs budget 2.056e-4
+attention K cache (post-RoPE): max diff 7.153e-7 vs budget 4.676e-5
+attention V cache: max diff 1.431e-6 vs budget 1.176e-4
+attention step with KV cache (threads 4): max diff 1.490e-6 vs budget 6.191e-5
+test gqa_attention_prefill_and_step ... ok
+decoder linear_attention prefill (threads 5): max diff 3.576e-5 vs budget 9.131e-4
+decoder linear_attention step (threads 5): max diff 3.767e-5 vs budget 4.925e-4
+decoder full_attention prefill (threads 1): max diff 2.670e-5 vs budget 1.243e-3
+decoder full_attention step (threads 1): max diff 1.526e-5 vs budget 8.126e-4
+deltanet prefill vs HF chunk kernel (threads 3): max diff 3.576e-7 vs budget 1.463e-5
+deltanet prefill vs HF sequential recurrence: max diff 5.364e-7 vs budget 1.463e-5
+deltanet prefill recurrent state: max diff 3.576e-7 vs budget 9.951e-6
+deltanet prefill conv window: max diff 1.431e-6 vs budget 1.249e-4
+deltanet step with carried state (threads 3): max diff 2.384e-7 vs budget 2.716e-5
+deltanet step recurrent state: max diff 2.384e-7 vs budget 2.875e-5
+deltanet step conv window: max diff 1.907e-6 vs budget 1.659e-4
+test gated_deltanet_prefill_and_step ... ok
+decoder full_attention prefill (threads 5): max diff 2.670e-5 vs budget 1.243e-3
+decoder full_attention step (threads 5): max diff 1.526e-5 vs budget 8.126e-4
+test decoder_layers_prefill_and_step ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.27s
+capital: logits max diff 3.278e-7 vs budget 1.361e-4; argmax 38098 want 38098 (top-2 margin 0.0791)
+test tiny_oracle_is_thread_invariant ... ok
+capital: greedy 20/20 match; got [38098, 95643, 98452, 171749, 228657, 2879, 26251, 92122, 226796, 211592, 151543, 61191, 101179, 84680, 109921, 190833, 67415, 9954, 132759, 144677]
+fib: logits max diff 3.576e-7 vs budget 1.289e-4; argmax 125305 want 125305 (top-2 margin 0.0086)
+fib: greedy 20/20 match; got [125305, 199417, 123818, 25422, 30739, 51257, 26826, 160493, 162061, 118075, 25184, 22899, 242510, 56123, 47118, 24896, 27557, 35047, 100164, 51175]
+sentence: logits max diff 2.682e-7 vs budget 1.236e-4; argmax 19521 want 19521 (top-2 margin 0.0202)
+test tiny_oracle_matches_hf_reference has been running for over 60 seconds
+sentence: greedy 20/20 match; got [19521, 205183, 174092, 111966, 222924, 188214, 80610, 75958, 5440, 235164, 25622, 192961, 41803, 145291, 166906, 24205, 22230, 219259, 81445, 238314]
+greedy 60/60; worst layer: capital layer 0: diff 7.451e-9 vs budget 9.415e-7 (0.01 of budget)
+test tiny_oracle_matches_hf_reference ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 63.69s
+test prompts_encode ... ok
+encode 45/45, decode 45/45
+test tok_cases_encode_and_decode ... ok
+test special_ids_from_gguf_cross_check_hf_files ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
