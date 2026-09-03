@@ -7,7 +7,9 @@ last-position logits (float32 .npy), argmax, top-10, in the same shapes as tools
 
 Requires the bf16 shards in <hf_dir> (about 52 GiB; NOT downloaded in Phase 0 without approval).
 
-STATUS: written in Phase 0 but NOT executed (shards not downloaded). Expect to debug it once.
+STATUS: validated by tools/ref_forward_selftest.py on a tiny random Qwen3_5 model (bit-identical to the full
+Qwen3_5TextModel forward in float32 and bfloat16 with eager attention). Not yet run on the real 27B shards.
+Attention is forced to "eager" so results are deterministic; SDPA in bf16 differs from eager by bf16 rounding.
 
 Usage:
   python tools/ref_forward.py <hf_dir> --prompt fib            # shortest prompt first, prints wall time
