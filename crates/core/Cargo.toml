@@ -11,3 +11,8 @@ tokenizers = { version = "0.23", default-features = false, features = ["fancy-re
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[features]
+# Stage timing for the decode path (docs/data/nonmatvec_profile.txt). Off by default: `prof_scope!`
+# expands to nothing and the profiler compiles to empty functions.
+profile = []

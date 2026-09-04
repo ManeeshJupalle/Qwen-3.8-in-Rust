@@ -221,16 +221,22 @@ pub fn dequant_f32(src: &[u8], dst: &mut [f32]) -> Result<(), QuantError> {
 /// Dispatch on type. `n` is the element count.
 pub fn dequantize(t: GgmlType, src: &[u8], n: usize) -> Result<Vec<f32>, QuantError> {
     let mut dst = vec![0f32; n];
+    dequantize_into(t, src, &mut dst)?;
+    Ok(dst)
+}
+
+/// `dequantize` into a caller-owned buffer (no allocation): the decode path's embedding row (Phase 3.6).
+pub fn dequantize_into(t: GgmlType, src: &[u8], dst: &mut [f32]) -> Result<(), QuantError> {
     match t {
-        GgmlType::Q4_0 => dequant_q4_0(src, &mut dst)?,
-        GgmlType::Q8_0 => dequant_q8_0(src, &mut dst)?,
-        GgmlType::Q4_K => dequant_q4_k(src, &mut dst)?,
-        GgmlType::Q5_K => dequant_q5_k(src, &mut dst)?,
-        GgmlType::Q6_K => dequant_q6_k(src, &mut dst)?,
-        GgmlType::F32 => dequant_f32(src, &mut dst)?,
+        GgmlType::Q4_0 => dequant_q4_0(src, dst)?,
+        GgmlType::Q8_0 => dequant_q8_0(src, dst)?,
+        GgmlType::Q4_K => dequant_q4_k(src, dst)?,
+        GgmlType::Q5_K => dequant_q5_k(src, dst)?,
+        GgmlType::Q6_K => dequant_q6_k(src, dst)?,
+        GgmlType::F32 => dequant_f32(src, dst)?,
         other => return Err(QuantError::Unsupported(other)),
     }
-    Ok(dst)
+    Ok(())
 }
 
 /// Standard CRC-32 (IEEE 802.3, reflected, init/final 0xFFFFFFFF), same as Python's `zlib.crc32`.

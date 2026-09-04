@@ -2,7 +2,22 @@
 
 use super::{Linear, Result, TensorSource};
 use crate::kernels::act::swiglu;
-use crate::kernels::matvec::{acts_for, matmul, matvec2, ActVec};
+use crate::kernels::matvec::{acts_for, matmul, matvec, matvec2, ActBuf, ActVec};
+
+/// Preallocated per-token buffers for `Mlp::forward_in` (Phase 3.6): the gate and up outputs, the SwiGLU
+/// result, and the quantised form of that result for the down projection.
+pub struct MlpScratch {
+    pub g: Vec<f32>,
+    pub u: Vec<f32>,
+    pub h: Vec<f32>,
+    pub act: ActBuf,
+}
+
+impl MlpScratch {
+    pub fn new(inter: usize) -> MlpScratch {
+        MlpScratch { g: vec![0f32; inter], u: vec![0f32; inter], h: vec![0f32; inter], act: ActBuf::with_capacity(inter) }
+    }
+}
 
 pub struct Mlp {
     pub gate: Linear,
@@ -22,13 +37,29 @@ impl Mlp {
 
     /// Gate and up are one fused pass over `x` (quantised once); then SwiGLU and down.
     pub fn forward(&self, x: &[f32], y: &mut [f32], threads: usize) {
+        let mut sc = MlpScratch::new(self.gate.out_features());
+        let mut act = ActBuf::with_capacity(x.len());
+        act.fill(x, &self.input_types());
+        self.forward_in(x, &act, &mut sc, y, threads);
+    }
+
+    /// `forward` with caller-owned buffers: no allocation. `act` must already be filled for `x` with the
+    /// gate and up weight types (the decoder layer fills it once for the whole layer).
+    pub fn forward_in(&self, x: &[f32], act: &ActBuf, sc: &mut MlpScratch, y: &mut [f32], threads: usize) {
         let inter = self.gate.out_features();
-        let mut g = vec![0f32; inter];
-        let mut u = vec![0f32; inter];
-        matvec2(&self.gate.w, &self.up.w, &ActVec::new(x), &mut g, &mut u, threads);
-        let mut h = vec![0f32; inter];
-        swiglu(&g, &u, &mut h);
-        self.down.forward(&h, y, threads);
+        let (gt, ut, dt) = (self.gate.w.ggml_type, self.up.w.ggml_type, self.down.w.ggml_type);
+        matvec2(&self.gate.w, &self.up.w, act.act_for(gt, x), act.act_for(ut, x), &mut sc.g[..inter], &mut sc.u[..inter], threads);
+        {
+            crate::prof_scope!(crate::prof::Stage::Swiglu);
+            swiglu(&sc.g[..inter], &sc.u[..inter], &mut sc.h[..inter]);
+        }
+        sc.act.fill(&sc.h[..inter], &[dt]);
+        matvec(&self.down.w, sc.act.act_for(dt, &sc.h[..inter]), y, threads);
+    }
+
+    /// The weight types whose activation forms `forward_in` needs `act` filled for.
+    pub fn input_types(&self) -> [crate::GgmlType; 2] {
+        [self.gate.w.ggml_type, self.up.w.ggml_type]
     }
 }
 

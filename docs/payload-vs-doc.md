@@ -749,3 +749,67 @@ far enough from the bus that a second thread per core finds work to do. Together
 against 93 % for the K-quants, so the default follows the K-quants; a file with a different mix would want
 the opposite, which is what `--threads` is for.
 
+## 52. The decode step now allocates nothing, and taking the allocations out made the token 1.6 x faster
+
+Phase 3.6 item 1: every buffer a decode step touches is preallocated in `model::State` at load
+(`layers::Scratch` for the per-layer temporaries, `DeltaScratch` / `AttnScratch` / `MlpScratch` for the
+mixers and the MLP, `ActBuf` for the quantised activations, the residual ping-pong, the lm_head input;
+`State::reserve(max_pos)` sizes the KV caches and the attention score rows). `tests/decode_alloc.rs` proves
+it: a counting global allocator, armed after one warm-up token, records **0 allocations across 32
+`forward_token` steps** on the tiny 9-layer model, at 1, 2 and 6 threads. The same file also asserts that the
+preallocated path and the old allocating one (`forward_hidden` + `logits_of`) produce bit-identical logits
+over those 32 steps, and the real-model gate confirms it at scale: `tests/phase3_e2e.rs` reproduces every
+number of the Phase 3.5 run exactly (logits vs ref_gguf 0.3623 / 0.2807 / 0.3573, argmax at every position,
+all 96 generated ids), only faster.
+
+The file holds exactly one `#[test]`, deliberately: the allocator counter is global and cargo runs a
+binary's tests concurrently, so a second test in the same binary contaminates the count. The first version
+of this test had two and reported 301 phantom allocations.
+
+Where the old ones were: about 10,000 per token. Every projection built a fresh `ActVec` whose `Q8Row` /
+`Q8KRow` allocated five and four vectors respectively; every decoder layer allocated `normed`, `mixed` and
+`h`; every DeltaNet layer allocated seven buffers plus `qn`, `kn` and `o` per head (48 heads x 3); every
+attention layer allocated eleven plus `scores` and `probs` per head; the MLP three more.
+
+**The speed.** Decode went from 1.151 / 1.154 / 1.178 s per token to **0.717 / 0.720 / 0.725**, i.e. 23.4 GB/s
+= 74 % of the 31.6 GB/s membw, against 45 to 46 % before (`docs/data/phase3_timing.txt`). That is 1.6 x, and
+it is more than malloc: to make the head loops allocation-free they had to move off `std::thread::scope`,
+which was spawning fresh OS threads for every DeltaNet and every attention layer -- 64 scopes and a few
+hundred thread creations **per token** -- onto the persistent pool the matvecs already use. The two changes
+were made together and are not separable after the fact, but the profile (finding 53) settles which
+dominated: all the work those regions actually do now measures 24 ms per token, so the ~430 ms that
+disappeared was overhead, and thread creation is the only candidate of that size.
+
+This also, incidentally, meets the >= 60 % of membw end-to-end target that Phase 3.5 filed as not met.
+
+**Why it matters past speed** (the reason the item was worth doing regardless): Phase 4 runs the engine under
+a hard memory cap, and an allocation in the per-token path is where an OOM comes from. A decode step whose
+working set is fixed at load cannot fail that way, and its peak RSS is known before the first token.
+
+## 53. Measured, the non-matvec work is 7 % of a token, not 40 %: the engine is a matvec engine now
+
+Phase 3.6 item 2, `docs/data/nonmatvec_profile.txt`, `--features profile`. The profiler charges **exclusive**
+wall time per stage (entering a scope charges the elapsed time to the enclosing stage first), so the stages
+sum to the token: 756.6 ms of stages against 758 ms measured, 0.2 % apart.
+
+At 6 threads, per token: **matvec 703.7 ms (93.0 %)**, everything else **52.9 ms (7.0 %)** -- deltanet_rec
+19.4, conv 13.6, swiglu 11.1, attn 4.9, quantise 2.8, norm 0.46, residual 0.35, rope 0.21, softmax 0.05,
+embed 0.004. The matvec figure is 16.84 GB of weights in 703.7 ms = 23.9 GB/s, exactly the rate the kernel
+bench measures for these kernels (finding 49), so the dot products are running at their measured capability
+and the rest of the token is 53 ms.
+
+Finding 50's 0.46 s of "non-matvec" was an inference from component rates, and it was wrong. The work it
+named is 33 ms (deltanet_rec + conv + norm); what was actually there was the per-token allocation and thread
+creation that finding 52 removed. **Inferring a breakdown from component rates was the mistake** -- the same
+mistake in kind as finding 47's, trusting a derived number over a measured one.
+
+Two things the 1-thread column shows that the 6-thread one cannot. `deltanet_rec` and `attn` scale with
+threads (56.1 -> 19.4 ms and 10.5 -> 4.9, about 2.9 x on 6 threads): they are parallel over heads.
+`conv` and `swiglu` do not move at all (13.8 -> 13.6, 11.1 -> 11.1): they are serial scalar loops on the
+calling thread, and they are 25 of the remaining 53 ms. So the non-matvec work that is left is mostly work
+that has never been vectorised or parallelised (`causal_conv1d_step`, `swiglu`, `deltanet_step` are all still
+scalar, `docs/simd.md`).
+
+None of it was optimised this session, by instruction, and the number says why that is the right call: the
+whole non-matvec budget is 7 % of the token. Driving it to zero would take 0.758 s to 0.705 s. The next real
+speed work is not here.

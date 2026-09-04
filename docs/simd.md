@@ -32,9 +32,15 @@ fixture tests (budgets of `k * sqrt(width) * eps * max|x|`) and the tiny oracle 
 ## What stays scalar
 
 `dot_f32`, `dot_f32_q8` (F32 weights: `ssm_alpha`, `ssm_beta`, 48 rows per DeltaNet layer), `rmsnorm_gated`
-(needs `silu` = `exp` per element), `rope`, `causal_conv1d_step`, `deltanet_step`, `silu`/`swiglu`. They are
-either a small share of decode time or bounded by `exp`. The DeltaNet recurrence (`dk x dv` per head per token,
-48 heads) is the largest of these and is a candidate for a later vector pass; it is not memory-bound.
+(needs `silu` = `exp` per element), `rope`, `causal_conv1d_step`, `deltanet_step`, `silu`/`swiglu`.
+
+Phase 3.6 measured what that costs (`docs/data/nonmatvec_profile.txt`, finding 53): at 6 threads all of it
+together is 53 ms of a 758 ms token, 7 %. In order, `deltanet_step` and its per-head neighbours 19.4 ms,
+`causal_conv1d_step` 13.6 ms, `swiglu` 11.1 ms, attention's per-head work 4.9 ms, the Q8_K quantiser 2.8 ms,
+`rmsnorm` 0.46 ms, `rope` 0.21 ms, `softmax` 0.05 ms. The DeltaNet and attention head loops are parallel over
+heads and scale (2.9 x on 6 threads); `causal_conv1d_step` and `swiglu` are serial scalar loops on the calling
+thread and read the same at 1 thread as at 6, which makes them 25 of those 53 ms. Vectorising any of it is
+worth at most 7 % of the token, so none of it was done.
 
 ## Dispatch
 

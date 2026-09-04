@@ -5,3 +5,7 @@ edition = "2021"
 
 [dependencies]
 aqueduct-core = { path = "../core" }
+
+[features]
+# Forwarded to aqueduct-core; `aqueduct run --profile` needs it.
+profile = ["aqueduct-core/profile"]

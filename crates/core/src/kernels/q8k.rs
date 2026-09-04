@@ -27,30 +27,54 @@ impl Q8KRow {
     /// ggml layout per block: f32 d, 256 x i8, 16 x i16.
     pub const BLOCK_BYTES: usize = 4 + 256 + 32;
 
+    /// An empty row with room for `n` values, so `quantize_into` never allocates (Phase 3.6).
+    pub fn with_capacity(n: usize) -> Q8KRow {
+        let nb = n / Self::BLOCK;
+        Q8KRow { n: 0, d: Vec::with_capacity(nb), qs: Vec::with_capacity(n), bsums: Vec::with_capacity(nb * 16), q8s: Vec::with_capacity(nb * 8) }
+    }
+
     /// Quantise `x` (length a multiple of 256). AVX2 when available (bit-identical, `avx2.rs`), else scalar.
     pub fn quantize(x: &[f32]) -> Q8KRow {
+        let mut r = Q8KRow::with_capacity(x.len());
+        r.quantize_into(x);
+        r
+    }
+
+    /// Quantise `x` into this row, reusing its buffers: no allocation once the capacity is right
+    /// (`with_capacity`), which is what makes the decode path allocation-free (Phase 3.6, finding 52).
+    /// Same bits as `quantize`.
+    pub fn quantize_into(&mut self, x: &[f32]) {
+        crate::prof_scope!(crate::prof::Stage::Quantise);
         #[cfg(target_arch = "x86_64")]
         if super::simd::use_avx2() {
             assert!(x.len().is_multiple_of(Self::BLOCK), "Q8KRow::quantize: length {} is not a multiple of 256", x.len());
-            let nb = x.len() / Self::BLOCK;
-            let mut d = Vec::with_capacity(nb);
-            let mut qs = Vec::with_capacity(x.len());
-            let mut bsums = Vec::with_capacity(nb * 16);
+            self.d.clear();
+            self.qs.clear();
+            self.bsums.clear();
             // SAFETY: `use_avx2` is only true when the CPU reports AVX2 and F16C.
-            unsafe { super::avx2::quantize_row_q8k(x, &mut d, &mut qs, &mut bsums) };
-            let q8s = pair_sums(&bsums);
-            return Q8KRow { n: x.len(), d, qs, bsums, q8s };
+            unsafe { super::avx2::quantize_row_q8k(x, &mut self.d, &mut self.qs, &mut self.bsums) };
+            self.n = x.len();
+            pair_sums_into(&self.bsums, &mut self.q8s);
+            return;
         }
-        Self::quantize_scalar(x)
+        self.quantize_scalar_into(x);
     }
 
     /// The scalar reference quantiser (the port of `quantize_row_q8_K_ref`).
     pub fn quantize_scalar(x: &[f32]) -> Q8KRow {
+        let mut r = Q8KRow::with_capacity(x.len());
+        r.quantize_scalar_into(x);
+        r
+    }
+
+    /// The scalar quantiser, in place.
+    pub fn quantize_scalar_into(&mut self, x: &[f32]) {
         assert!(x.len().is_multiple_of(Self::BLOCK), "Q8KRow::quantize: length {} is not a multiple of 256", x.len());
         let nb = x.len() / Self::BLOCK;
-        let mut d = Vec::with_capacity(nb);
-        let mut qs: Vec<i8> = Vec::with_capacity(x.len());
-        let mut bsums = Vec::with_capacity(nb * 16);
+        self.d.clear();
+        self.qs.clear();
+        self.bsums.clear();
+        let (d, qs, bsums) = (&mut self.d, &mut self.qs, &mut self.bsums);
         for b in 0..nb {
             let blk = &x[b * Self::BLOCK..(b + 1) * Self::BLOCK];
             let mut amax = 0f32;
@@ -80,8 +104,8 @@ impl Q8KRow {
             }
             d.push(1.0 / iscale);
         }
-        let q8s = pair_sums(&bsums);
-        Q8KRow { n: x.len(), d, qs, bsums, q8s }
+        self.n = x.len();
+        pair_sums_into(&self.bsums, &mut self.q8s);
     }
 
     pub fn n_blocks(&self) -> usize {
@@ -155,4 +179,10 @@ impl Q8KRow {
 /// `bsums[2s] + bsums[2s+1]` for every block (exact: |bsums| <= 2032).
 fn pair_sums(bsums: &[i16]) -> Vec<i16> {
     bsums.chunks_exact(2).map(|p| p[0] + p[1]).collect()
+}
+
+/// `pair_sums` into an existing buffer (reuses its capacity).
+fn pair_sums_into(bsums: &[i16], out: &mut Vec<i16>) {
+    out.clear();
+    out.extend(bsums.chunks_exact(2).map(|p| p[0] + p[1]));
 }

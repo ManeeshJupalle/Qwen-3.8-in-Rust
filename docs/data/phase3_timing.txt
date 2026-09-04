@@ -1,3 +1,45 @@
+# Phase 3.6 timing (crates/core/tests/phase3_e2e.rs), 2026-09-04, production config after the allocation work:
+# Q8_K activations, physical-core thread default (6), and the decode path made allocation-free (finding 52:
+# every scratch buffer preallocated in State, the per-head loops moved off `std::thread::scope` onto the pool).
+# membw 31.6 GB/s at 6 threads in the same session (docs/data/bench_rounds.log); '% of membw' is against that.
+# EVERY NUMBER THAT IS NOT A CLOCK IS IDENTICAL to the Phase 3.5 run below: same logits vs ref_gguf, same
+# argmax at every prompt position, same 96 generated ids. Only the time moved.
+# Decode: 0.717 / 0.720 / 0.725 s per token = 23.4 / 23.3 / 23.2 GB/s = 74 / 74 / 73 % of membw,
+# against 1.151 / 1.154 / 1.178 s (45 to 46 %) before -- 1.6 x, and past the >= 60 % end-to-end target.
+# Stage breakdown of the token: docs/data/nonmatvec_profile.txt (matvec 93 %, everything else 7 %).
+#
+load: 20.3 s, 17.523 GB of weights, peak RSS 17.568 GB, threads 6
+activations: q8k; ceilings D:\Aqueduct\crates\core\..\..\tests\fixtures\q8k_ceilings.json
+== prompt capital (5 ids) ==
+prefill: sequential 4.30 s, batched 2.57 s (1.95 tok/s) + head 0.11 s; hidden max|diff| 0e0; last logits batched vs sequential max|diff| 0e0 (ceiling 0.7246); state max rel 0e0, cache max rel 0e0; argmax per position 5/5; vs ref_gguf max|diff| batched 0.3623 sequential 0.3623 (ceiling 0.7246)
+decode: 32 tokens, 0.717 s/token = 23.43 GB/s = 74% of membw 31.6
+ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+llama.cpp first 16 match: 16/16
+margins: 3.01 1.57 0.62 1.25 3.90 5.15 0.52 7.83 5.87 5.66 3.48 5.22 7.00 9.50 2.25 7.83 7.35 6.05 3.07 5.20 5.11 8.35 2.94 7.87 7.17 6.37 3.72 5.90 7.09 8.91 1.07 8.99
+text: " Paris.\nThe capital of Germany is Berlin.\nThe capital of Italy is Rome.\nThe capital of Spain is Madrid.\nThe capital of Portugal is"
+== prompt fib (4 ids) ==
+prefill: sequential 2.72 s, batched 2.02 s (1.98 tok/s) + head 0.10 s; hidden max|diff| 0e0; last logits batched vs sequential max|diff| 0e0 (ceiling 0.5614); state max rel 0e0, cache max rel 0e0; argmax per position 4/4; vs ref_gguf max|diff| batched 0.2807 sequential 0.2807 (ceiling 0.5614)
+decode: 32 tokens, 0.720 s/token = 23.34 GB/s = 74% of membw 31.6
+ids: 198,262,413,307,2564,220,16,25,198,285,460,307,198,262,745,25,198,285,460,73111,1393,12,16,8,478,73111,1393,12,17,8,271,2
+llama.cpp first 16 match: 6/16; first divergence at step 6: ours 16 vs llama.cpp 15 with top1-top2 margin 0.0954 (llama.cpp text "\n    if n <= 0:\n        return 0\n    elif")
+margins: 4.05 3.66 0.97 4.27 0.33 3.89 0.10 5.47 4.11 5.80 4.84 3.89 2.80 9.25 0.33 5.97 6.08 6.15 2.97 1.94 8.86 0.22 4.11 2.62 7.44 8.62 8.53 4.65 6.83 8.24 1.63 0.04
+text: "\n    if n <= 1:\n        return n\n    else:\n        return fibonacci(n-1) + fibonacci(n-2)\n\n#"
+== prompt sentence (39 ids) ==
+prefill: sequential 27.01 s, batched 18.30 s (2.13 tok/s) + head 0.88 s; hidden max|diff| 0e0; last logits batched vs sequential max|diff| 0e0 (ceiling 0.7146); state max rel 0e0, cache max rel 0e0; argmax per position 37/39; vs ref_gguf max|diff| batched 0.3573 sequential 0.3573 (ceiling 0.7146)
+argmax flip inside the noise floor: position 26: ours 491 vs ref 685 (our runner-up 685, margin 0.1821)
+argmax flip inside the noise floor: position 29: ours 23540 vs ref 2627 (our runner-up 2627, margin 0.0667)
+decode: 32 tokens, 0.725 s/token = 23.18 GB/s = 73% of membw 31.6
+ids: 733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446,321,4172,31717,430,781,87805,13,561,916,1315,314,1439,8177,2218,6067,289
+llama.cpp first 16 match: 5/16; first divergence at step 5: ours 91420 vs llama.cpp 34343 with top1-top2 margin 0.0241 (llama.cpp text " In the highlands, rivers plunge over cliffs and through narrow gorges, their")
+margins: 0.24 0.74 0.30 1.87 0.26 0.02 1.13 0.43 1.60 1.29 0.88 0.40 4.10 1.12 7.74 2.41 1.28 0.19 3.26 0.42 2.68 1.08 0.93 1.24 0.31 5.51 0.24 0.08 4.07 1.24 0.76 11.37
+text: " In the highlands, glaciers once shaped the landscape, leaving behind U-shaped valleys and moraines as they retreated. The interplay of these forces—erosion"
+peak RSS 17.971 GB vs expected 17.686 GB (weights 17.523 GB + state), ratio 1.016; 96 tokens generated
+load 20.3 s
+summary: capital: llama.cpp match 16/16; prefill batched 2.57 s (1.95 tok/s) vs sequential 4.30 s; decode 0.717 s/token = 23.43 GB/s
+summary: fib: llama.cpp match 6/16; prefill batched 2.02 s (1.98 tok/s) vs sequential 2.72 s; decode 0.720 s/token = 23.34 GB/s
+summary: sentence: llama.cpp match 5/16; prefill batched 18.30 s (2.13 tok/s) vs sequential 27.01 s; decode 0.725 s/token = 23.18 GB/s
+
+# ==================================================================================================== superseded runs
 # Phase 3.5 timing (crates/core/tests/phase3_e2e.rs, `cargo test --release --test phase3_e2e -- --ignored --nocapture`), 2026-09-04, PRODUCTION CONFIG:
 # Q8_K activations for K-quant weights (the 3.5 decision, docs/kquant-dot.md) and the physical-core thread default (6 on this box, finding 51).
 # i7-9750H (6 cores / 12 threads), 32 GB DDR4-2667, GGUF on the C: NVMe SSD, Windows 11.

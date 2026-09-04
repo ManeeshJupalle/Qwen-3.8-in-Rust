@@ -306,7 +306,7 @@ fn matvec_forms_are_thread_invariant_and_agree_with_single_rows() {
         // fused
         let mut g = vec![0f32; rows];
         let mut u = vec![0f32; rows];
-        matvec2(&w1, &w2, &acts[0], &mut g, &mut u, 12);
+        matvec2(&w1, &w2, acts[0].act_for(t), acts[0].act_for(t), &mut g, &mut u, 12);
         let mut u_ref = vec![0f32; rows];
         matvec(&w2, acts[0].act_for(t), &mut u_ref, 1);
         assert!(g.iter().zip(&y_ref).all(|(a, b)| a.to_bits() == b.to_bits()), "{t:?}: matvec2 gate differs");

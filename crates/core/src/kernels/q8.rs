@@ -27,26 +27,57 @@ pub struct Q8Row {
 impl Q8Row {
     pub const BLOCK: usize = 32;
 
+    /// An empty row with room for `n` values, so `quantize_into` never allocates (Phase 3.6).
+    pub fn with_capacity(n: usize) -> Q8Row {
+        let nb = n / Self::BLOCK;
+        Q8Row {
+            n: 0,
+            d: Vec::with_capacity(nb),
+            qs: Vec::with_capacity(n),
+            d32: Vec::with_capacity(nb),
+            dxs: Vec::with_capacity(nb),
+            off6: Vec::with_capacity(nb * 8),
+        }
+    }
+
     /// Quantise `x` (length a multiple of 32). AVX2 when available (bit-identical, `avx2.rs`), else scalar.
     pub fn quantize(x: &[f32]) -> Q8Row {
-        #[cfg(target_arch = "x86_64")]
-        if super::simd::use_avx2() {
-            assert!(x.len().is_multiple_of(Self::BLOCK), "Q8Row::quantize: length {} is not a multiple of 32", x.len());
-            let mut d = Vec::with_capacity(x.len() / Self::BLOCK);
-            let mut qs = Vec::with_capacity(x.len());
-            // SAFETY: `use_avx2` is only true when the CPU reports AVX2 and F16C.
-            unsafe { super::avx2::quantize_row(x, &mut d, &mut qs) };
-            return Q8Row::from_parts(x.len(), d, qs);
-        }
-        Self::quantize_scalar(x)
+        let mut r = Q8Row::with_capacity(x.len());
+        r.quantize_into(x);
+        r
     }
 
     /// The scalar reference quantiser.
     pub fn quantize_scalar(x: &[f32]) -> Q8Row {
+        let mut r = Q8Row::with_capacity(x.len());
+        r.quantize_scalar_into(x);
+        r
+    }
+
+    /// Quantise `x` into this row, reusing its buffers: no allocation once the capacity is right
+    /// (`with_capacity`), which is what makes the decode path allocation-free (Phase 3.6, finding 52).
+    /// Same bits as `quantize`.
+    pub fn quantize_into(&mut self, x: &[f32]) {
+        crate::prof_scope!(crate::prof::Stage::Quantise);
+        #[cfg(target_arch = "x86_64")]
+        if super::simd::use_avx2() {
+            assert!(x.len().is_multiple_of(Self::BLOCK), "Q8Row::quantize: length {} is not a multiple of 32", x.len());
+            self.d.clear();
+            self.qs.clear();
+            // SAFETY: `use_avx2` is only true when the CPU reports AVX2 and F16C.
+            unsafe { super::avx2::quantize_row(x, &mut self.d, &mut self.qs) };
+            self.derive(x.len());
+            return;
+        }
+        self.quantize_scalar_into(x);
+    }
+
+    /// The scalar quantiser, in place.
+    pub fn quantize_scalar_into(&mut self, x: &[f32]) {
         assert!(x.len().is_multiple_of(Self::BLOCK), "Q8Row::quantize: length {} is not a multiple of 32", x.len());
         let nb = x.len() / Self::BLOCK;
-        let mut d = Vec::with_capacity(nb);
-        let mut qs = Vec::with_capacity(x.len());
+        self.d.clear();
+        self.qs.clear();
         for b in 0..nb {
             let blk = &x[b * Self::BLOCK..(b + 1) * Self::BLOCK];
             let mut amax = 0f32;
@@ -58,29 +89,37 @@ impl Q8Row {
             }
             let dd = amax / 127.0;
             let id = if dd != 0.0 { 1.0 / dd } else { 0.0 };
-            d.push(half::f16::from_f32(dd).to_bits());
+            self.d.push(half::f16::from_f32(dd).to_bits());
             for &v in blk {
-                qs.push((v * id).round() as i8);
+                self.qs.push((v * id).round() as i8);
             }
         }
-        Q8Row::from_parts(x.len(), d, qs)
+        self.derive(x.len());
+    }
+
+    /// Recompute the derived per-block data (`d32`, `dxs`, `off6`) from `d` and `qs`.
+    fn derive(&mut self, n: usize) {
+        let nb = self.d.len();
+        assert_eq!(self.qs.len(), nb * Self::BLOCK);
+        self.n = n;
+        self.d32.clear();
+        self.dxs.clear();
+        self.off6.clear();
+        for b in 0..nb {
+            self.d32.push(f16_to_f32(self.d[b]));
+            let q = &self.qs[b * Self::BLOCK..(b + 1) * Self::BLOCK];
+            let lo: i32 = q[..16].iter().map(|&v| v as i32).sum();
+            let hi: i32 = q[16..].iter().map(|&v| v as i32).sum();
+            self.dxs.push(self.d32[b] * (lo + hi) as f32);
+            self.off6.extend_from_slice(&[32 * lo, 0, 0, 0, 32 * hi, 0, 0, 0]);
+        }
     }
 
     /// Assemble a row from its scales and codes and compute the derived per-block data.
     pub fn from_parts(n: usize, d: Vec<u16>, qs: Vec<i8>) -> Q8Row {
-        let nb = d.len();
-        assert_eq!(qs.len(), nb * Self::BLOCK);
-        let d32: Vec<f32> = d.iter().map(|&b| f16_to_f32(b)).collect();
-        let mut dxs = Vec::with_capacity(nb);
-        let mut off6 = Vec::with_capacity(nb * 8);
-        for b in 0..nb {
-            let q = &qs[b * Self::BLOCK..(b + 1) * Self::BLOCK];
-            let lo: i32 = q[..16].iter().map(|&v| v as i32).sum();
-            let hi: i32 = q[16..].iter().map(|&v| v as i32).sum();
-            dxs.push(d32[b] * (lo + hi) as f32);
-            off6.extend_from_slice(&[32 * lo, 0, 0, 0, 32 * hi, 0, 0, 0]);
-        }
-        Q8Row { n, d, qs, d32, dxs, off6 }
+        let mut r = Q8Row { n, d, qs, d32: Vec::new(), dxs: Vec::new(), off6: Vec::new() };
+        r.derive(n);
+        r
     }
 
     /// Parse a ggml Q8_0 row (`n/32` blocks of `f16 d` + 32 bytes), e.g. from a fixture.

@@ -22,6 +22,8 @@ pub struct RunArgs {
     pub ids_only: bool,
     /// Feed the prompt token by token instead of the batched prefill (the 3.2 path, for timing comparisons).
     pub sequential_prefill: bool,
+    /// Print the per-stage decode breakdown (needs `--features profile`).
+    pub profile: bool,
     pub verbose: bool,
 }
 
@@ -29,7 +31,7 @@ pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String
     // physical cores, not hardware threads: the matvec kernels are memory-bound, so SMT siblings contend
     // rather than add bandwidth (`aqueduct_core::cpu`, finding 51). `--threads N` overrides.
     let all = aqueduct_core::physical_cores();
-    let mut a = RunArgs { model: DEFAULT_GGUF.into(), tokenizer: default_tokenizer.into(), threads: all, max_tokens: 32, ids: None, prompt: None, ids_only: false, sequential_prefill: false, verbose: false };
+    let mut a = RunArgs { model: DEFAULT_GGUF.into(), tokenizer: default_tokenizer.into(), threads: all, max_tokens: 32, ids: None, prompt: None, ids_only: false, sequential_prefill: false, profile: false, verbose: false };
     let mut i = 0;
     while i < args.len() {
         let next = |i: usize| args.get(i + 1).ok_or_else(|| format!("{} needs a value", args[i]));
@@ -65,6 +67,10 @@ pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String
             }
             "--q8-fine" => {
                 set_q8_fine(true);
+                i += 1;
+            }
+            "--profile" => {
+                a.profile = true;
                 i += 1;
             }
             "--sequential-prefill" => {
@@ -107,6 +113,9 @@ pub fn run(a: RunArgs) -> Result<(), String> {
     );
 
     let mut state = model.new_state();
+    // preallocate the KV caches and the attention score buffers for the whole run: after this the decode
+    // step allocates nothing (Phase 3.6, `tests/decode_alloc.rs`)
+    state.reserve(prompt_ids.len() + a.max_tokens + 1);
     let mut logits = vec![0f32; model.vocab()];
     // prefill: batched (3.3) unless asked for the token-by-token path; logits only for the last position
     let t0 = Instant::now();
@@ -127,6 +136,7 @@ pub fn run(a: RunArgs) -> Result<(), String> {
 
     let mut out: Vec<u32> = Vec::new();
     let mut next = argmax(&logits);
+    aqueduct_core::prof::reset();
     let t1 = Instant::now();
     let mut stopped = None;
     for _ in 0..a.max_tokens {
@@ -160,6 +170,10 @@ pub fn run(a: RunArgs) -> Result<(), String> {
     if let Some(rss) = peak_rss_bytes() {
         let expected = model.weight_bytes + model.state_bytes(prompt_ids.len() + out.len());
         eprintln!("peak RSS {:.3} GB vs expected {:.3} GB (weights + state)", rss as f64 / 1e9, expected as f64 / 1e9);
+    }
+    if a.profile {
+        eprintln!("# decode stage breakdown, {} threads, {steps} steps ({} s/token)", model.threads, format_args!("{s_per_tok:.3}"));
+        eprint!("{}", aqueduct_core::prof::report(steps));
     }
     let ids_line = out.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(",");
     if a.ids_only {

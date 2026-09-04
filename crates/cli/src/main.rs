@@ -16,8 +16,9 @@ fn usage() -> ExitCode {
     eprintln!(
         "usage:\n  aqueduct info <model.gguf>\n  aqueduct tok [--tokenizer <tokenizer.json>] encode <text>\n  aqueduct tok [--tokenizer <tokenizer.json>] decode <id,id,...>\n  aqueduct bench kernels [--threads N] [--rows R] [--cols C] [--reps N] [--no-scalar]
   aqueduct bench membw [--gib 2] [--runs 5] [--threads N]
-  aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] [--sequential-prefill] [--q8-fine] [-v] (--ids <csv> | --prompt <text>)
-  (--threads defaults to the physical core count, not the hardware thread count)"
+  aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] [--sequential-prefill] [--q8-fine] [--profile] [-v] (--ids <csv> | --prompt <text>)
+  (--threads defaults to the physical core count, not the hardware thread count;
+   --profile needs a build with --features profile)"
     );
     ExitCode::from(2)
 }

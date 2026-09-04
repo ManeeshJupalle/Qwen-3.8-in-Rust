@@ -159,6 +159,58 @@ pub fn acts_for<'a>(acts: &'a [ActVec<'_>], t: GgmlType) -> Vec<Act<'a>> {
     acts.iter().map(|a| a.act_for(t)).collect()
 }
 
+/// A reusable activation buffer: the same thing `ActVec` holds, but owning its quantised rows so a decode
+/// step can refill them without allocating (Phase 3.6). `fill` quantises into the forms the given weight
+/// types consume; `act_for` then hands each projection its form. The f32 form is the caller's own slice,
+/// which is why `act_for` takes it back.
+pub struct ActBuf {
+    q8: Q8Row,
+    q8k: Q8KRow,
+    has_q8: bool,
+    has_q8k: bool,
+}
+
+impl ActBuf {
+    /// Room for a row of `n` values in either form; `fill` on a row of that length never allocates.
+    pub fn with_capacity(n: usize) -> ActBuf {
+        ActBuf { q8: Q8Row::with_capacity(n), q8k: Q8KRow::with_capacity(n), has_q8: false, has_q8k: false }
+    }
+
+    /// Quantise `x` into every form the weight types in `types` consume, each at most once.
+    pub fn fill(&mut self, x: &[f32], types: &[GgmlType]) {
+        self.has_q8 = false;
+        self.has_q8k = false;
+        for &t in types {
+            match act_kind(t) {
+                ActKind::Q8 if !self.has_q8 => {
+                    self.q8.quantize_into(x);
+                    self.has_q8 = true;
+                }
+                ActKind::Q8K if !self.has_q8k => {
+                    self.q8k.quantize_into(x);
+                    self.has_q8k = true;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// The activation `t` weights consume. `x` must be the slice the last `fill` was given.
+    pub fn act_for<'a>(&'a self, t: GgmlType, x: &'a [f32]) -> Act<'a> {
+        match act_kind(t) {
+            ActKind::F32 => Act::F32(x),
+            ActKind::Q8 => {
+                assert!(self.has_q8, "ActBuf: fill() was not told about a {t:?} weight");
+                Act::Q8(&self.q8)
+            }
+            ActKind::Q8K => {
+                assert!(self.has_q8k, "ActBuf: fill() was not told about a {t:?} weight");
+                Act::Q8K(&self.q8k)
+            }
+        }
+    }
+}
+
 /// f32 weight bytes times f32 activations without an intermediate copy when the row is 4-byte aligned.
 fn dot_f32_bytes(row: &[u8], x: &[f32]) -> f32 {
     // SAFETY: every bit pattern is a valid f32; `align_to` checks the alignment.
@@ -227,6 +279,7 @@ fn rows_into(w: &WeightMat, x: Act<'_>, a: usize, b: usize, y: SendPtr) {
 
 /// `y[r] = w[r] . x` for every row, using up to `threads` participants over contiguous row ranges.
 pub fn matvec(w: &WeightMat, x: Act<'_>, y: &mut [f32], threads: usize) {
+    crate::prof_scope!(crate::prof::Stage::Matvec);
     assert_eq!(y.len(), w.rows, "matvec: output length");
     check_act(w, x);
     let yp = SendPtr(y.as_mut_ptr());
@@ -238,12 +291,11 @@ pub fn matvec(w: &WeightMat, x: Act<'_>, y: &mut [f32], threads: usize) {
 
 /// Two matrices with the same shape over the same input in one dispatch (the MLP's gate and up): each
 /// participant streams its rows of the first, then of the second, so the two outputs cost one dispatch.
-pub fn matvec2(w1: &WeightMat, w2: &WeightMat, x: &ActVec<'_>, y1: &mut [f32], y2: &mut [f32], threads: usize) {
+pub fn matvec2(w1: &WeightMat, w2: &WeightMat, x1: Act<'_>, x2: Act<'_>, y1: &mut [f32], y2: &mut [f32], threads: usize) {
+    crate::prof_scope!(crate::prof::Stage::Matvec);
     assert_eq!((w1.rows, w1.cols), (w2.rows, w2.cols), "matvec2: shapes differ");
     assert_eq!(y1.len(), w1.rows, "matvec2: output length");
     assert_eq!(y2.len(), w2.rows, "matvec2: output length");
-    let x1 = x.act_for(w1.ggml_type);
-    let x2 = x.act_for(w2.ggml_type);
     check_act(w1, x1);
     check_act(w2, x2);
     let (p1, p2) = (SendPtr(y1.as_mut_ptr()), SendPtr(y2.as_mut_ptr()));
@@ -259,6 +311,7 @@ pub fn matvec2(w1: &WeightMat, w2: &WeightMat, x: &ActVec<'_>, y1: &mut [f32], y
 /// from memory once per batch instead of once per token. Row `r` of token `t` is the same arithmetic as
 /// `matvec` on `xs[t]` alone.
 pub fn matmul(w: &WeightMat, xs: &[Act<'_>], y: &mut [f32], threads: usize) {
+    crate::prof_scope!(crate::prof::Stage::Matvec);
     let t_len = xs.len();
     assert_eq!(y.len(), t_len * w.rows, "matmul: output length");
     for x in xs {

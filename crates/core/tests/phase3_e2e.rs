@@ -99,6 +99,8 @@ fn prefill_gate_and_end_to_end() {
         model.logits_of(&hs_seq[(t - 1) * hidden..], &mut logits_seq_last);
 
         let mut sb = model.new_state();
+        // preallocate for the prompt plus the 32 decode steps: the decode loop then allocates nothing
+        sb.reserve(t + 33);
         let t0 = Instant::now();
         let hs_bat = model.prefill(&ids, &mut sb);
         let bat_s = t0.elapsed().as_secs_f64();

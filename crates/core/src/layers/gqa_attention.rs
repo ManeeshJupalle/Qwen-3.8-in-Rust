@@ -7,11 +7,65 @@
 
 use super::{Linear, Result, TensorSource};
 use crate::kernels::act::sigmoid;
-use crate::kernels::matvec::{acts_for, matmul, row_range, ActVec};
+use crate::kernels::matvec::{acts_for, matmul, matvec, row_range, ActBuf, ActVec};
 use crate::kernels::pool::{self, SharedMut};
 use crate::kernels::rmsnorm::rmsnorm;
 use crate::kernels::rope::{apply_rope, cos_sin, inv_freq};
 use crate::kernels::softmax::softmax;
+use crate::GgmlType;
+
+/// Preallocated per-token buffers for `forward_token_in` (Phase 3.6). `scores` and `probs` get one row of
+/// `max_pos` per head, so the head loop is disjoint and allocation-free; `reserve` sizes them for the
+/// longest sequence the state will see.
+pub struct AttnScratch {
+    pub qg: Vec<f32>,
+    pub k: Vec<f32>,
+    pub v: Vec<f32>,
+    pub cos: Vec<f32>,
+    pub sin: Vec<f32>,
+    pub q: Vec<f32>,
+    pub gate: Vec<f32>,
+    pub tmp: Vec<f32>,
+    pub attn: Vec<f32>,
+    pub scores: Vec<f32>,
+    pub probs: Vec<f32>,
+    pub max_pos: usize,
+    pub act: ActBuf,
+    n_head: usize,
+}
+
+impl AttnScratch {
+    pub fn new(n_head: usize, n_head_kv: usize, head_dim: usize, rope_dim: usize) -> AttnScratch {
+        let (nh, nkv, hd) = (n_head, n_head_kv, head_dim);
+        AttnScratch {
+            qg: vec![0f32; 2 * nh * hd],
+            k: vec![0f32; nkv * hd],
+            v: vec![0f32; nkv * hd],
+            cos: vec![0f32; rope_dim],
+            sin: vec![0f32; rope_dim],
+            q: vec![0f32; nh * hd],
+            gate: vec![0f32; nh * hd],
+            tmp: vec![0f32; hd],
+            attn: vec![0f32; nh * hd],
+            scores: Vec::new(),
+            probs: Vec::new(),
+            max_pos: 0,
+            act: ActBuf::with_capacity(nh * hd),
+            n_head: nh,
+        }
+    }
+
+    /// Size the per-head score buffers for sequences up to `max_pos` positions. Called by
+    /// `model::State::reserve`; without it the head loop grows them on first use (one allocation).
+    pub fn reserve(&mut self, max_pos: usize) {
+        if max_pos <= self.max_pos {
+            return;
+        }
+        self.max_pos = max_pos;
+        self.scores = vec![0f32; self.n_head * max_pos];
+        self.probs = vec![0f32; self.n_head * max_pos];
+    }
+}
 
 pub struct GqaAttention {
     pub hidden: usize,
@@ -38,6 +92,15 @@ pub struct KvCache {
     pub stride: usize,
 }
 
+impl KvCache {
+    /// Preallocate for `max_pos` positions so `forward_token` never grows the cache mid-decode.
+    pub fn reserve(&mut self, max_pos: usize) {
+        let want = max_pos * self.stride;
+        self.k.reserve(want.saturating_sub(self.k.len()));
+        self.v.reserve(want.saturating_sub(self.v.len()));
+    }
+}
+
 impl GqaAttention {
     #[allow(clippy::too_many_arguments)]
     pub fn load(src: &dyn TensorSource, prefix: &str, hidden: usize, n_head: usize, n_head_kv: usize, head_dim: usize, rope_dim: usize, theta: f32, eps: f32) -> Result<GqaAttention> {
@@ -62,92 +125,102 @@ impl GqaAttention {
         KvCache { k: Vec::new(), v: Vec::new(), len: 0, stride: self.n_head_kv * self.head_dim }
     }
 
+    /// The weight types `forward_token_in` needs its `act` filled for.
+    pub fn input_types(&self) -> [GgmlType; 3] {
+        [self.q.w.ggml_type, self.k.w.ggml_type, self.v.w.ggml_type]
+    }
+
     /// One token at absolute position `pos` (the cache must hold exactly the previous positions).
     pub fn forward_token(&self, x: &[f32], pos: u32, cache: &mut KvCache, y: &mut [f32], threads: usize) {
+        let mut sc = AttnScratch::new(self.n_head, self.n_head_kv, self.head_dim, self.rope_dim);
+        sc.reserve(cache.len + 1);
+        let mut act = ActBuf::with_capacity(x.len());
+        act.fill(x, &self.input_types());
+        self.forward_token_in(x, &act, pos, cache, &mut sc, y, threads);
+    }
+
+    /// `forward_token` with caller-owned buffers: no allocation, provided `sc.reserve` covers the cache
+    /// length and the cache itself has capacity. Bit for bit what `forward_token` computes.
+    #[allow(clippy::too_many_arguments)]
+    pub fn forward_token_in(&self, x: &[f32], act: &ActBuf, pos: u32, cache: &mut KvCache, sc: &mut AttnScratch, y: &mut [f32], threads: usize) {
         let (nh, nkv, hd, rd) = (self.n_head, self.n_head_kv, self.head_dim, self.rope_dim);
         let group = nh / nkv;
-        let xa = ActVec::new(x);
-        let mut qg = vec![0f32; 2 * nh * hd];
-        self.q.forward_act(&xa, &mut qg, threads);
-        let mut k = vec![0f32; nkv * hd];
-        self.k.forward_act(&xa, &mut k, threads);
-        let mut v = vec![0f32; nkv * hd];
-        self.v.forward_act(&xa, &mut v, threads);
+        matvec(&self.q.w, act.act_for(self.q.w.ggml_type, x), &mut sc.qg[..2 * nh * hd], threads);
+        matvec(&self.k.w, act.act_for(self.k.w.ggml_type, x), &mut sc.k[..nkv * hd], threads);
+        matvec(&self.v.w, act.act_for(self.v.w.ggml_type, x), &mut sc.v[..nkv * hd], threads);
 
-        let mut cos = vec![0f32; rd];
-        let mut sin = vec![0f32; rd];
-        cos_sin(pos, &self.inv_freq, &mut cos, &mut sin);
-
-        // q (normed, roped) and gates, per head
-        let mut q = vec![0f32; nh * hd];
-        let mut gate = vec![0f32; nh * hd];
-        let mut tmp = vec![0f32; hd];
-        for h in 0..nh {
-            let src = &qg[h * 2 * hd..(h + 1) * 2 * hd];
-            rmsnorm(&src[..hd], &self.q_norm, self.eps, &mut tmp);
-            apply_rope(&mut tmp, hd, rd, &cos, &sin);
-            q[h * hd..(h + 1) * hd].copy_from_slice(&tmp);
-            gate[h * hd..(h + 1) * hd].copy_from_slice(&src[hd..]);
+        {
+            crate::prof_scope!(crate::prof::Stage::Rope);
+            let AttnScratch { qg, k, cos, sin, q, gate, tmp, .. } = &mut *sc;
+            cos_sin(pos, &self.inv_freq, &mut cos[..rd], &mut sin[..rd]);
+            // q (normed, roped) and gates, per head
+            for h in 0..nh {
+                let src = &qg[h * 2 * hd..(h + 1) * 2 * hd];
+                rmsnorm(&src[..hd], &self.q_norm, self.eps, &mut tmp[..hd]);
+                apply_rope(&mut tmp[..hd], hd, rd, &cos[..rd], &sin[..rd]);
+                q[h * hd..(h + 1) * hd].copy_from_slice(&tmp[..hd]);
+                gate[h * hd..(h + 1) * hd].copy_from_slice(&src[hd..]);
+            }
+            for h in 0..nkv {
+                let kh = &mut k[h * hd..(h + 1) * hd];
+                rmsnorm(kh, &self.k_norm, self.eps, &mut tmp[..hd]);
+                apply_rope(&mut tmp[..hd], hd, rd, &cos[..rd], &sin[..rd]);
+                kh.copy_from_slice(&tmp[..hd]);
+            }
         }
-        for h in 0..nkv {
-            let kh = &mut k[h * hd..(h + 1) * hd];
-            rmsnorm(kh, &self.k_norm, self.eps, &mut tmp);
-            apply_rope(&mut tmp, hd, rd, &cos, &sin);
-            kh.copy_from_slice(&tmp);
-        }
-        cache.k.extend_from_slice(&k);
-        cache.v.extend_from_slice(&v);
+        cache.k.extend_from_slice(&sc.k[..nkv * hd]);
+        cache.v.extend_from_slice(&sc.v[..nkv * hd]);
         cache.len += 1;
         let len = cache.len;
+        sc.reserve(len);
         let scaling = (hd as f32).powf(-0.5);
 
-        let mut attn = vec![0f32; nh * hd];
-        let run_head = |h: usize, out: &mut [f32]| {
-            let kvh = h / group;
-            let qh = &q[h * hd..(h + 1) * hd];
-            let mut scores = vec![0f32; len];
-            for (t, sc) in scores.iter_mut().enumerate() {
-                let kt = &cache.k[t * cache.stride + kvh * hd..t * cache.stride + (kvh + 1) * hd];
-                let mut s = 0f32;
-                for d in 0..hd {
-                    s += qh[d] * kt[d];
-                }
-                *sc = s * scaling;
-            }
-            let mut p = vec![0f32; len];
-            softmax(&scores, &mut p);
-            for o in out.iter_mut() {
-                *o = 0.0;
-            }
-            for (t, &pt) in p.iter().enumerate() {
-                let vt = &cache.v[t * cache.stride + kvh * hd..t * cache.stride + (kvh + 1) * hd];
-                for d in 0..hd {
-                    out[d] += pt * vt[d];
-                }
-            }
-            for d in 0..hd {
-                out[d] *= sigmoid(gate[h * hd + d]);
-            }
-        };
-        let threads = threads.max(1).min(nh);
-        if threads == 1 {
-            for h in 0..nh {
-                run_head(h, &mut attn[h * hd..(h + 1) * hd]);
-            }
-        } else {
-            let chunk = nh.div_ceil(threads);
-            std::thread::scope(|s| {
-                for (ci, outs) in attn.chunks_mut(chunk * hd).enumerate() {
-                    let run_head = &run_head;
-                    s.spawn(move || {
-                        for (i, out) in outs.chunks_mut(hd).enumerate() {
-                            run_head(ci * chunk + i, out);
+        {
+            let AttnScratch { q, gate, attn, scores, probs, max_pos, .. } = &mut *sc;
+            let max_pos = *max_pos;
+            let (q, gate): (&[f32], &[f32]) = (&q[..nh * hd], &gate[..nh * hd]);
+            let cache_ref: &KvCache = cache;
+            let attn_p = SharedMut::new(&mut attn[..nh * hd]);
+            let scores_p = SharedMut::new(&mut scores[..nh * max_pos]);
+            let probs_p = SharedMut::new(&mut probs[..nh * max_pos]);
+            crate::prof_scope!(crate::prof::Stage::Attn);
+            pool::global().run(threads.max(1).min(nh), &|tid, n| {
+                let (h0, h1) = row_range(nh, tid, n);
+                for h in h0..h1 {
+                    let kvh = h / group;
+                    let qh = &q[h * hd..(h + 1) * hd];
+                    // SAFETY: head `h` is handled by exactly one participant; each range is that head's own row.
+                    let (s_h, p_h, out) = unsafe { (scores_p.slice(h * max_pos, len), probs_p.slice(h * max_pos, len), attn_p.slice(h * hd, hd)) };
+                    for (t, sc) in s_h.iter_mut().enumerate() {
+                        let kt = &cache_ref.k[t * cache_ref.stride + kvh * hd..t * cache_ref.stride + (kvh + 1) * hd];
+                        let mut s = 0f32;
+                        for d in 0..hd {
+                            s += qh[d] * kt[d];
                         }
-                    });
+                        *sc = s * scaling;
+                    }
+                    {
+                        crate::prof_scope!(crate::prof::Stage::Softmax);
+                        softmax(s_h, p_h);
+                    }
+                    for o in out.iter_mut() {
+                        *o = 0.0;
+                    }
+                    for (t, &pt) in p_h.iter().enumerate() {
+                        let vt = &cache_ref.v[t * cache_ref.stride + kvh * hd..t * cache_ref.stride + (kvh + 1) * hd];
+                        for d in 0..hd {
+                            out[d] += pt * vt[d];
+                        }
+                    }
+                    for d in 0..hd {
+                        out[d] *= sigmoid(gate[h * hd + d]);
+                    }
                 }
             });
         }
-        self.o.forward(&attn, y, threads);
+        let ot = self.o.w.ggml_type;
+        sc.act.fill(&sc.attn[..nh * hd], &[ot]);
+        matvec(&self.o.w, sc.act.act_for(ot, &sc.attn[..nh * hd]), y, threads);
     }
 
     /// Prefill `t` tokens starting at `start_pos`: q/k/v and the output projection as batched matmuls, the KV

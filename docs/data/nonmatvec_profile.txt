@@ -1,0 +1,90 @@
+# Phase 3.6 item 2: where a decode token's time actually goes, measured (not inferred).
+#
+# Finding 50 (Phase 3.5) put a decode token at 1.151 s and INFERRED that ~0.69 s of it was matvec and ~0.46 s
+# was "DeltaNet, conv, norms, allocations", by taking the file's type mix and the per-type rates from the
+# kernel bench. That inference was wrong: the missing 0.46 s was almost all per-token thread creation and
+# allocation, which Phase 3.6 item 1 removed. Measured directly, the non-matvec work is 53 ms, not 460 ms.
+#
+# HOW. `--features profile` compiles a stage timer into the engine (crates/core/src/prof.rs). Scopes nest and
+# charge EXCLUSIVE time: entering a scope first charges the elapsed time to the enclosing stage, so a
+# projection's `quantise` is not double-counted inside its `matvec`, and the stages sum to the wall time of
+# the token (below: 756.6 ms of stages against 758 ms measured, 0.2 % apart).
+# Only the calling thread records. The row-parallel and head-parallel regions run on the persistent pool and
+# `pool::run` returns only when every participant has finished, so the caller's wall time across such a
+# region is that region's real duration including the workers. Worker threads keep their own (unread)
+# counters, so a sub-stage inside a parallel closure (`softmax` inside `attn`) is only the caller's own share
+# -- which is why the 1-thread column is the one to read for the composition of the parallel regions.
+#
+# Command:
+#   cargo build --release --features profile
+#   aqueduct run --ids <the 39-token `sentence` prompt> --max-tokens 32 --ids-only --profile --threads {6,1}
+# Machine: i7-9750H (6 physical / 12 logical), 32 GB DDR4-2667, GGUF on the C: NVMe SSD, 2026-09-04.
+# Other load during the runs: 0.34 of 12 cores (2.8 %), measured with GetProcessTimes deltas (finding 47).
+# Production config: Q8_K activations, physical-core thread default. 31 decode steps timed per run.
+# Profiling overhead is about 6 %: the same binary without `--profile` decodes at 0.717 s/token, with it 0.758.
+#
+# ---------------------------------------------------------------------------------------- 6 threads (production)
+# decode: 32 tokens, 0.758 s/token = 22.18 GB/s of weights
+stage              ms/token   % token  total ms
+matvec              703.697     93.0%   21814.6
+quantise              2.839      0.4%      88.0
+deltanet_rec         19.365      2.6%     600.3
+conv                 13.626      1.8%     422.4
+attn                  4.944      0.7%     153.3
+softmax               0.054      0.0%       1.7
+rope                  0.210      0.0%       6.5
+norm                  0.456      0.1%      14.1
+swiglu               11.061      1.5%     342.9
+residual              0.350      0.0%      10.8
+embed                 0.004      0.0%       0.1
+TOTAL               756.605    100.0%   23454.8
+  matvec            703.697     93.0%
+  non-matvec         52.908      7.0%
+#
+# ---------------------------------------------------------------------------------------- 1 thread (composition)
+# decode: 32 tokens, 2.323 s/token = 7.23 GB/s of weights
+stage              ms/token   % token  total ms
+matvec             2226.585     95.9%   69024.1
+quantise              2.877      0.1%      89.2
+deltanet_rec         56.104      2.4%    1739.2
+conv                 13.806      0.6%     428.0
+attn                 10.474      0.5%     324.7
+softmax               0.299      0.0%       9.3
+rope                  0.221      0.0%       6.9
+norm                  0.435      0.0%      13.5
+swiglu               11.107      0.5%     344.3
+residual              0.392      0.0%      12.2
+embed                 0.004      0.0%       0.1
+TOTAL              2322.304    100.0%   71991.4
+  matvec           2226.585     95.9%
+  non-matvec         95.720      4.1%
+#
+# WHAT THE STAGES ARE
+#   matvec        the dot-product kernels: every projection, plus the 248,320-row lm_head. 16.84 GB of weights
+#                 per token; 703.7 ms at 6 threads is 23.9 GB/s, which is the kernel bench's rate
+#                 (docs/data/kernels_bench.txt: 75 to 89 % of membw at the 17408 x 5120 shape). The matvec is
+#                 doing what the kernels are capable of; it is not leaving anything on the table.
+#   quantise      turning each activation vector into Q8_K before a projection (nested inside matvec's callers,
+#                 charged separately).
+#   deltanet_rec  the 48 DeltaNet layers' per-head recurrence: l2norm of q and k, the delta-rule step
+#                 (dk x dv = 128 x 128 f32 per head, 48 heads), the gated RMSNorm.
+#   conv          the causal depthwise conv1d before the DeltaNet projections.
+#   attn          the 16 GQA layers' per-head scores, weighted V sum and output gating.
+#   rope / norm / softmax / swiglu / residual / embed as named.
+#
+# READING
+# 1. NON-MATVEC IS 53 ms OF A 758 ms TOKEN (7 %). Even reduced to zero, the token would go from 0.758 to
+#    0.705 s: a 7 % gain. The engine is now a matvec engine, and matvec is at kernel speed.
+# 2. The three that matter, in order: deltanet_rec 19.4 ms, conv 13.6 ms, swiglu 11.1 ms -- 44 of the 53 ms.
+# 3. CONV AND SWIGLU DO NOT SCALE. Both read the same at 1 thread and at 6 (13.8 -> 13.6 and 11.1 -> 11.1):
+#    they are serial scalar loops on the calling thread. deltanet_rec does scale (56.1 -> 19.4, 2.9x on 6
+#    threads) because it is parallel over heads, and attn likewise (10.5 -> 4.9). So of the 44 ms, 25 ms is
+#    already-serial work that would need vectorising or parallelising, not better threading.
+# 4. Against Phase 3.5's inference: the 0.46 s it attributed to "DeltaNet, conv, norms, allocations" was not
+#    those; deltanet_rec + conv + norm together are 33 ms. It was the per-token overhead item 1 removed
+#    (about 10,000 allocations and 64 `std::thread::scope` regions per token, each spawning its own threads).
+#    Inferring a breakdown from component rates was the mistake; this file is the measurement.
+#
+# NOT DONE THIS SESSION (by instruction): no optimisation. deltanet_step, causal_conv1d_step and swiglu are
+# all still scalar (docs/simd.md); vectorising them is the obvious next step and is worth at most 7 % of the
+# token, so the next real speed work is elsewhere.

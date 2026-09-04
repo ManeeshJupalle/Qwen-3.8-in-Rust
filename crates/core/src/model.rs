@@ -9,10 +9,10 @@ use std::time::Instant;
 use crate::arch::{arch_consts, stop_ids, ArchConsts};
 use crate::config::ModelConfig;
 use crate::gguf::Gguf;
-use crate::kernels::matvec::{acts_for, matmul, matvec, ActVec, WeightMat};
+use crate::kernels::matvec::{acts_for, matmul, matvec, ActBuf, ActVec, WeightMat};
 use crate::kernels::rmsnorm::rmsnorm;
-use crate::layers::{DecoderLayer, LayerError, MixerState, TensorSource};
-use crate::quant::dequantize;
+use crate::layers::{DecoderLayer, LayerError, MixerState, Scratch, TensorSource};
+use crate::quant::dequantize_into;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ModelError {
@@ -44,10 +44,38 @@ pub struct Model {
     pub weight_bytes: u64,
 }
 
-/// Carried state of one sequence: per-layer DeltaNet state / KV cache and the next position.
+/// Carried state of one sequence: per-layer DeltaNet state / KV cache, the next position, and every
+/// per-token scratch buffer the decode path uses (Phase 3.6). `Model::forward_token` allocates nothing
+/// once `reserve` has covered the sequence length: the buffers here are the whole working set.
 pub struct State {
     pub layers: Vec<MixerState>,
     pub pos: u32,
+    /// Per-token buffers shared by every layer in turn.
+    pub scratch: Scratch,
+    /// Residual-stream ping-pong: the layer stack reads `h0` and writes `h1`, then swaps.
+    h0: Vec<f32>,
+    h1: Vec<f32>,
+    /// Final-norm output and its quantised form, for the lm_head.
+    lm_normed: Vec<f32>,
+    lm_act: ActBuf,
+}
+
+impl State {
+    /// Preallocate for sequences up to `max_pos` positions: the KV caches and the attention score buffers.
+    /// Without it the first token past the current capacity grows them, which is an allocation.
+    pub fn reserve(&mut self, max_pos: usize) {
+        self.scratch.reserve(max_pos);
+        for l in &mut self.layers {
+            if let MixerState::Attention(c) = l {
+                c.reserve(max_pos);
+            }
+        }
+    }
+
+    /// The residual stream after the last layer of the most recent `forward_token` / `forward_hidden`.
+    pub fn hidden(&self) -> &[f32] {
+        &self.h0
+    }
 }
 
 impl Model {
@@ -81,7 +109,16 @@ impl Model {
     }
 
     pub fn new_state(&self) -> State {
-        State { layers: self.layers.iter().map(|l| l.new_state()).collect(), pos: 0 }
+        let hidden = self.hidden();
+        State {
+            layers: self.layers.iter().map(|l| l.new_state()).collect(),
+            pos: 0,
+            scratch: Scratch::for_layers(&self.layers, hidden),
+            h0: vec![0f32; hidden],
+            h1: vec![0f32; hidden],
+            lm_normed: vec![0f32; hidden],
+            lm_act: ActBuf::with_capacity(hidden),
+        }
     }
 
     /// Bytes the carried state occupies at `n_pos` positions (DeltaNet state + conv window + KV cache).
@@ -94,29 +131,53 @@ impl Model {
 
     /// The embedding row of `id` as f32.
     pub fn embed_token(&self, id: u32) -> Vec<f32> {
+        let mut out = vec![0f32; self.hidden()];
+        self.embed_token_into(id, &mut out);
+        out
+    }
+
+    /// The embedding row of `id` into a caller-owned buffer (no allocation).
+    pub fn embed_token_into(&self, id: u32, out: &mut [f32]) {
+        crate::prof_scope!(crate::prof::Stage::Embed);
         assert!((id as usize) < self.embed.rows, "token id {id} outside the vocabulary");
-        dequantize(self.embed.ggml_type, self.embed.row(id as usize), self.hidden()).expect("embedding row")
+        dequantize_into(self.embed.ggml_type, self.embed.row(id as usize), out).expect("embedding row");
+    }
+
+    /// Embed and run the layer stack, leaving the residual stream in `state.h0`; advances the state.
+    /// Allocation-free (Phase 3.6).
+    fn run_layers(&self, id: u32, state: &mut State) {
+        let State { layers: sts, pos, scratch, h0, h1, .. } = state;
+        self.embed_token_into(id, h0);
+        for (layer, st) in self.layers.iter().zip(sts.iter_mut()) {
+            layer.forward_token_in(h0, *pos, st, scratch, h1, self.threads);
+            std::mem::swap(h0, h1);
+        }
+        *pos += 1;
     }
 
     /// The residual stream after the last layer for token `id` at the state's position; advances the state.
+    /// Allocates the returned vector: the decode loop uses `forward_token`, which does not.
     pub fn forward_hidden(&self, id: u32, state: &mut State) -> Vec<f32> {
-        let hidden = self.hidden();
-        let mut h = self.embed_token(id);
-        let mut y = vec![0f32; hidden];
-        for (layer, st) in self.layers.iter().zip(state.layers.iter_mut()) {
-            layer.forward_token(&h, state.pos, st, &mut y, self.threads);
-            std::mem::swap(&mut h, &mut y);
-        }
-        state.pos += 1;
-        h
+        self.run_layers(id, state);
+        state.h0.clone()
     }
 
     /// Final norm and lm_head of a residual-stream vector.
     pub fn logits_of(&self, h: &[f32], logits: &mut [f32]) {
         let mut normed = vec![0f32; self.hidden()];
-        rmsnorm(h, &self.output_norm, self.cfg.rms_norm_eps, &mut normed);
-        let a = ActVec::new(&normed);
-        matvec(&self.lm_head, a.act_for(self.lm_head.ggml_type), logits, self.threads);
+        let mut act = ActBuf::with_capacity(self.hidden());
+        self.logits_with(h, &mut normed, &mut act, logits);
+    }
+
+    /// `logits_of` on caller-owned buffers (no allocation).
+    fn logits_with(&self, h: &[f32], normed: &mut [f32], act: &mut ActBuf, logits: &mut [f32]) {
+        {
+            crate::prof_scope!(crate::prof::Stage::Norm);
+            rmsnorm(h, &self.output_norm, self.cfg.rms_norm_eps, normed);
+        }
+        let t = self.lm_head.ggml_type;
+        act.fill(normed, &[t]);
+        matvec(&self.lm_head, act.act_for(t, normed), logits, self.threads);
     }
 
     /// Batched prefill (Phase 3.3): the residual stream after the last layer for every token of `ids`
@@ -156,10 +217,13 @@ impl Model {
         self.weight_bytes - self.embed.bytes() as u64 + self.embed.row_bytes as u64
     }
 
-    /// One token in, logits out (`vocab` long); the state advances by one position.
+    /// One token in, logits out (`vocab` long); the state advances by one position. This is the decode
+    /// loop's step and it allocates nothing once `State::reserve` has covered the sequence length
+    /// (`tests/decode_alloc.rs` asserts exactly that).
     pub fn forward_token(&self, id: u32, state: &mut State, logits: &mut [f32]) {
-        let h = self.forward_hidden(id, state);
-        self.logits_of(&h, logits);
+        self.run_layers(id, state);
+        let State { h0, lm_normed, lm_act, .. } = state;
+        self.logits_with(h0, lm_normed, lm_act, logits);
     }
 
     pub fn is_stop(&self, id: u32) -> bool {
