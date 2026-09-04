@@ -4,7 +4,7 @@
 
 use std::time::Instant;
 
-use aqueduct_core::kernels::matvec::set_q8k_activations;
+use aqueduct_core::kernels::matvec::set_q8_fine;
 use aqueduct_core::model::{argmax, Model};
 use aqueduct_core::Tok;
 
@@ -61,8 +61,8 @@ pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String
                 a.ids_only = true;
                 i += 1;
             }
-            "--q8k" => {
-                set_q8k_activations(true);
+            "--q8-fine" => {
+                set_q8_fine(true);
                 i += 1;
             }
             "--sequential-prefill" => {

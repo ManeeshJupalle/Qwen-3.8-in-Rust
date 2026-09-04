@@ -3,12 +3,14 @@
 //! into contiguous chunks over the persistent pool (`pool.rs`); every row is computed by exactly one
 //! participant with the same kernel, so results are bit-identical for any thread count.
 //!
-//! Activations (Phase 3): every quantised weight type consumes Q8_0 rows (`q8.rs`; K-quant kernels in
-//! `dot.rs` / `avx2.rs` with the Phase 3 lane structure), F32 weights consume f32. ggml's Q8_K rows
-//! (`q8k.rs`, `kdot.rs`) are an opt-in for K-quant weights (`set_q8k_activations`): faster to quantise and
-//! a little faster to multiply, but one scale per 256 values exceeds the frozen Phase 2b error ceilings
-//! (`docs/kquant-dot.md`). `ActVec` holds one vector with each quantised form computed at most once, so the
-//! projections that share an input share the quantisation.
+//! Activations (Phase 3.5 decision, `docs/kquant-dot.md`): K-quant weights consume ggml's Q8_K rows
+//! (`q8k.rs`, `kdot.rs` / `avx2.rs`), the production path since its 64-layer measurement met the promotion
+//! criterion (argmax 3/3, top-10 >= 9/10, logits 0.28 to 0.36 from the f32 reference against the 0.52 to
+//! 0.68 bf16 noise floor) and is gated by its own frozen ceilings; Q8_0-grain rows (`q8.rs`; `dot.rs` /
+//! `avx2.rs` with the same lane structure, 2 to 4 x less rounding) are the `--q8-fine` opt-in for K-quants
+//! (`set_q8_fine`) and the only form for Q8_0 / Q4_0 weights; F32 weights consume f32. `ActVec` holds one
+//! vector with each quantised form computed at most once, so the projections that share an input share the
+//! quantisation.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
@@ -74,15 +76,22 @@ pub enum ActKind {
     Q8K,
 }
 
-static Q8K_ACTS: AtomicBool = AtomicBool::new(false);
+static Q8_FINE: AtomicBool = AtomicBool::new(false);
 
-/// Opt in to (or out of) Q8_K activations for K-quant weights. Off by default (see the module doc).
-pub fn set_q8k_activations(on: bool) {
-    Q8K_ACTS.store(on, Ordering::Relaxed);
+/// Give K-quant weights Q8_0-grain activations (per-32 scales, `aqueduct run --q8-fine`) instead of the
+/// production Q8_K rows. Off by default (the Phase 3.5 decision, see the module doc).
+pub fn set_q8_fine(on: bool) {
+    Q8_FINE.store(on, Ordering::Relaxed);
 }
 
+/// Are K-quant weights taking Q8_0-grain activations (`--q8-fine`)?
+pub fn q8_fine() -> bool {
+    Q8_FINE.load(Ordering::Relaxed)
+}
+
+/// Are K-quant weights taking ggml's Q8_K activations (the production default)?
 pub fn q8k_activations() -> bool {
-    Q8K_ACTS.load(Ordering::Relaxed)
+    !q8_fine()
 }
 
 pub fn act_kind(t: GgmlType) -> ActKind {
@@ -205,6 +214,17 @@ pub fn row_range(rows: usize, tid: usize, n: usize) -> (usize, usize) {
     (start, ((tid + 1) * chunk).min(rows))
 }
 
+/// `y[r] = w[r] . x` for `r` in `a..b`, the participant's contiguous range. (Phase 3.5 tried two rows per
+/// pass here, sharing the activation loads between a row pair; measured interleaved against this loop it was
+/// slower on every kernel, `docs/data/two_row_ab.log`, so rows stay one at a time.)
+#[inline]
+fn rows_into(w: &WeightMat, x: Act<'_>, a: usize, b: usize, y: SendPtr) {
+    for r in a..b {
+        // SAFETY: `a..b` is this participant's disjoint range inside `y`.
+        unsafe { y.set(r, one_row(w, x, r)) };
+    }
+}
+
 /// `y[r] = w[r] . x` for every row, using up to `threads` participants over contiguous row ranges.
 pub fn matvec(w: &WeightMat, x: Act<'_>, y: &mut [f32], threads: usize) {
     assert_eq!(y.len(), w.rows, "matvec: output length");
@@ -212,15 +232,12 @@ pub fn matvec(w: &WeightMat, x: Act<'_>, y: &mut [f32], threads: usize) {
     let yp = SendPtr(y.as_mut_ptr());
     pool::global().run(threads.min(w.rows.max(1)), &|tid, n| {
         let (a, b) = row_range(w.rows, tid, n);
-        for r in a..b {
-            // SAFETY: ranges of different participants are disjoint and inside `y`.
-            unsafe { yp.set(r, one_row(w, x, r)) };
-        }
+        rows_into(w, x, a, b, yp);
     });
 }
 
-/// Two matrices with the same shape over the same input in one pass (the MLP's gate and up): each
-/// participant streams its rows of both, so the two outputs cost one dispatch and one walk of the input.
+/// Two matrices with the same shape over the same input in one dispatch (the MLP's gate and up): each
+/// participant streams its rows of the first, then of the second, so the two outputs cost one dispatch.
 pub fn matvec2(w1: &WeightMat, w2: &WeightMat, x: &ActVec<'_>, y1: &mut [f32], y2: &mut [f32], threads: usize) {
     assert_eq!((w1.rows, w1.cols), (w2.rows, w2.cols), "matvec2: shapes differ");
     assert_eq!(y1.len(), w1.rows, "matvec2: output length");
@@ -232,13 +249,8 @@ pub fn matvec2(w1: &WeightMat, w2: &WeightMat, x: &ActVec<'_>, y1: &mut [f32], y
     let (p1, p2) = (SendPtr(y1.as_mut_ptr()), SendPtr(y2.as_mut_ptr()));
     pool::global().run(threads.min(w1.rows.max(1)), &|tid, n| {
         let (a, b) = row_range(w1.rows, tid, n);
-        for r in a..b {
-            // SAFETY: as in `matvec`.
-            unsafe {
-                p1.set(r, one_row(w1, x1, r));
-                p2.set(r, one_row(w2, x2, r));
-            }
-        }
+        rows_into(w1, x1, a, b, p1);
+        rows_into(w2, x2, a, b, p2);
     });
 }
 

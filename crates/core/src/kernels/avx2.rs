@@ -10,7 +10,10 @@
 //!   exactly as `dot.rs` documents.
 //! - `dot_q4_k_q8`, `dot_q5_k_q8`, `dot_q6_k_q8` (Phase 3, `docs/kquant-dot.md`): exact i32 lane sums per
 //!   sub-block, one f32 factor per sub-block into 8 f32 lanes (plus 8 min lanes), one reduction per row; the
-//!   scalar reference in `dot.rs` computes the same lanes in the same order.
+//!   scalar reference in `dot.rs` computes the same lanes in the same order. Phase 3.5: the per-sub-block
+//!   factors are computed once per super-block into a small stack table and read back with broadcast loads
+//!   (no shuffles in the sub-block loop) and Q5_K consumes its high bits with a fixed shift; the arithmetic
+//!   is unchanged, so the bits are. (Two-row forms were tried and measured slower, `docs/kquant-dot.md`.)
 //! - `quantize_row` (Q8_0): the block max is order-independent, `d` and `id` are computed as in `q8.rs`,
 //!   rounding is half-away-from-zero (ties fixed up after `round_ps`), the f16 scale comes from `half`.
 //! - `inv_rms` and `softmax` sums: `rmsnorm.rs` / `softmax.rs` define their summation order as eight
@@ -116,19 +119,26 @@ pub unsafe fn dot_q4_0_q8(w: &[u8], x: &Q8Row) -> f32 {
     acc
 }
 
-/// 8 lanes of `dsc8[s]`.
+/// 8 lanes of `v[s]` (a lane permute; the Q8_0-grain Q5_K kernel keeps this form, see `docs/kquant-dot.md`).
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn lane_bcast(v: __m256, s: usize) -> __m256 {
     _mm256_permutevar8x32_ps(v, _mm256_set1_epi32(s as i32))
 }
 
-/// `[v[2k] x4, v[2k+1] x4]`.
+/// Factor `s` of a per-super-block table in all 8 lanes: one load-port uop (`vbroadcastss`) per sub-block
+/// instead of a shuffle (Phase 3.5; the tables are written once per super-block with `storeu_ps`).
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn lane_pair(v: __m256, k: usize) -> __m256 {
-    let (a, b) = ((2 * k) as i32, (2 * k + 1) as i32);
-    _mm256_permutevar8x32_ps(v, _mm256_setr_epi32(a, a, a, a, b, b, b, b))
+unsafe fn bcast(tbl: *const f32, s: usize) -> __m256 {
+    _mm256_broadcast_ss(&*tbl.add(s))
+}
+
+/// `[lo x4, hi x4]` from two table entries (Q6_K: the two 16-group factors of a sub-block).
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn bcast_pair(lo: *const f32, hi: *const f32) -> __m256 {
+    _mm256_blend_ps(_mm256_broadcast_ss(&*lo), _mm256_broadcast_ss(&*hi), 0xF0)
 }
 
 /// Exact i32 lane sums of a 32-element sub-block: lane `i` = elements `4i..4i+4` (unsigned codes <= 63).
@@ -163,6 +173,7 @@ pub unsafe fn dot_q4_k_q8(w: &[u8], x: &Q8Row) -> f32 {
     let m4 = _mm256_set1_epi8(0x0F);
     let mut acc = _mm256_setzero_ps();
     let mut accm = _mm256_setzero_ps();
+    let mut tbl = [0f32; 8];
     for sb in 0..nb / 8 {
         let wb = w.as_ptr().add(sb * Q4_K_BLOCK_BYTES);
         prefetch(wb.add(PF_DIST));
@@ -170,22 +181,23 @@ pub unsafe fn dot_q4_k_q8(w: &[u8], x: &Q8Row) -> f32 {
         prefetch(wb.add(PF_DIST + 96));
         let (dsc8, am) = k45_header(wb, x, sb, accm);
         accm = am;
+        _mm256_storeu_ps(tbl.as_mut_ptr(), dsc8);
         let q4 = wb.add(16);
         let q8 = x.qs.as_ptr().add(sb * 256) as *const u8;
         for j in 0..4 {
             let q4bits = load(q4.add(32 * j));
-            let q4l = _mm256_and_si256(q4bits, m4);
-            let q4h = _mm256_and_si256(_mm256_srli_epi16(q4bits, 4), m4);
-            let pl = lanes_u8(q4l, load(q8.add(64 * j)));
-            let ph = lanes_u8(q4h, load(q8.add(64 * j + 32)));
-            acc = _mm256_add_ps(acc, _mm256_mul_ps(_mm256_cvtepi32_ps(pl), lane_bcast(dsc8, 2 * j)));
-            acc = _mm256_add_ps(acc, _mm256_mul_ps(_mm256_cvtepi32_ps(ph), lane_bcast(dsc8, 2 * j + 1)));
+            let pl = lanes_u8(_mm256_and_si256(q4bits, m4), load(q8.add(64 * j)));
+            let ph = lanes_u8(_mm256_and_si256(_mm256_srli_epi16(q4bits, 4), m4), load(q8.add(64 * j + 32)));
+            acc = _mm256_add_ps(acc, _mm256_mul_ps(_mm256_cvtepi32_ps(pl), bcast(tbl.as_ptr(), 2 * j)));
+            acc = _mm256_add_ps(acc, _mm256_mul_ps(_mm256_cvtepi32_ps(ph), bcast(tbl.as_ptr(), 2 * j + 1)));
         }
     }
     reduce8(acc) + reduce8(accm)
 }
 
-/// Q5_K weights x Q8_0 activations: as Q4_K plus the fifth bit from `qh` (bit `s` of every byte).
+/// Q5_K weights x Q8_0 activations: as Q4_K plus the fifth bit from `qh` (bit `s` of every byte). Kept in
+/// its Phase 3 form (lane permute, constant shifts): the 3.5 table + bit-serial form measured 30 % slower
+/// single-threaded for this kernel while the same change made `dot_q5_k_q8k` 60 % faster (`docs/kquant-dot.md`).
 #[target_feature(enable = "avx2,f16c")]
 pub unsafe fn dot_q5_k_q8(w: &[u8], x: &Q8Row) -> f32 {
     let nb = x.n_blocks();
@@ -220,52 +232,64 @@ pub unsafe fn dot_q5_k_q8(w: &[u8], x: &Q8Row) -> f32 {
     reduce8(acc) + reduce8(accm)
 }
 
+/// The 16 factors of a Q6_K super-block for Q8_0-grain rows, into `tbl`: `tbl[s] = d_x[s] * (d * sc[2s])`
+/// (lanes 0..4 of sub-block `s`, its first 16-group) and `tbl[8 + s] = d_x[s] * (d * sc[2s + 1])` (lanes 4..8).
+/// The int8 scales are de-interleaved with one byte shuffle (even groups, then odd groups).
+#[inline]
+#[target_feature(enable = "avx2,f16c")]
+unsafe fn q6_factors(wb: *const u8, x: &Q8Row, sb: usize, deint: __m128i, tbl: *mut f32) {
+    let d = _mm256_set1_ps(f16_at(wb.add(208)));
+    let sc2 = _mm_shuffle_epi8(_mm_loadu_si128(wb.add(192) as *const __m128i), deint);
+    let dsc_even = _mm256_mul_ps(d, _mm256_cvtepi32_ps(_mm256_cvtepi8_epi32(sc2)));
+    let dsc_odd = _mm256_mul_ps(d, _mm256_cvtepi32_ps(_mm256_cvtepi8_epi32(_mm_srli_si128(sc2, 8))));
+    let dx8 = _mm256_loadu_ps(x.d32.as_ptr().add(sb * 8));
+    _mm256_storeu_ps(tbl, _mm256_mul_ps(dx8, dsc_even));
+    _mm256_storeu_ps(tbl.add(8), _mm256_mul_ps(dx8, dsc_odd));
+}
+
+/// The four unsigned 6-bit code vectors of one 128-code half of a Q6_K super-block (sub-blocks `4j..4j+4`):
+/// low nibbles of `ql` (two 32-byte loads) plus bit pairs of `qh` moved to bits 4..6 (one mask, `0x30`).
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn q6_codes(wb: *const u8, j: usize, m15: __m256i, m48: __m256i) -> [__m256i; 4] {
+    let ql = wb.add(64 * j);
+    let q4bits1 = load(ql);
+    let q4bits2 = load(ql.add(32));
+    let qh = load(wb.add(128 + 32 * j));
+    [
+        _mm256_or_si256(_mm256_and_si256(q4bits1, m15), _mm256_and_si256(_mm256_slli_epi16(qh, 4), m48)),
+        _mm256_or_si256(_mm256_and_si256(q4bits2, m15), _mm256_and_si256(_mm256_slli_epi16(qh, 2), m48)),
+        _mm256_or_si256(_mm256_and_si256(_mm256_srli_epi16(q4bits1, 4), m15), _mm256_and_si256(qh, m48)),
+        _mm256_or_si256(_mm256_and_si256(_mm256_srli_epi16(q4bits2, 4), m15), _mm256_and_si256(_mm256_srli_epi16(qh, 2), m48)),
+    ]
+}
+
 /// Q6_K weights x Q8_0 activations: int8 group scales (two per sub-block), the -32 offset from `off6`.
 #[target_feature(enable = "avx2,f16c")]
 pub unsafe fn dot_q6_k_q8(w: &[u8], x: &Q8Row) -> f32 {
     let nb = x.n_blocks();
     assert!(nb.is_multiple_of(8), "dot_q6_k_q8: activation length must be a multiple of 256");
     assert_eq!(w.len(), nb / 8 * Q6_K_BLOCK_BYTES, "dot_q6_k_q8: weight row bytes");
-    let m3 = _mm256_set1_epi8(3);
-    let m12 = _mm256_set1_epi8(12);
-    let m48 = _mm256_set1_epi8(48);
-    let m192 = _mm256_set1_epi8(-64);
+    let m48 = _mm256_set1_epi8(0x30);
     let m15 = _mm256_set1_epi8(15);
+    let deint = _mm_setr_epi8(0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15);
     let mut acc = _mm256_setzero_ps();
+    let mut tbl = [0f32; 16];
     for sb in 0..nb / 8 {
         let wb = w.as_ptr().add(sb * Q6_K_BLOCK_BYTES);
         prefetch(wb.add(PF_DIST));
         prefetch(wb.add(PF_DIST + 56));
         prefetch(wb.add(PF_DIST + 112));
         prefetch(wb.add(PF_DIST + 168));
-        let d = _mm256_set1_ps(f16_at(wb.add(208)));
-        let scales = _mm_loadu_si128(wb.add(192) as *const __m128i);
-        // d * sc[g] for g in 0..8 and 8..16
-        let dsc_lo = _mm256_mul_ps(d, _mm256_cvtepi32_ps(_mm256_cvtepi8_epi32(scales)));
-        let dsc_hi = _mm256_mul_ps(d, _mm256_cvtepi32_ps(_mm256_cvtepi8_epi32(_mm_srli_si128(scales, 8))));
-        let dx8 = _mm256_loadu_ps(x.d32.as_ptr().add(sb * 8));
+        q6_factors(wb, x, sb, deint, tbl.as_mut_ptr());
         for j in 0..2 {
-            let dsc = if j == 0 { dsc_lo } else { dsc_hi };
-            let ql = wb.add(64 * j);
-            let q4bits1 = load(ql);
-            let q4bits2 = load(ql.add(32));
-            let qh = load(wb.add(128 + 32 * j));
-            let q4h_0 = _mm256_slli_epi16(_mm256_and_si256(qh, m3), 4);
-            let q4h_1 = _mm256_slli_epi16(_mm256_and_si256(qh, m12), 2);
-            let q4h_2 = _mm256_and_si256(qh, m48);
-            let q4h_3 = _mm256_srli_epi16(_mm256_and_si256(qh, m192), 2);
-            let q6 = [
-                _mm256_or_si256(_mm256_and_si256(q4bits1, m15), q4h_0),
-                _mm256_or_si256(_mm256_and_si256(q4bits2, m15), q4h_1),
-                _mm256_or_si256(_mm256_and_si256(_mm256_srli_epi16(q4bits1, 4), m15), q4h_2),
-                _mm256_or_si256(_mm256_and_si256(_mm256_srli_epi16(q4bits2, 4), m15), q4h_3),
-            ];
+            let q6 = q6_codes(wb, j, m15, m48);
             for (k, q6k) in q6.iter().enumerate() {
                 let s = 4 * j + k;
                 let xb = sb * 8 + s;
                 let p = lanes_u8(*q6k, load(x.qs.as_ptr().add(xb * 32) as *const u8));
                 let p = _mm256_sub_epi32(p, _mm256_loadu_si256(x.off6.as_ptr().add(xb * 8) as *const __m256i));
-                let f = _mm256_mul_ps(lane_bcast(dx8, s), lane_pair(dsc, k));
+                let f = bcast_pair(tbl.as_ptr().add(s), tbl.as_ptr().add(8 + s));
                 acc = _mm256_add_ps(acc, _mm256_mul_ps(_mm256_cvtepi32_ps(p), f));
             }
         }
@@ -595,14 +619,18 @@ pub unsafe fn dot_q5_k_q8k(w: &[u8], x: &Q8KRow) -> f32 {
         accm = mins_term(sm, x.q8s.as_ptr().add(sb * 8), dmin, accm);
         let sc128 = _mm256_castsi256_si128(sm);
         let scales = _mm256_set_m128i(sc128, sc128);
-        let hbits = load(wb.add(16));
+        let mut hb = load(wb.add(16));
         let q5 = wb.add(48);
         let q8 = x.qs.as_ptr().add(sb * 256);
         let mut sumi = _mm256_setzero_si256();
         for j in 0..4 {
             let q5bits = load(q5.add(32 * j));
-            let h0 = _mm256_slli_epi16(_mm256_and_si256(shift_right_epi16(hbits, (2 * j) as i32), mone), 4);
-            let h1 = _mm256_slli_epi16(_mm256_and_si256(shift_right_epi16(hbits, (2 * j + 1) as i32), mone), 4);
+            // the fifth bits of sub-blocks 2j and 2j+1: bit 0 of every byte of `hb`, moved to bit 4, `hb` shifted
+            // right by one each time (a 16-bit shift spills a high byte's bit into the low byte's bit 7, never read)
+            let h0 = _mm256_slli_epi16(_mm256_and_si256(hb, mone), 4);
+            hb = _mm256_srli_epi16(hb, 1);
+            let h1 = _mm256_slli_epi16(_mm256_and_si256(hb, mone), 4);
+            hb = _mm256_srli_epi16(hb, 1);
             let q5_0 = _mm256_add_epi8(_mm256_and_si256(q5bits, m4), h0);
             let q5_1 = _mm256_add_epi8(_mm256_and_si256(_mm256_srli_epi16(q5bits, 4), m4), h1);
             let q8_0 = load(q8.add(64 * j) as *const u8);
@@ -630,10 +658,7 @@ unsafe fn q6_scale_pair(scales: __m128i, m: usize) -> __m256i {
 pub unsafe fn dot_q6_k_q8k(w: &[u8], x: &Q8KRow) -> f32 {
     let nb = x.n_blocks();
     assert_eq!(w.len(), nb * Q6_K_BLOCK_BYTES, "dot_q6_k_q8k: weight row bytes");
-    let m3 = _mm256_set1_epi8(3);
-    let m12 = _mm256_set1_epi8(12);
-    let m48 = _mm256_set1_epi8(48);
-    let m192 = _mm256_set1_epi8(-64);
+    let m48 = _mm256_set1_epi8(0x30);
     let m15 = _mm256_set1_epi8(15);
     let mut acc = _mm256_setzero_ps();
     for sb in 0..nb {
@@ -649,23 +674,12 @@ pub unsafe fn dot_q6_k_q8k(w: &[u8], x: &Q8KRow) -> f32 {
         let q8 = x.qs.as_ptr().add(sb * 256);
         let mut sumi = _mm256_setzero_si256();
         for j in 0..2 {
-            let ql = wb.add(64 * j);
-            let q4bits1 = load(ql);
-            let q4bits2 = load(ql.add(32));
-            let qh = load(wb.add(128 + 32 * j));
-            let q4h_0 = _mm256_slli_epi16(_mm256_and_si256(qh, m3), 4);
-            let q4h_1 = _mm256_slli_epi16(_mm256_and_si256(qh, m12), 2);
-            let q4h_2 = _mm256_and_si256(qh, m48);
-            let q4h_3 = _mm256_srli_epi16(_mm256_and_si256(qh, m192), 2);
-            let q4_0 = _mm256_or_si256(_mm256_and_si256(q4bits1, m15), q4h_0);
-            let q4_1 = _mm256_or_si256(_mm256_and_si256(q4bits2, m15), q4h_1);
-            let q4_2 = _mm256_or_si256(_mm256_and_si256(_mm256_srli_epi16(q4bits1, 4), m15), q4h_2);
-            let q4_3 = _mm256_or_si256(_mm256_and_si256(_mm256_srli_epi16(q4bits2, 4), m15), q4h_3);
+            let q6 = q6_codes(wb, j, m15, m48);
             let q8p = q8.add(128 * j) as *const u8;
-            let p16_0 = _mm256_madd_epi16(q6_scale_pair(scales, 4 * j), _mm256_maddubs_epi16(q4_0, load(q8p)));
-            let p16_1 = _mm256_madd_epi16(q6_scale_pair(scales, 4 * j + 1), _mm256_maddubs_epi16(q4_1, load(q8p.add(32))));
-            let p16_2 = _mm256_madd_epi16(q6_scale_pair(scales, 4 * j + 2), _mm256_maddubs_epi16(q4_2, load(q8p.add(64))));
-            let p16_3 = _mm256_madd_epi16(q6_scale_pair(scales, 4 * j + 3), _mm256_maddubs_epi16(q4_3, load(q8p.add(96))));
+            let p16_0 = _mm256_madd_epi16(q6_scale_pair(scales, 4 * j), _mm256_maddubs_epi16(q6[0], load(q8p)));
+            let p16_1 = _mm256_madd_epi16(q6_scale_pair(scales, 4 * j + 1), _mm256_maddubs_epi16(q6[1], load(q8p.add(32))));
+            let p16_2 = _mm256_madd_epi16(q6_scale_pair(scales, 4 * j + 2), _mm256_maddubs_epi16(q6[2], load(q8p.add(64))));
+            let p16_3 = _mm256_madd_epi16(q6_scale_pair(scales, 4 * j + 3), _mm256_maddubs_epi16(q6[3], load(q8p.add(96))));
             sumi = _mm256_add_epi32(sumi, _mm256_add_epi32(p16_0, p16_1));
             sumi = _mm256_add_epi32(sumi, _mm256_add_epi32(p16_2, p16_3));
         }

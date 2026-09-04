@@ -53,3 +53,9 @@ activations (`dot.rs` scalar reference, `avx2.rs`), plus ggml's Q8_K activation 
 (`q8k.rs`, `kdot.rs`). `matvec` runs on the persistent pool (`pool.rs`), `matvec2` fuses the MLP's gate and up,
 `matmul` is the batched prefill form. `bench kernels` reports both activation forms and `bench membw` the
 ceiling. The scalar `inv_rms` / softmax orders and the Q8_0 / Q4_0 kernels are unchanged apart from prefetch.
+
+Phase 3.5: Q8_K activations are the production form for K-quant weights (`docs/kquant-dot.md`), the
+Q8_0-grain K-quant kernels read their per-sub-block factors from a per-super-block stack table (broadcast
+loads, no shuffles in the inner loop), and Q5_K consumes its high bits with a fixed shift; the arithmetic is
+unchanged, so the AVX2 and scalar paths still agree bit for bit (`tests/avx2.rs`, `tests/q8k.rs`). A two-row
+matvec was tried and measured slower (`docs/data/two_row_ab.log`), so rows stay one per pass.

@@ -117,3 +117,23 @@ pub fn kquant_terms_budget(t: aqueduct_core::GgmlType, wrow: &[u8], w_deq: &[f32
 pub fn is_kquant(t: aqueduct_core::GgmlType) -> bool {
     matches!(t, aqueduct_core::GgmlType::Q4_K | aqueduct_core::GgmlType::Q5_K | aqueduct_core::GgmlType::Q6_K)
 }
+
+/// The K-quant activation format of a model-scale test run (Phase 3.5): `AQUEDUCT_ACT=q8_0` (per-32 Q8_0
+/// rows) or `AQUEDUCT_ACT=q8k` (ggml's Q8_K rows) overrides the production default. Sets the matvec flag and
+/// returns the format's name and its frozen rule-5 ceilings fixture. Rule 5 as amended in 3.5: the ceilings
+/// are per activation format, each frozen from that format's own measurement (`q8_ceilings.json` for Q8_0,
+/// `q8k_ceilings.json` for Q8_K); a format without a frozen file runs ungated, as its measurement.
+pub fn configure_act() -> (&'static str, PathBuf) {
+    use aqueduct_core::kernels::matvec::{q8k_activations, set_q8_fine};
+    match std::env::var("AQUEDUCT_ACT").as_deref() {
+        Ok("q8k") => set_q8_fine(false),
+        Ok("q8_0") => set_q8_fine(true),
+        Ok(other) => panic!("AQUEDUCT_ACT={other}: expected q8_0 or q8k"),
+        Err(_) => {}
+    }
+    if q8k_activations() {
+        ("q8k", fixture("q8k_ceilings.json"))
+    } else {
+        ("q8_0", fixture("q8_ceilings.json"))
+    }
+}

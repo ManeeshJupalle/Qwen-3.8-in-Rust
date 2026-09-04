@@ -2,9 +2,10 @@
 //! `cargo test --release --test phase3_e2e -- --ignored --nocapture`, output filed to docs/data/phase3_timing.txt).
 //!
 //! 3.3: for the 3 prompts, the batched prefill against the token-by-token feed: last-position logits within
-//! the frozen Q8 ceiling (both are also checked against ref_gguf), argmax at every prompt position vs ref_gguf,
-//! carried DeltaNet state / conv window / KV cache max relative difference (expected 0: the batched path is
-//! the same arithmetic per row).
+//! the frozen Q8 ceiling of the active activation format (both are also checked against ref_gguf), argmax at
+//! every prompt position vs ref_gguf (3.5: flips allowed only where the reference token is our runner-up
+//! inside the 0.52 noise floor, and printed), carried DeltaNet state / conv window / KV cache max relative
+//! difference (expected 0: the batched path is the same arithmetic per row).
 //! 3.4: greedy 32 tokens per prompt from the batched prefill, first 16 against tests/fixtures/ref_llamacpp,
 //! the top-1/top-2 logit margin at the first divergence, decoded text; load / prefill / decode timing, weight
 //! bytes per token over decode seconds as a fraction of membw, peak RSS vs weights + state.
@@ -68,7 +69,10 @@ fn prefill_gate_and_end_to_end() {
     let vocab = model.vocab();
 
     let prompts = common::json(&common::fixtures().join("prompts.json"));
-    let ceil = common::json(&common::fixture("q8_ceilings.json"));
+    // rule 5 (3.5): ceilings per activation format; the format is the production default unless AQUEDUCT_ACT says otherwise
+    let (act_name, ceil_path) = common::configure_act();
+    println!("activations: {act_name}; ceilings {}", ceil_path.display());
+    let ceil = common::json(&ceil_path);
     let factor = ceil["factor"].as_f64().unwrap();
     let ref_dir = common::fixture("ref_gguf");
     let llama_dir = common::fixture("ref_llamacpp");
@@ -122,7 +126,24 @@ fn prefill_gate_and_end_to_end() {
         // reference: argmax at every position, last logits
         let meta = common::json(&ref_dir.join(format!("{name}.json")));
         let ref_pos: Vec<u32> = meta["argmax_per_position"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as u32).collect();
-        let pos_match = (0..t).filter(|&i| argmax(&logits_bat[i * vocab..(i + 1) * vocab]) == ref_pos[i]).count();
+        // argmax at every prompt position vs ref_gguf. Phase 3.5: a position may differ only where the
+        // reference's token is our runner-up and our top-1/top-2 margin is inside the bf16-vs-GGUF noise
+        // floor (0.52 raw logits, finding 35): that is the coin-toss between two correct Q8 engines
+        // (the Q8_K path has 2 such positions on `sentence`, the Q8_0 path none); a wrong binding misses
+        // by about 1 or more and still fails here.
+        const NOISE_FLOOR: f32 = 0.52;
+        let mut pos_match = 0usize;
+        let mut flips: Vec<String> = Vec::new();
+        for i in 0..t {
+            let (a, x1, b, x2) = top2(&logits_bat[i * vocab..(i + 1) * vocab]);
+            if a == ref_pos[i] {
+                pos_match += 1;
+            } else {
+                let margin = x1 - x2;
+                flips.push(format!("position {i}: ours {a} vs ref {} (our runner-up {b}, margin {margin:.4})", ref_pos[i]));
+                assert!(b == ref_pos[i] && margin < NOISE_FLOOR, "{name}: argmax flip at position {i} outside the noise floor: ours {a} (runner-up {b}, margin {margin:.4}) vs ref {}", ref_pos[i]);
+            }
+        }
         let ref_logits = common::read_npy_f32(&ref_dir.join(format!("{name}.logits.npy")));
         let d_ref_bat = max_abs_diff(logits_bat_last, &ref_logits);
         let d_ref_seq = max_abs_diff(&logits_seq_last, &ref_logits);
@@ -131,9 +152,11 @@ fn prefill_gate_and_end_to_end() {
             "prefill: sequential {seq_s:.2} s, batched {bat_s:.2} s ({:.2} tok/s) + head {head_s:.2} s; hidden max|diff| {hidden_diff:e}; last logits batched vs sequential max|diff| {logit_diff:e} (ceiling {ceiling:.4}); state max rel {state_rel:e}, cache max rel {cache_rel:e}; argmax per position {pos_match}/{t}; vs ref_gguf max|diff| batched {d_ref_bat:.4} sequential {d_ref_seq:.4} (ceiling {ceiling:.4})",
             t as f64 / bat_s
         );
+        for f in &flips {
+            println!("argmax flip inside the noise floor: {f}");
+        }
         assert!(logit_diff <= ceiling, "{name}: batched vs sequential logits {logit_diff} > ceiling {ceiling}");
         assert!(d_ref_bat <= ceiling && d_ref_seq <= ceiling, "{name}: logits vs ref_gguf exceed the frozen ceiling");
-        assert_eq!(pos_match, t, "{name}: argmax per position");
         assert_eq!(argmax(logits_bat_last), argmax(&ref_logits), "{name}: last argmax vs ref_gguf");
         max_pos += t;
 

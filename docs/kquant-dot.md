@@ -1,4 +1,4 @@
-# K-quant dot products, ggml-structured, with Q8_0 (production) and Q8_K (opt-in) activations (Phase 3.1)
+# K-quant dot products, ggml-structured, with Q8_K (production since 3.5) and Q8_0-grain (`--q8-fine`) activations
 
 Source read: ggml `ggml-quants.c` (`quantize_row_q8_K_ref`, `nearest_int`) and
 `ggml-cpu/arch/x86/quants.c` (`ggml_vec_dot_q4_K_q8_K`, `q5_K`, `q6_K`, AVX2 branches) in the
@@ -11,9 +11,21 @@ forms), `pool.rs` (persistent workers). Numbers: `docs/data/membw.txt`, `docs/da
 row, one reduction per row, mins folded through activation sums) is what makes the kernels memory-bound; ggml's
 Q8_K activation format (one scale per 256 values) is not required for that and turned out 2.5 x noisier than
 the Q8_0 rows Phase 2 used, beyond the frozen rule-5 ceilings at layer 0 (`docs/payload-vs-doc.md` finding 37).
-The production path therefore keeps Q8_0 activations (per-32 f16 scales) under the same lane structure, with
-one f32 factor per sub-block instead of one per super-block; the Q8_K row and kernels stay in the tree as an
-opt-in (`aqueduct run --q8k`, `matvec::set_q8k_activations`) and both are benchmarked side by side.
+Phase 3 therefore kept Q8_0 activations (per-32 f16 scales) under the same lane structure, with one f32
+factor per sub-block instead of one per super-block, and left the Q8_K row and kernels in the tree as an
+opt-in; both are benchmarked side by side.
+
+**Phase 3.5 decision (2026-09-04).** Rule 5 was amended: the frozen ceilings are per activation format, each
+from that format's own 64-layer measurement (`tests/fixtures/q8k_ceilings.json`, `q8_ceilings.json`;
+`tests/real_layers.rs`, `AQUEDUCT_ACT=q8k|q8_0`). Measured over all 64 layers with Q8_K activations
+(`docs/data/phase3_5_parity_q8k_0_63.log`), the Q8_K path's last-position logits sit 0.362 / 0.281 / 0.357
+(capital / fib / sentence) from the f32 reference, argmax 3/3, top-10 10 / 10 / 9, inside the bf16-vs-GGUF
+noise floor of 0.653 / 0.516 / 0.679 (finding 35), and 0.349 / 0.226 / 0.392 from llama.cpp, which quantises
+to Q8_K itself (argmax 3/3, top-10 9 / 10 / 9). That meets the promotion criterion, so **Q8_K is the
+production activation for K-quant weights** and the Q8_0-grain kernels are the `--q8-fine` opt-in
+(`matvec::set_q8_fine`); Q8_0 / Q4_0 weights keep Q8_0 rows. Per layer, Q8_K's relative error is 2 to 4 x
+Q8_0's (worst 5.3e-2 vs 1.6e-2, layer 63 `sentence`), and on `sentence` the argmax matches the reference at
+37 of the 39 prompt positions (39/39 with Q8_0; both flips are inside the noise floor, `tests/phase3_e2e.rs`).
 
 ## Why the Phase 2 kernels were compute-bound
 
@@ -89,7 +101,7 @@ while sitting at 1.4 % of that budget. ggml has the same property. The whole-lay
 frozen Q8 ceilings (`tests/fixtures/q8_ceilings.json`, 2x the Phase 2b per-layer relative errors) in
 `tests/real_layers.rs`.
 
-## The production variant: Q8_0-grain activations in the same lane structure (`dot.rs`, `avx2.rs`)
+## The Q8_0-grain variant (`--q8-fine`; production in Phase 3): the same lane structure (`dot.rs`, `avx2.rs`)
 
 With a scale `d_x[s]` per 32-element sub-block the integer sums cannot be accumulated across sub-blocks, so the
 kernel scales each sub-block's exact 8-lane sum `p32` (`madd(maddubs(q, q8), ones)`: lane `i` = positions
@@ -111,6 +123,42 @@ form: one `cvt`, one `mul`, one `add` and one broadcast per sub-block instead of
 unchanged because the kernels are memory-bound there. The scalar reference (`dot.rs`) computes the same lanes
 in the same order, so `tests/avx2.rs` still asserts bit-identity, and `tests/kernels.rs` checks the fixture
 rows against the f64 reference with the term-magnitude budget above.
+
+## Phase 3.5: factor tables and fixed shifts (kept); two rows per pass (measured slower, not shipped)
+
+The Q8_0-grain kernels' per-sub-block tail was `cvt + permutevar8x32 + mul + add` (two permutes and the
+`off6` subtract for Q6_K) and Q5_K's high bits went through a variable-shift jump table. Phase 3.5 changes
+the instruction stream, not the arithmetic:
+
+- **Factor tables.** `k45_header` (Q4_K / Q5_K) and `q6_factors` (Q6_K) compute the sub-block factors once
+  per super-block into a stack array (8 f32; 16 for Q6_K: `d_x[s] * (d * sc[2s])` and `d_x[s] * (d *
+  sc[2s+1])`, the int8 scales de-interleaved with one byte shuffle). The sub-block loop reads them back with
+  `vbroadcastss`, a load-port uop (Q6_K: a pair joined with `blend_ps`), instead of `permutevar8x32` on
+  port 5.
+- **Q5_K high bits** are consumed bit by bit: `(qh & 1) << 4`, then `qh >>= 1` in 16-bit lanes (the bit that
+  spills from a high byte into a low byte's bit 7 is never read). No variable shift; the Q8_K Q5_K kernel
+  does the same.
+- **Q6_K unpack** with two masks (`0x0F`, `0x30`) instead of five, shared by both activation forms
+  (`q6_codes`): `(qh << 4) & 0x30`, `(qh << 2) & 0x30`, `qh & 0x30`, `(qh >> 2) & 0x30`.
+
+The operations per row are the same in the same order, so the AVX2 kernels and the scalar `dot.rs` /
+`kdot.rs` still give the same bits (`tests/avx2.rs`, `tests/q8k.rs`), and the frozen ceilings do not move.
+
+**Two rows per pass** was implemented for both activation forms (`dot2_q{4,5,6}_k_q8`, `dot2_*_q8k`: two
+weight rows against one activation, the activation and per-block loads shared, the two rows' accumulator
+chains interleaved, `matvec` / `matvec2` walking row pairs) and measured against the single-row kernels with
+an interleaved in-process A/B (the two variants alternated 21 times per line, medians compared;
+`docs/data/two_row_ab.log`): the two-row form was slower on 51 of 54 lines, ratios 0.65 to 1.16 and mostly
+0.85 to 0.95, worst for Q6_K (0.65 to 0.93), at one thread as much as at six. The likely cause is register
+pressure (two rows of unpacked codes, two accumulator sets and the masks exceed the 16 ymm registers, and
+the Q8_K kernels have no accumulator-latency problem to solve in the first place). It was removed again;
+rows stay one per pass. The same A/B gave the only burst measurement of the 3.5 kernels on this box: with
+the clock up for a fraction of a second, the single-row Q8_K kernels read 27 to 34 GB/s at 6 threads on
+17408 x 5120 (no cache help), at or above the membw of the same minutes (27 to 32 GB/s): they are
+memory-bound when the clock is available. The sustained numbers (`docs/data/bench_rounds.log`, protocol
+`tools/bench_rounds.ps1`: plugged in, 5 minutes idle, then rounds of `membw` followed by the kernels at both
+shapes, every round filed with the thermal zone, clock ratio and other load next to it) are the box's
+throttled state under a runaway service (`docs/payload-vs-doc.md` finding 47), not the kernels.
 
 ## Other choices
 

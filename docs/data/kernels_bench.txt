@@ -374,3 +374,73 @@ threads   best GB/s worst GB/s   runs (GB/s)
 1             16.49      16.01   16.01 16.49 16.05
 6             30.72      28.98   28.98 30.72 30.63
 12            28.68      27.70   28.68 27.70 27.85
+
+# ================================================================================================== Phase 3.5 (2026-09-04)
+# Protocol (tools/bench_rounds.ps1): plugged in, 5 minutes idle, then 3 rounds of 'bench membw --runs 3' followed at once by 'bench kernels' at
+# 5120 x 5120, the Phase 3 binary at 5120 x 5120 (same state), and 17408 x 5120; every round filed in docs/data/bench_rounds.log with the ACPI
+# thermal zone, the clock ratio, total CPU busy and the three busiest other processes before and after every step. MACHINE STATE: a runaway
+# bthserv (Bluetooth Support Service) svchost at 9 to 11 cores and the thermal zone at 96 to 97 C throughout (docs/payload-vs-doc.md finding 47):
+# these numbers are the floor under that load, not the kernels' capability.
+# Two effects dominate them, not the kernels: (1) the all-core turbo budget is spent a few seconds into each kernels run, so the first kernel/act
+# configuration of a run (Q4_K, first act form) reads 18 to 24 GB/s at 6 threads and everything after it 6 to 11; (2) at one thread, whichever
+# activation form runs second on the Q5_K matrix reads ~30 % lower (docs/data/phase3_5_single_thread.log). A burst A/B in one process
+# (docs/data/two_row_ab.log) put the single-row Q8_K kernels at 27 to 34 GB/s at 6 threads on 17408 x 5120, at or above the same minutes' membw:
+# memory-bound when the clock is up. The two-row matvec was measured slower in that A/B (ratio 0.65 to 1.16, mostly 0.85 to 0.95) and removed;
+# the shipped kernels differ from Phase 3 only in bit-identical instruction-stream changes (factor tables for the Q4_K / Q6_K Q8_0-grain kernels,
+# two-mask Q6_K unpack, fixed Q5_K high-bit shift in the Q8_K kernel).
+# membw per round (best, 1 / 6 / 12 threads): round 1 15.5 / 27.3 / 27.2; round 2 16.7 / 31.6 / 28.1; round 3 16.9 / 30.3 / 32.0 GB/s.
+# Sustained numbers over the three rounds (python tools/bench_rounds_summary.py docs/data/bench_rounds.log); exe 1 = the 3.5 binary (in these rounds
+# it listed q8_k first; the shipped bench order is q8_0 first, as in Phase 3), exe 2 = the Phase 3 binary (q8_0 first):
+== range over 3 rounds (GB/s, % of that round's membw); exe 1 = target\release\aqueduct.exe; exe 2 = <phase 3 binary>
+exe   rows   kernel act   thr   GB/s min..max     % min..max     
+1     5120   Q4_0   q8_0    6     3.13 ..   4.73     9.9 ..  14.8
+1     5120   Q4_0   q8_0   12     3.76 ..   4.99    12.8 ..  15.6
+1     5120   Q4_K   q8_0    6     5.68 ..   8.02    20.3 ..  25.1
+1     5120   Q4_K   q8_0   12     5.97 ..   7.08    19.6 ..  22.1
+1     5120   Q4_K   q8_k    6    18.05 ..  23.90    66.0 ..  75.6
+1     5120   Q4_K   q8_k   12    15.69 ..  22.58    57.4 ..  71.5
+1     5120   Q5_K   q8_0    6     6.43 ..   9.94    22.7 ..  31.1
+1     5120   Q5_K   q8_0   12     6.40 ..   8.83    22.1 ..  27.6
+1     5120   Q5_K   q8_k    6     6.16 ..   8.24    22.5 ..  25.8
+1     5120   Q5_K   q8_k   12     6.34 ..   7.23    22.6 ..  23.2
+1     5120   Q6_K   q8_0    6     6.87 ..   9.38    22.5 ..  29.3
+1     5120   Q6_K   q8_0   12     6.79 ..   8.49    21.5 ..  26.5
+1     5120   Q6_K   q8_k    6     7.86 ..  11.18    26.5 ..  35.0
+1     5120   Q6_K   q8_k   12     7.13 ..  10.03    26.0 ..  31.4
+1     5120   Q8_0   q8_0    6     5.10 ..   8.88    16.1 ..  27.8
+1     5120   Q8_0   q8_0   12     7.09 ..   9.05    22.4 ..  29.0
+1     17408  Q4_0   q8_0    6     5.33 ..   6.79    17.1 ..  21.2
+1     17408  Q4_0   q8_0   12     5.95 ..   8.55    18.8 ..  26.7
+1     17408  Q4_K   q8_0    6     7.69 ..  12.45    24.3 ..  38.9
+1     17408  Q4_K   q8_0   12     9.37 ..  13.14    29.7 ..  41.1
+1     17408  Q4_K   q8_k    6    18.65 ..  23.25    59.0 ..  73.0
+1     17408  Q4_K   q8_k   12    15.65 ..  21.55    49.5 ..  67.6
+1     17408  Q5_K   q8_0    6     9.38 ..  10.82    29.7 ..  37.9
+1     17408  Q5_K   q8_0   12    12.13 ..  14.64    44.3 ..  45.8
+1     17408  Q5_K   q8_k    6    11.50 ..  13.95    42.1 ..  43.6
+1     17408  Q5_K   q8_k   12    10.64 ..  15.85    33.7 ..  49.6
+1     17408  Q6_K   q8_0    6    10.52 ..  13.27    36.0 ..  41.5
+1     17408  Q6_K   q8_0   12    12.68 ..  15.60    44.3 ..  48.8
+1     17408  Q6_K   q8_k    6     9.85 ..  15.78    31.2 ..  49.3
+1     17408  Q6_K   q8_k   12    12.99 ..  17.00    47.5 ..  53.2
+1     17408  Q8_0   q8_0    6    10.04 ..  13.04    35.8 ..  40.8
+1     17408  Q8_0   q8_0   12    12.31 ..  15.43    40.8 ..  48.8
+2     5120   Q4_0   q8_0    6     2.36 ..   4.92     7.5 ..  15.4
+2     5120   Q4_0   q8_0   12     4.23 ..   5.60    14.2 ..  17.5
+2     5120   Q4_K   q8_0    6    14.36 ..  21.85    45.4 ..  71.1
+2     5120   Q4_K   q8_0   12    18.75 ..  19.09    59.7 ..  68.6
+2     5120   Q4_K   q8_k    6     7.69 ..  10.16    28.1 ..  32.2
+2     5120   Q4_K   q8_k   12     6.83 ..   9.30    25.0 ..  29.4
+2     5120   Q5_K   q8_0    6     7.43 ..   9.23    27.2 ..  28.9
+2     5120   Q5_K   q8_0   12     6.78 ..   9.97    24.8 ..  31.2
+2     5120   Q5_K   q8_k    6     6.12 ..  10.74    19.4 ..  33.6
+2     5120   Q5_K   q8_k   12     7.05 ..  10.22    25.8 ..  32.0
+2     5120   Q6_K   q8_0    6     2.36 ..  10.53     7.5 ..  32.9
+2     5120   Q6_K   q8_0   12     5.01 ..  10.29    15.9 ..  32.2
+2     5120   Q6_K   q8_k    6     4.73 ..  12.93    15.0 ..  40.4
+2     5120   Q6_K   q8_k   12     5.99 ..  11.42    19.0 ..  35.7
+2     5120   Q8_0   q8_0    6     5.51 ..   9.83    17.4 ..  30.7
+2     5120   Q8_0   q8_0   12     7.75 ..  10.33    28.3 ..  32.3
+# Single thread, alternating binaries, first position on each matrix (docs/data/phase3_5_single_thread.log): Q4_K q8_k 7.5 to 7.9 (Phase 3 7.5 to
+# 7.7), Q4_K q8_0 6.0 to 6.3 (6.0 to 6.1), Q5_K q8_k 7.1 to 7.5 (Phase 3 never ran it first; second position 5.1 vs Phase 3's 4.0 to 4.5),
+# Q5_K q8_0 5.8 to 6.0 (5.9 to 6.3), Q6_K q8_k 5.7 to 6.0 (5.4 to 5.9), Q6_K q8_0 4.5 to 4.8 (4.0 to 4.7) GB/s.

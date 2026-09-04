@@ -63,7 +63,7 @@ pub fn kernels(args: &[String]) -> Result<(), String> {
     }
     println!("# aqueduct bench kernels: rows={rows} cols={cols} reps>={reps}, threads {thread_list:?} (available {all_threads}); avx2+f16c detected: {avx2}");
     println!("# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)");
-    println!("# act: q8_0 = Q8_0 activations (the production path for every type); q8_k = ggml's Q8_K activations (opt-in for K-quants)");
+    println!("# act: q8_k = ggml's Q8_K activations (the production path for K-quant weights, Phase 3.5); q8_0 = Q8_0 activations (--q8-fine for K-quants; the only form for Q8_0 / Q4_0 weights)");
     let mut rng = Rng(0x1234_5678_9ABC_DEF1);
     let x: Vec<f32> = (0..cols).map(|_| rng.f32()).collect();
     let xa = ActVec::new(&x);

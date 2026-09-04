@@ -14,9 +14,9 @@ const DEFAULT_TOKENIZER: &str = "models/Qwen3.8-27B/tokenizer.json";
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage:\n  aqueduct info <model.gguf>\n  aqueduct tok [--tokenizer <tokenizer.json>] encode <text>\n  aqueduct tok [--tokenizer <tokenizer.json>] decode <id,id,...>\n  aqueduct bench kernels [--threads N] [--rows R] [--cols C] [--reps N]
+        "usage:\n  aqueduct info <model.gguf>\n  aqueduct tok [--tokenizer <tokenizer.json>] encode <text>\n  aqueduct tok [--tokenizer <tokenizer.json>] decode <id,id,...>\n  aqueduct bench kernels [--threads N] [--rows R] [--cols C] [--reps N] [--no-scalar]
   aqueduct bench membw [--gib 2] [--runs 5] [--threads N]
-  aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] [--sequential-prefill] [--q8k] [-v] (--ids <csv> | --prompt <text>)"
+  aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] [--sequential-prefill] [--q8-fine] [-v] (--ids <csv> | --prompt <text>)"
     );
     ExitCode::from(2)
 }

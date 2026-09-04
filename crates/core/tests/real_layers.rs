@@ -21,6 +21,12 @@
 //! `real_layers_0_7` runs two full 3:1 blocks; `real_layers_0_63_and_logits` (ignored: minutes, all 64
 //! layers, the whole file read once) also does the final norm and lm_head and compares the logits with
 //! `ref_gguf` and with llama.cpp (`tests/fixtures/ref_llamacpp`).
+//!
+//! Phase 3.5 (rule 5 amended): the q8 mode's regression ceilings are per K-quant activation format
+//! (`common::configure_act`, `AQUEDUCT_ACT=q8_0|q8k`, default = production), each frozen from that format's
+//! own 0..63 measurement at 2 x the max over the three prompts per layer (`tests/fixtures/q8_ceilings.json`,
+//! `q8k_ceilings.json`). A format with no frozen file runs ungated and prints the numbers to freeze
+//! (`tools/freeze_ceilings.py`).
 
 mod common;
 
@@ -170,11 +176,25 @@ fn run_parity(n_layers: usize, with_logits: bool) -> Report {
     let hidden = cfg.hidden_size as usize;
     let width = (cfg.intermediate_size as usize).max(hidden).max((cfg.dn_head_dim_k * cfg.dn_head_dim_v) as usize);
     let r = Ref::load();
-    // Rule 5 (Phase 3): the q8 mode's per-layer relative errors and logit max|diff| measured in Phase 2b are
-    // frozen as regression ceilings (x `factor`); any kernel change that exceeds one fails here.
-    let ceil = common::json(&common::fixture("q8_ceilings.json"));
-    let ceil_factor = ceil["factor"].as_f64().unwrap();
-    let ceil_layers = ceil["measured"]["layers"].as_array().unwrap();
+    // Rule 5 (Phase 3, amended in 3.5: per activation format): the q8 mode's per-layer relative errors and
+    // logit max|diff| are frozen as regression ceilings (x `factor`) for each K-quant activation format,
+    // from that format's own measurement; any kernel change that exceeds one fails here. With no frozen file
+    // for the selected format this is that format's measurement run: everything is printed, nothing gated.
+    let (act_name, ceil_path) = common::configure_act();
+    let ceil: Option<serde_json::Value> = ceil_path.exists().then(|| common::json(&ceil_path));
+    println!(
+        "q8 mode activations: {act_name}; ceilings: {}",
+        match &ceil {
+            Some(_) => ceil_path.display().to_string(),
+            None => "none frozen for this format (measurement run, not gated)".to_string(),
+        }
+    );
+    let ceil_factor = ceil.as_ref().map(|c| c["factor"].as_f64().unwrap()).unwrap_or(f64::NAN);
+    // per layer (rule 5): the factor times the largest of the three prompts' measured values
+    let layer_ceiling = |l: usize| -> Option<f64> {
+        let c = ceil.as_ref()?;
+        Some(ceil_factor * c["measured"]["layers"][l]["rel"].as_object().unwrap().values().map(|v| v.as_f64().unwrap()).fold(0f64, f64::max))
+    };
     let mut worst_ceiling = (0usize, String::new(), 0f64); // fraction of ceiling
     let modes = [Mode::F32, Mode::Q8];
     let t0 = Instant::now();
@@ -233,19 +253,18 @@ fn run_parity(n_layers: usize, with_logits: bool) -> Report {
                         if rel > rep.worst_q8_rel.2 {
                             rep.worst_q8_rel = (l, p.name.clone(), rel);
                         }
-                        // per layer (rule 5): the factor times the largest of the three prompts' 2b values
-                        let measured = ceil_layers[l]["rel"].as_object().unwrap().values().map(|v| v.as_f64().unwrap()).fold(0f64, f64::max);
-                        let ceiling = ceil_factor * measured;
-                        assert!(rel <= ceiling, "{} layer {l} (q8 mode): relative error {rel:.3e} exceeds the frozen ceiling {ceiling:.3e} (2b measured x {ceil_factor})", p.name);
-                        if rel / ceiling > worst_ceiling.2 {
-                            worst_ceiling = (l, p.name.clone(), rel / ceiling);
+                        if let Some(ceiling) = layer_ceiling(l) {
+                            assert!(rel <= ceiling, "{} layer {l} (q8 mode, {act_name}): relative error {rel:.3e} exceeds the frozen ceiling {ceiling:.3e} (measured x {ceil_factor})", p.name);
+                            if rel / ceiling > worst_ceiling.2 {
+                                worst_ceiling = (l, p.name.clone(), rel / ceiling);
+                            }
                         }
                         let d_f32 = max_diff(&y, &streams[pi][0].h);
                         let rel_f32 = d_f32 / ma;
                         if rel_f32 > rep.worst_q8_vs_f32_rel.2 {
                             rep.worst_q8_vs_f32_rel = (l, p.name.clone(), rel_f32);
                         }
-                        line += &format!(" q8 {:.2e} ({:.1e} rel, vs f32 {:.1e})", d, rel, rel_f32);
+                        line += &format!(" q8 {:.2e} ({:.2e} rel, vs f32 {:.2e})", d, rel, rel_f32);
                     }
                 }
                 streams[pi][mi].h = y;
@@ -328,12 +347,16 @@ fn run_parity(n_layers: usize, with_logits: bool) -> Report {
                         p.name, if am { "match" } else { "DIFF" }, if aml { "match" } else { "DIFF" });
                 }
                 if mode == Mode::Q8 {
-                    let ceiling = ceil_factor * ceil["measured"]["logits"][&p.name]["vs_ref_gguf_max_diff"].as_f64().unwrap();
-                    assert!(d <= ceiling, "{} logits (q8 mode): max|diff| {d:.4} vs ref_gguf exceeds the frozen ceiling {ceiling:.4}", p.name);
-                    println!("{:<8} logits q8: {:.3} of the frozen ceiling {ceiling:.4}", p.name, d / ceiling);
+                    if let Some(c) = &ceil {
+                        let ceiling = ceil_factor * c["measured"]["logits"][&p.name]["vs_ref_gguf_max_diff"].as_f64().unwrap();
+                        assert!(d <= ceiling, "{} logits (q8 mode, {act_name}): max|diff| {d:.4} vs ref_gguf exceeds the frozen ceiling {ceiling:.4}", p.name);
+                        println!("{:<8} logits q8: {:.3} of the frozen ceiling {ceiling:.4}", p.name, d / ceiling);
+                    }
                 }
-                assert!(am, "{} ({mode_name}): argmax differs from ref_gguf: got {} want {}", p.name, argmax(last), argmax(&want));
-                assert!(aml, "{} ({mode_name}): argmax differs from llama.cpp: got {} want {}", p.name, argmax(last), argmax(&llama));
+                if mode == Mode::F32 || ceil.is_some() {
+                    assert!(am, "{} ({mode_name}): argmax differs from ref_gguf: got {} want {}", p.name, argmax(last), argmax(&want));
+                    assert!(aml, "{} ({mode_name}): argmax differs from llama.cpp: got {} want {}", p.name, argmax(last), argmax(&llama));
+                }
             }
             println!("lm_head {}: {:.0}s", if mode == Mode::F32 { "f32" } else { "q8" }, tm.elapsed().as_secs_f64());
         }
@@ -344,7 +367,10 @@ fn run_parity(n_layers: usize, with_logits: bool) -> Report {
         rep.worst_q8_rel.0, rep.worst_q8_rel.1, rep.worst_q8_rel.2, rep.worst_q8_vs_f32_rel.0, rep.worst_q8_vs_f32_rel.1, rep.worst_q8_vs_f32_rel.2,
         if rep.incremental_ok { "bit-exact" } else { "DIFFERS" }
     );
-    println!("ceilings: worst layer {} {} at {:.3} of its frozen ceiling (factor {ceil_factor})", worst_ceiling.0, worst_ceiling.1, worst_ceiling.2);
+    match &ceil {
+        Some(_) => println!("ceilings ({act_name}): worst layer {} {} at {:.3} of its frozen ceiling (factor {ceil_factor})", worst_ceiling.0, worst_ceiling.1, worst_ceiling.2),
+        None => println!("ceilings ({act_name}): none frozen; this run is the measurement to freeze with tools/freeze_ceilings.py"),
+    }
     rep
 }
 
