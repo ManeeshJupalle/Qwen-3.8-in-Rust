@@ -13,7 +13,7 @@
 //! quantisation.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use super::dot::{dot_f32, dot_q8};
 use super::kdot::dot_q8k;
@@ -21,6 +21,16 @@ use super::pool;
 use super::q8::Q8Row;
 use super::q8k::Q8KRow;
 use crate::gguf::GgmlType;
+use crate::os::AlignedBuf;
+
+/// Where a `WeightMat`'s bytes live: its own allocation, or a window of an arena / ring slot (Phase 4).
+/// A view keeps the arena alive through the `Arc`; the ring protocol (`tier.rs`) guarantees nobody writes a
+/// slot while a view of it is being read.
+#[derive(Debug, Clone)]
+pub enum WeightBytes {
+    Owned(Vec<u8>),
+    View { buf: Arc<AlignedBuf>, off: usize, len: usize },
+}
 
 /// A weight matrix of `rows` rows, each `cols` elements, stored as ggml rows (`row_bytes` each).
 #[derive(Debug, Clone)]
@@ -30,16 +40,44 @@ pub struct WeightMat {
     pub cols: usize,
     pub row_bytes: usize,
     /// Raw ggml bytes (`rows * row_bytes`), also for F32 (little-endian f32).
-    pub data: Vec<u8>,
+    pub data: WeightBytes,
 }
 
 impl WeightMat {
     pub fn new(ggml_type: GgmlType, rows: usize, cols: usize, data: Vec<u8>) -> WeightMat {
+        let row_bytes = Self::row_bytes_of(ggml_type, cols);
+        assert_eq!(data.len(), rows * row_bytes, "WeightMat: data length");
+        WeightMat { ggml_type, rows, cols, row_bytes, data: WeightBytes::Owned(data) }
+    }
+
+    /// A matrix whose bytes are `len` bytes at `off` inside `buf` (an arena or a ring slot).
+    pub fn view(ggml_type: GgmlType, rows: usize, cols: usize, buf: Arc<AlignedBuf>, off: usize, len: usize) -> WeightMat {
+        let row_bytes = Self::row_bytes_of(ggml_type, cols);
+        assert_eq!(len, rows * row_bytes, "WeightMat::view: data length");
+        assert!(off + len <= buf.len(), "WeightMat::view: window {off}..{} outside the {}-byte buffer", off + len, buf.len());
+        WeightMat { ggml_type, rows, cols, row_bytes, data: WeightBytes::View { buf, off, len } }
+    }
+
+    fn row_bytes_of(ggml_type: GgmlType, cols: usize) -> usize {
         let (bs, ts) = ggml_type.block_layout();
         assert!((cols as u64).is_multiple_of(bs), "WeightMat: cols {cols} not a multiple of block size {bs} for {ggml_type:?}");
-        let row_bytes = (cols as u64 / bs * ts) as usize;
-        assert_eq!(data.len(), rows * row_bytes, "WeightMat: data length");
-        WeightMat { ggml_type, rows, cols, row_bytes, data }
+        (cols as u64 / bs * ts) as usize
+    }
+
+    /// All the bytes, whichever way they are held.
+    #[inline]
+    pub fn data(&self) -> &[u8] {
+        match &self.data {
+            WeightBytes::Owned(v) => v,
+            // SAFETY: the window was checked at construction; the ring protocol keeps the slot stable while
+            // any reader (a matvec on this matrix) is inside it.
+            WeightBytes::View { buf, off, len } => unsafe { buf.slice(*off, *len) },
+        }
+    }
+
+    /// Is this matrix a window of an arena rather than its own allocation?
+    pub fn is_view(&self) -> bool {
+        matches!(self.data, WeightBytes::View { .. })
     }
 
     pub fn from_f32(rows: usize, cols: usize, w: &[f32]) -> WeightMat {
@@ -53,7 +91,7 @@ impl WeightMat {
 
     #[inline]
     pub fn row(&self, r: usize) -> &[u8] {
-        &self.data[r * self.row_bytes..(r + 1) * self.row_bytes]
+        &self.data()[r * self.row_bytes..(r + 1) * self.row_bytes]
     }
 
     /// Row `r` as f32 (only for F32 matrices).
@@ -174,6 +212,11 @@ impl ActBuf {
     /// Room for a row of `n` values in either form; `fill` on a row of that length never allocates.
     pub fn with_capacity(n: usize) -> ActBuf {
         ActBuf { q8: Q8Row::with_capacity(n), q8k: Q8KRow::with_capacity(n), has_q8: false, has_q8k: false }
+    }
+
+    /// Bytes held by both rows (capacities), for the memory plan (`tier::act_buf_bytes` is the formula).
+    pub fn bytes(&self) -> usize {
+        self.q8.bytes() + self.q8k.bytes()
     }
 
     /// Quantise `x` into every form the weight types in `types` consume, each at most once.

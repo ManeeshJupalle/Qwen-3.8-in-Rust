@@ -813,3 +813,115 @@ scalar, `docs/simd.md`).
 None of it was optimised this session, by instruction, and the number says why that is the right call: the
 whole non-matvec budget is 7 % of the token. Driving it to zero would take 0.758 s to 0.705 s. The next real
 speed work is not here.
+
+## 54. The ladder: the same 32 ids at every budget from 6 GiB to resident, at 3.9 to 0.74 s per token
+
+Phase 4, `docs/data/ladder.txt`, `docs/ladder.md`, `scripts/ladder.ps1`. Three prompts, 32 greedy tokens each,
+at 6 / 8 / 12 / 16 / 32 GiB with the engine inside a job object capped at the budget, and fully resident:
+
+| budget | pinned | streamed | GB/token from disk | s/token | GB/s through the CPU | % membw | peak RSS |
+|---|---|---|---|---|---|---|---|
+| 6 GiB | 13 | 51 | 12.461 | 3.893 | 4.32 | 14 % | 6.049 GB |
+| 8 GiB | 22 | 42 | 10.298 | 3.318 | 5.07 | 17 % | 8.216 GB |
+| 12 GiB | 40 | 24 | 5.991 | 2.239 | 7.51 | 25 % | 12.532 GB |
+| 16 GiB | 58 | 6 | 1.588 | 1.098 | 15.31 | 51 % | 16.943 GB |
+| 32 GiB | 64 | 0 | 0 | 0.747 | 22.51 | 75 % | 17.993 GB |
+| resident | 64 | 0 | 0 | 0.741 | 22.68 | 75 % | 17.959 GB |
+
+The 32 ids are identical at every rung and equal to the Phase 3 resident output for all three prompts
+(`tests/fixtures/ladder_expected_ids.json`; the identity check is exact string equality of the id lists).
+Peak RSS is under the budget at every capped rung, by three readings that agree within 20 MB: the job
+object's own `PeakJobMemoryUsed` (committed bytes, what the cap enforces), the engine's
+`K32GetProcessMemoryInfo` peak working set, and the working set sampled from the script. The resident
+rung reproduces Phase 3.6 (0.741 vs 0.717 s per token, 3 % apart, same ids): the arena views cost the
+kernels nothing measurable.
+
+The per-step times are flat: at 6 GiB every one of the 93 decode steps lies between 3.86 and 4.04 s; the
+first token of the 16 GiB `capital` run (1.71 s against 1.09 after) is the only outlier in the file, the
+ring's first fill after the prefill pass.
+
+## 55. Every streamed rung is within 6 % of the cost model; the resident rung is 21 % slower than it, because the model assumes the kernels reach the full memory bandwidth
+
+`t = bytes_ram / membw + bytes_disk / diskbw + 0.053`, with membw 30.06 GB/s and diskbw 3.30 GB/s
+(unbuffered, queue depth 2) from `docs/data/doctor_maneesh-msi.txt`: predicted 3.974 / 3.390 / 2.228 / 1.041 /
+0.612 s per token at 6 / 8 / 12 / 16 / 32 GiB, measured 3.893 / 3.318 / 2.239 / 1.098 / 0.747, ratios
+0.98 / 0.98 / 1.00 / 1.06 / 1.22 (resident 1.21). All within the 2 x gate, and the shape of the error is
+informative: where the disk term dominates the model is right to 2 % (the ring reads at 3.25 to 3.31
+GB/s, exactly what `doctor` measured for one layer), and where the RAM term dominates it is optimistic by
+1.2 x, because the production kernels stream weights at 74 to 77 % of membw (findings 49, 52), not 100 %.
+A `bytes_ram / (0.75 x membw)` term would put every rung within 6 %; the formula is kept as specified and
+the ratio filed.
+
+## 56. Under streaming the disk is busy 94 to 97 % of the wall time, so the engine is exactly as fast as the drive: 3.3 GB/s means 3.3 seconds per 11 GB of weights
+
+The overlap accounting of `aqueduct run` (`read`, `compute`, `wait` and wall seconds over the decode phase):
+at 6 GiB reading 117.4 s, computing 27.9 s, waiting 92.6 s, wall 120.6 s; the overlap (compute + read -
+wall) is 24.8 s = 88 % of the compute hidden under reads and 21 % of the read time hidden under compute.
+At 8 GiB 76 % of the compute is hidden, at 12 GiB 53 %, at 16 GiB 28 %. The read time is 97 % of the wall
+at 6 GiB and 94 % at 8 GiB: the prefetch keeps the drive saturated and the token is the read time plus the
+part of the pinned prefix's compute that the two-slot ring cannot cover (at 6 GiB, 3.893 s against 12.461 GB
+/ 3.29 GB/s = 3.79 s of pure reading). This is the property the architecture wanted: a 16 GB laptop with an
+NVMe drive runs the 17.8 GB model at the drive's sequential rate, and the ladder is a straight line from
+the drive to the bus.
+
+The prefetch overlap number as the spec asks for it, "% of read time hidden", is therefore the compute share
+of the token in this regime (21 to 46 %), and the number that says whether the prefetch works is the other
+one: how much of the compute the reads hide. Both are filed.
+
+## 57. Two ring slots are enough where the disk is the bottleneck; a third helps only where the streamed tail is short, and costs a pinned layer
+
+`--slots` at a fixed split (the budget raised by one slot so the same layers stay pinned). At 22 pinned / 42
+streamed (the 8 GiB split): 2 slots 3.311 to 3.328 s per token, 3 slots 3.348 (81 % of the compute hidden
+against 76 %, but the drive was already busy 94 % of the time, so nothing is gained). At the 16 GiB split
+(58 pinned / 6 streamed) a third slot does help, a little: 1.075 s per token against 1.086 to 1.116 with two
+(36 % of the compute hidden against 28 %), because with two slots the ring fills two layers during the
+pinned prefix and then idles until layer 58 is consumed, so four of the six reads are exposed. A ring deep
+enough to hide all six would cost six slots, which at that split is the same memory as pinning the six
+layers, and the plan rightly does that instead (a 17.05 GiB budget pins everything: 0.784 s per token, the
+resident speed). At a fixed budget every extra slot is one fewer pinned layer (270 MB) and 0.25 GB more
+per token from disk, which costs 0.08 s where the disk is the bottleneck. The default stays at 2.
+
+Also measured: the pass-boundary case the ring's fixed slot mapping allows (finding in `docs/tiers.md`: with
+an odd streamed count the last and the first streamed layer share a slot, so the refill of the first waits
+for the last to finish) is the 6 GiB rung (51 streamed), and its ratio to the model is 0.98 like the even
+rungs: the drive is saturated either way.
+
+## 58. The whole load is unbuffered sequential reads at 2.5 to 2.9 GB/s: 7 s for the resident model against Phase 3's 20 to 30 s
+
+Every arena (the non-layer set, the MTP block, each tier-1 layer) is one `FILE_FLAG_NO_BUFFERING` read of
+the layer's aligned span: 5.30 GB in 1.8 s (2.89 GB/s) at 6 GiB, 7.46 GB in 3.0 s at 8 GiB, 17.99 GB in
+about 7.3 s resident (`load s` column of `docs/data/ladder.txt`), against 20.3 to 30.6 s for Phase 3's
+buffered per-tensor reads of the same file. The page cache is bypassed, so a capped process does not
+accumulate cached file pages against its budget either. Peak RSS after the load equals the plan's arenas
+plus a 30 to 60 MB baseline: 5.857 GB after the 6 GiB load against 5.851 GB of weights held.
+
+## 59. The plan's fixed reserves are generous: measured overhead is 35 to 60 MB against the 256 MiB baseline reserve, and the plan total sits 0.2 GB above the measured peak at every rung
+
+Peak RSS minus (weights held + state + logits) is 34 MB at 6 GiB (6.049 vs 6.015 planned working set),
+similar at every rung; the parsed GGUF header (the vocabulary and merges arrays) is 41.5 MiB right after
+`Gguf::open` and is dropped once the layers are built. The 256 MiB baseline reserve and the 4 KiB per arena
+are therefore worth 0.2 GB of headroom per rung, about one layer's worth at the margin (the plan is 71 to
+159 MB under the budget after pinning, and the next layer needs 214 to 270 MB). The reserve is kept: a
+16 GB laptop's free RAM is not a constant, and the cost is one layer, 0.25 GB per token from disk, 0.08 s.
+
+## 60. The plan search must run from the top down: pinning one more layer can shrink the ring, so the feasible pin counts are not a prefix
+
+Tier 1 is the longest prefix `0..k` such that resident + ring(largest layer of `k..`) + arenas(`0..k`) fits.
+A climb from `k = 0` with the ring sized for the suffix at each step can stop early: with the ring sized for
+a large layer still in the suffix, the next layer does not fit, but pinning it would move the large layer
+into tier 1 and shrink the ring enough for both. The first implementation did exactly that and a unit test
+with a 6-layer toy layout caught it (`tier.rs`); `compute` now tries every `k` from 64 down and takes the
+first that fits. On this file it makes no difference at the ladder budgets (the largest span, 269,681,536
+bytes, recurs up to layer 62), but the rule is general.
+
+## 61. Two PowerShell facts that silently broke the first two ladder runs: a null `ExitCode`, and parameters that share a variable with the script's own names
+
+`Start-Process -PassThru` reports `$proc.ExitCode` as `$null` once the process has gone unless the process
+handle was touched while it was alive (`$null = $proc.Handle` right after the start), and `$null -ne 0` is
+true, so the script threw "rung failed" after a successful run. And PowerShell variables are
+case-insensitive: a `[string]$Expected` parameter and the script's `$expected = (ConvertFrom-Json ...).ids`
+are one variable with a string type constraint, so the parsed fixture was coerced to a string, every
+comparison ran against an empty list, and the identity gate printed "DIFFER" for ids that matched (the
+"vs )" in the message gave it away). The `$md` list next to the `-Md` parameter crashed the markdown step the
+same way. The script now names its own variables apart from its parameters and can re-render both files
+from the saved stats (`-FromStats`), which is how the filed ladder was produced from the run's own numbers.

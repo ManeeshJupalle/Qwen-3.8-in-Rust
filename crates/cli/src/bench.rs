@@ -202,6 +202,26 @@ fn sum_threads(buf: &[u64], threads: usize) -> (u64, f64) {
     (total, t0.elapsed().as_secs_f64())
 }
 
+/// Best-of-`runs` read bandwidth (GB/s) of a `gib` GiB buffer at `threads` threads: the short form
+/// `aqueduct doctor` uses. Returns (best, all runs).
+pub fn membw_best(gib: usize, runs: usize, threads: usize) -> Result<(f64, Vec<f64>), String> {
+    let n = gib << 27;
+    let bytes = (n * 8) as f64;
+    let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+    let mut buf: Vec<u64> = Vec::with_capacity(n);
+    buf.extend((0..n).map(|_| rng.next()));
+    let expected = sum_chunk(&buf);
+    let mut gbs = Vec::with_capacity(runs);
+    for _ in 0..runs {
+        let (s, secs) = sum_threads(&buf, threads);
+        if s != expected {
+            return Err(format!("membw: sum mismatch at {threads} threads"));
+        }
+        gbs.push(bytes / secs / 1e9);
+    }
+    Ok((gbs.iter().cloned().fold(0f64, f64::max), gbs))
+}
+
 /// `aqueduct bench membw [--gib 2] [--runs 5] [--threads N]`: read bandwidth of a buffer larger than any
 /// cache, measured as a multi-threaded sum-reduction (every byte read once, nothing written), at one thread,
 /// at half the hardware threads (the physical cores on an SMT machine) and at every hardware thread.

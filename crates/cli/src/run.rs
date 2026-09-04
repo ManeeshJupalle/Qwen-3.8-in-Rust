@@ -1,16 +1,22 @@
-//! `aqueduct run`: load the whole GGUF into RAM, feed a prompt (raw ids or raw text, no chat template),
-//! decode greedily. Stats go to stderr; ids and text to stdout (`--ids-only`: the generated ids alone, the
-//! test channel).
+//! `aqueduct run`: load the GGUF under a memory plan (everything resident, or `--budget` with the rest
+//! streamed from disk), feed a prompt (raw ids or raw text, no chat template), decode greedily. Stats go to
+//! stderr; ids and text to stdout (`--ids-only`: the generated ids alone, the test channel). `--stats
+//! <file>` writes one JSON object with every number the ladder records.
 
 use std::time::Instant;
 
 use aqueduct_core::kernels::matvec::set_q8_fine;
-use aqueduct_core::model::{argmax, Model};
+use aqueduct_core::model::{argmax, LoadOpts, Model};
+use aqueduct_core::os::{apply_job_memory_limit, job_peak_memory, large_page_note};
+use aqueduct_core::tier::parse_bytes;
 use aqueduct_core::Tok;
 
 use aqueduct_core::rss::peak_rss_bytes;
 
 pub const DEFAULT_GGUF: &str = r"C:\models\Qwen3.8-27B-Q4_K_M.gguf";
+
+/// The non-matvec constant of the cost model (docs/data/nonmatvec_profile.txt: 53 ms per token).
+pub const NON_MATVEC_S: f64 = 0.053;
 
 pub struct RunArgs {
     pub model: String,
@@ -25,13 +31,44 @@ pub struct RunArgs {
     /// Print the per-stage decode breakdown (needs `--features profile`).
     pub profile: bool,
     pub verbose: bool,
+    /// Phase 4: the memory budget (None = everything resident), the job-object cap, ring depth, read params.
+    pub budget: Option<u64>,
+    pub job_limit: Option<u64>,
+    pub slots: usize,
+    pub max_pos: Option<usize>,
+    pub qd: usize,
+    pub large_pages: bool,
+    pub stats: Option<String>,
+    /// For the predicted s/token line: membw and disk GB/s (from `aqueduct doctor`).
+    pub membw: Option<f64>,
+    pub diskbw: Option<f64>,
 }
 
 pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String> {
     // physical cores, not hardware threads: the matvec kernels are memory-bound, so SMT siblings contend
     // rather than add bandwidth (`aqueduct_core::cpu`, finding 51). `--threads N` overrides.
     let all = aqueduct_core::physical_cores();
-    let mut a = RunArgs { model: DEFAULT_GGUF.into(), tokenizer: default_tokenizer.into(), threads: all, max_tokens: 32, ids: None, prompt: None, ids_only: false, sequential_prefill: false, profile: false, verbose: false };
+    let mut a = RunArgs {
+        model: DEFAULT_GGUF.into(),
+        tokenizer: default_tokenizer.into(),
+        threads: all,
+        max_tokens: 32,
+        ids: None,
+        prompt: None,
+        ids_only: false,
+        sequential_prefill: false,
+        profile: false,
+        verbose: false,
+        budget: None,
+        job_limit: None,
+        slots: 2,
+        max_pos: None,
+        qd: 2,
+        large_pages: true,
+        stats: None,
+        membw: None,
+        diskbw: None,
+    };
     let mut i = 0;
     while i < args.len() {
         let next = |i: usize| args.get(i + 1).ok_or_else(|| format!("{} needs a value", args[i]));
@@ -60,6 +97,42 @@ pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String
             "--prompt" => {
                 a.prompt = Some(next(i)?.clone());
                 i += 2;
+            }
+            "--budget" => {
+                a.budget = Some(parse_bytes(next(i)?)?);
+                i += 2;
+            }
+            "--job-limit" => {
+                a.job_limit = Some(parse_bytes(next(i)?)?);
+                i += 2;
+            }
+            "--slots" => {
+                a.slots = next(i)?.parse().map_err(|e| format!("--slots: {e}"))?;
+                i += 2;
+            }
+            "--max-pos" => {
+                a.max_pos = Some(next(i)?.parse().map_err(|e| format!("--max-pos: {e}"))?);
+                i += 2;
+            }
+            "--qd" => {
+                a.qd = next(i)?.parse().map_err(|e| format!("--qd: {e}"))?;
+                i += 2;
+            }
+            "--stats" => {
+                a.stats = Some(next(i)?.clone());
+                i += 2;
+            }
+            "--membw" => {
+                a.membw = Some(next(i)?.parse().map_err(|e| format!("--membw: {e}"))?);
+                i += 2;
+            }
+            "--diskbw" => {
+                a.diskbw = Some(next(i)?.parse().map_err(|e| format!("--diskbw: {e}"))?);
+                i += 2;
+            }
+            "--no-large-pages" => {
+                a.large_pages = false;
+                i += 1;
             }
             "--ids-only" => {
                 a.ids_only = true;
@@ -90,8 +163,17 @@ pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String
     Ok(a)
 }
 
+fn json_list<T: std::fmt::Display>(v: &[T]) -> String {
+    format!("[{}]", v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(","))
+}
+
 pub fn run(a: RunArgs) -> Result<(), String> {
     let e = |m: String| m;
+    // the cap first, before anything of size is allocated: from here on the process cannot commit more
+    if let Some(limit) = a.job_limit {
+        apply_job_memory_limit(limit).map_err(|x| e(format!("job memory limit: {x}")))?;
+        eprintln!("job object: committed memory capped at {limit} bytes ({:.2} GiB) for this process", limit as f64 / (1u64 << 30) as f64);
+    }
     let tok = if a.prompt.is_some() || !a.ids_only { Some(Tok::from_file(&a.tokenizer).map_err(|x| e(format!("tokenizer: {x}")))?) } else { None };
     let prompt_ids: Vec<u32> = match (&a.ids, &a.prompt) {
         (Some(ids), _) => ids.clone(),
@@ -101,13 +183,17 @@ pub fn run(a: RunArgs) -> Result<(), String> {
     if prompt_ids.is_empty() {
         return Err("empty prompt".into());
     }
+    let max_pos = a.max_pos.unwrap_or(prompt_ids.len() + a.max_tokens + 1);
+    let opts = LoadOpts { budget: a.budget, max_pos, n_slots: a.slots, large_pages: a.large_pages, qd: a.qd, verbose: true, ..LoadOpts::default() };
     eprintln!("loading {} with {} threads ...", a.model, a.threads);
-    let model = Model::load(&a.model, a.threads).map_err(|x| e(format!("load: {x}")))?;
+    let model = Model::load_with(&a.model, a.threads, &opts).map_err(|x| e(format!("load: {x}")))?;
     let rss_after_load = peak_rss_bytes();
     eprintln!(
-        "loaded in {:.1} s: {} layers, {:.3} GB of weights, peak RSS {}",
+        "loaded in {:.1} s: {} layers ({} pinned, {} streamed), {:.3} GB of weights held, peak RSS {}",
         model.load_secs,
         model.layers.len(),
+        model.plan.pinned,
+        model.plan.streamed(),
         model.weight_bytes as f64 / 1e9,
         rss_after_load.map(|b| format!("{:.3} GB", b as f64 / 1e9)).unwrap_or_else(|| "n/a".into())
     );
@@ -115,7 +201,8 @@ pub fn run(a: RunArgs) -> Result<(), String> {
     let mut state = model.new_state();
     // preallocate the KV caches and the attention score buffers for the whole run: after this the decode
     // step allocates nothing (Phase 3.6, `tests/decode_alloc.rs`)
-    state.reserve(prompt_ids.len() + a.max_tokens + 1);
+    state.reserve(max_pos);
+    let state_bytes = state.bytes();
     let mut logits = vec![0f32; model.vocab()];
     // prefill: batched (3.3) unless asked for the token-by-token path; logits only for the last position
     let t0 = Instant::now();
@@ -137,8 +224,11 @@ pub fn run(a: RunArgs) -> Result<(), String> {
     let mut out: Vec<u32> = Vec::new();
     let mut next = argmax(&logits);
     aqueduct_core::prof::reset();
+    let stream_before = model.stream_stats();
     let t1 = Instant::now();
     let mut stopped = None;
+    let mut step_secs: Vec<f64> = Vec::new();
+    let mut disk_per_step: Vec<u64> = Vec::new();
     for _ in 0..a.max_tokens {
         if model.is_stop(next) {
             stopped = Some(next);
@@ -149,33 +239,146 @@ pub fn run(a: RunArgs) -> Result<(), String> {
             break;
         }
         let ts = Instant::now();
+        let c0 = model.stream_stats().map_or(0, |s| s.consumed_bytes);
         model.forward_token(next, &mut state, &mut logits);
+        let c1 = model.stream_stats().map_or(0, |s| s.consumed_bytes);
+        // rule 4, checked here as well as inside the model: exactly the streamed layers, once
+        assert_eq!(c1 - c0, model.streamed_bytes_per_pass(), "disk bytes this token");
+        disk_per_step.push(c1 - c0);
+        step_secs.push(ts.elapsed().as_secs_f64());
         next = argmax(&logits);
         if a.verbose {
-            eprintln!("  token {} -> {} ({:.3} s)", out.len(), next, ts.elapsed().as_secs_f64());
+            eprintln!("  token {} -> {} ({:.3} s, {} bytes from disk)", out.len(), next, step_secs.last().unwrap(), c1 - c0);
         }
     }
     let decode_s = t1.elapsed().as_secs_f64();
     let steps = out.len().saturating_sub(1).max(1);
     let s_per_tok = decode_s / steps as f64;
+    let ram_gbps = model.decode_bytes_per_token() as f64 / s_per_tok / 1e9;
     eprintln!(
-        "decode: {} tokens, {:.3} s/token ({:.2} tok/s) = {:.2} GB/s of weights, {} threads{}",
+        "decode: {} tokens, {:.3} s/token ({:.2} tok/s) = {:.2} GB/s of weights through the CPU, {} threads{}",
         out.len(),
         s_per_tok,
         1.0 / s_per_tok,
-        model.decode_bytes_per_token() as f64 / s_per_tok / 1e9,
+        ram_gbps,
         model.threads,
         stopped.map(|s| format!(", stopped at id {s}")).unwrap_or_default()
     );
-    if let Some(rss) = peak_rss_bytes() {
-        let expected = model.weight_bytes + model.state_bytes(prompt_ids.len() + out.len());
-        eprintln!("peak RSS {:.3} GB vs expected {:.3} GB (weights + state)", rss as f64 / 1e9, expected as f64 / 1e9);
+    // streaming numbers over the decode phase
+    let stream_after = model.stream_stats();
+    // Overlap accounting over the decode phase: the consumer is either waiting for a slot (`wait`) or
+    // computing (`compute = decode - wait`); the I/O thread is reading for `read`. With no overlap at all
+    // the phase would take compute + read; what it saved is the overlap, which hides a share of the read
+    // time (the spec's number) and a share of the compute (the meaningful one when the disk is the
+    // bottleneck, as it is at every streamed rung here).
+    let (disk_bytes_per_token, hidden_of_read, hidden_of_compute, wait_s, read_s, compute_s, overlap_s, read_gbps) = match (stream_before, stream_after) {
+        (Some(b), Some(af)) => {
+            let consumed = af.consumed_bytes - b.consumed_bytes;
+            let wait = (af.wait_ns - b.wait_ns) as f64 / 1e9;
+            let read = (af.read_ns - b.read_ns) as f64 / 1e9;
+            let read_bytes = af.read_bytes - b.read_bytes;
+            let compute = (decode_s - wait).max(0.0);
+            let overlap = (compute + read - decode_s).max(0.0);
+            let of_read = if read > 0.0 { overlap / read } else { 1.0 };
+            let of_compute = if compute > 0.0 { overlap / compute } else { 1.0 };
+            let gbps = if read > 0.0 { read_bytes as f64 / read / 1e9 } else { 0.0 };
+            eprintln!(
+                "disk: {:.3} GB per token from disk ({} bytes = streamed layers exactly, asserted every token); reads at {:.2} GB/s; over the decode phase: reading {read:.2} s, computing {compute:.2} s, waiting {wait:.2} s, wall {decode_s:.2} s; overlap {overlap:.2} s = {:.1}% of the read time hidden, {:.1}% of the compute hidden",
+                consumed as f64 / steps as f64 / 1e9,
+                consumed / steps as u64,
+                gbps,
+                100.0 * of_read,
+                100.0 * of_compute
+            );
+            (consumed / steps as u64, of_read, of_compute, wait, read, compute, overlap, gbps)
+        }
+        _ => (0, 1.0, 1.0, 0.0, 0.0, decode_s, 0.0, 0.0),
+    };
+    let expected = model.weight_bytes + state_bytes as u64 + (model.vocab() * 4) as u64;
+    let peak = peak_rss_bytes();
+    if let Some(rss) = peak {
+        eprintln!(
+            "peak RSS {:.3} GB vs planned {:.3} GB (weights held {:.3} GB + state {:.3} GB + logits); plan total {:.3} GB{}",
+            rss as f64 / 1e9,
+            expected as f64 / 1e9,
+            model.weight_bytes as f64 / 1e9,
+            state_bytes as f64 / 1e9,
+            model.plan.total as f64 / 1e9,
+            a.budget.map(|b| format!("; budget {:.3} GB: {}", b as f64 / 1e9, if rss <= b { "UNDER" } else { "OVER" })).unwrap_or_default()
+        );
     }
+    let job_peak = job_peak_memory();
+    if let Some((pp, jp)) = job_peak {
+        eprintln!("job object peak: process {:.3} GB, job {:.3} GB (committed memory, as the cap counts it)", pp as f64 / 1e9, jp as f64 / 1e9);
+    }
+    // the cost model, when the doctor numbers were given
+    let bytes_disk = model.streamed_bytes_per_pass();
+    let bytes_ram = model.decode_bytes_per_token() - bytes_disk;
+    let predicted = match (a.membw, a.diskbw) {
+        (Some(m), Some(d)) if m > 0.0 && d > 0.0 => {
+            let p = bytes_ram as f64 / 1e9 / m + bytes_disk as f64 / 1e9 / d + NON_MATVEC_S;
+            eprintln!("cost model: {:.3} GB/{m} GB/s + {:.3} GB/{d} GB/s + {NON_MATVEC_S} = {p:.3} s/token predicted vs {s_per_tok:.3} measured, ratio {:.2}", bytes_ram as f64 / 1e9, bytes_disk as f64 / 1e9, s_per_tok / p);
+            Some(p)
+        }
+        _ => None,
+    };
     if a.profile {
         eprintln!("# decode stage breakdown, {} threads, {steps} steps ({} s/token)", model.threads, format_args!("{s_per_tok:.3}"));
         eprint!("{}", aqueduct_core::prof::report(steps));
     }
     let ids_line = out.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(",");
+    if let Some(path) = &a.stats {
+        let js = format!(
+            "{{\"budget\":{},\"job_limit\":{},\"pinned\":{},\"streamed\":{},\"n_slots\":{},\"slot_bytes\":{},\"plan_total\":{},\"plan_resident\":{},\"sector\":{},\"large_pages\":{},\"large_page_note\":{:?},\"threads\":{},\"qd\":{},\"load_s\":{:.3},\"load_read_bytes\":{},\"load_read_s\":{:.3},\"prompt_len\":{},\"n_generated\":{},\"steps\":{},\"prefill_s\":{:.3},\"decode_s\":{:.3},\"s_per_token\":{:.4},\"step_secs\":{},\"decode_bytes_per_token\":{},\"ram_gbps\":{:.3},\"disk_bytes_per_token\":{},\"streamed_bytes_per_pass\":{},\"disk_per_step\":{},\"read_gbps\":{:.3},\"prefetch_hidden\":{:.4},\"hidden_of_compute\":{:.4},\"wait_s\":{:.3},\"read_s\":{:.3},\"compute_s\":{:.3},\"overlap_s\":{:.3},\"peak_rss\":{},\"peak_rss_after_load\":{},\"job_peak_process\":{},\"job_peak_job\":{},\"planned_rss\":{},\"state_bytes\":{},\"weight_bytes\":{},\"membw\":{},\"diskbw\":{},\"predicted_s_per_token\":{},\"ids\":{}}}\n",
+            a.budget.map_or("null".to_string(), |b| b.to_string()),
+            a.job_limit.map_or("null".to_string(), |b| b.to_string()),
+            model.plan.pinned,
+            model.plan.streamed(),
+            model.plan.n_slots,
+            model.plan.slot_bytes,
+            model.plan.total,
+            model.plan.resident_bytes,
+            model.sector,
+            model.large_pages_used,
+            large_page_note().unwrap_or(""),
+            model.threads,
+            a.qd,
+            model.load_secs,
+            model.load_read_bytes,
+            model.load_read_secs,
+            prompt_ids.len(),
+            out.len(),
+            steps,
+            prefill_s,
+            decode_s,
+            s_per_tok,
+            json_list(&step_secs.iter().map(|s| format!("{s:.4}")).collect::<Vec<_>>()),
+            model.decode_bytes_per_token(),
+            ram_gbps,
+            disk_bytes_per_token,
+            model.streamed_bytes_per_pass(),
+            json_list(&disk_per_step),
+            read_gbps,
+            hidden_of_read,
+            hidden_of_compute,
+            wait_s,
+            read_s,
+            compute_s,
+            overlap_s,
+            peak.map_or("null".to_string(), |b| b.to_string()),
+            rss_after_load.map_or("null".to_string(), |b| b.to_string()),
+            job_peak.map_or("null".to_string(), |(p, _)| p.to_string()),
+            job_peak.map_or("null".to_string(), |(_, j)| j.to_string()),
+            expected,
+            state_bytes,
+            model.weight_bytes,
+            a.membw.map_or("null".to_string(), |m| m.to_string()),
+            a.diskbw.map_or("null".to_string(), |d| d.to_string()),
+            predicted.map_or("null".to_string(), |p| format!("{p:.4}")),
+            json_list(&out),
+        );
+        std::fs::write(path, js).map_err(|x| e(format!("write {path}: {x}")))?;
+    }
     if a.ids_only {
         println!("{ids_line}");
     } else {

@@ -1,13 +1,17 @@
-//! aqueduct CLI: `info <gguf>`, `tok encode|decode` (Phase 1), `bench kernels|membw` (Phase 2b / 3) and
-//! `run` (Phase 3: fully resident greedy decode).
+//! aqueduct CLI: `info <gguf>`, `tok encode|decode` (Phase 1), `bench kernels|membw` (Phase 2b / 3),
+//! `run` (Phase 3: greedy decode; Phase 4: under a memory budget), `plan` and `doctor` (Phase 4).
 
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 use std::time::Instant;
 
+use aqueduct_core::os::{DirectFile, DEFAULT_CHUNK};
+use aqueduct_core::rss::peak_rss_bytes;
+use aqueduct_core::tier::{group, parse_bytes, MemoryPlan, PlanInput, PlanParams};
 use aqueduct_core::{layer_of, Gguf, ModelConfig, Tok};
 
 mod bench;
+mod doctor;
 mod run;
 
 const DEFAULT_TOKENIZER: &str = "models/Qwen3.8-27B/tokenizer.json";
@@ -16,9 +20,14 @@ fn usage() -> ExitCode {
     eprintln!(
         "usage:\n  aqueduct info <model.gguf>\n  aqueduct tok [--tokenizer <tokenizer.json>] encode <text>\n  aqueduct tok [--tokenizer <tokenizer.json>] decode <id,id,...>\n  aqueduct bench kernels [--threads N] [--rows R] [--cols C] [--reps N] [--no-scalar]
   aqueduct bench membw [--gib 2] [--runs 5] [--threads N]
-  aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] [--sequential-prefill] [--q8-fine] [--profile] [-v] (--ids <csv> | --prompt <text>)
+  aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] [--sequential-prefill] [--q8-fine] [--profile] [-v]
+               [--budget 8G] [--job-limit 8G] [--slots 2] [--max-pos N] [--qd 2] [--no-large-pages] [--stats <file>] [--membw GB/s --diskbw GB/s]
+               (--ids <csv> | --prompt <text>)
+  aqueduct plan --budget <8G|bytes> [--model <gguf>] [--max-pos 4096] [--slots 2]
+  aqueduct doctor [--model <gguf>] [--budget X] [--max-pos 4096] [--slots 2] [--runs 5] [--out <file>]
   (--threads defaults to the physical core count, not the hardware thread count;
-   --profile needs a build with --features profile)"
+   --profile needs a build with --features profile; --budget sizes the memory plan, --job-limit caps the
+   process with a job object; sizes are binary: 8G = 8 GiB)"
     );
     ExitCode::from(2)
 }
@@ -48,6 +57,21 @@ fn main() -> ExitCode {
             }
         },
         Some("run") => match run::parse(&args[1..], DEFAULT_TOKENIZER).and_then(run::run) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("plan") => match plan(&args[1..]) {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::FAILURE,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("doctor") => match doctor::doctor(&args[1..]) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");
@@ -159,6 +183,36 @@ fn info(path: &str) -> Result<(), Box<dyn std::error::Error>> {
         .collect();
     println!("other non-layer tensors not in (token_embd, output, output_norm): {other:?}");
     Ok(())
+}
+
+/// `aqueduct plan --budget X`: the memory plan for the model, printed without loading a byte of weights
+/// (the GGUF header and the drive's sector size are all it reads). Returns Ok(false) when the plan is
+/// refused.
+fn plan(args: &[String]) -> Result<bool, Box<dyn std::error::Error>> {
+    let get = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
+    let model = get("--model").cloned().unwrap_or_else(|| run::DEFAULT_GGUF.to_string());
+    let budget = match get("--budget") {
+        Some(b) => Some(parse_bytes(b)?),
+        None => None,
+    };
+    let max_pos: u64 = get("--max-pos").map(|s| s.parse()).transpose()?.unwrap_or(4096);
+    let slots: usize = get("--slots").map(|s| s.parse()).transpose()?.unwrap_or(2);
+    let t0 = Instant::now();
+    let g = Gguf::open(&model)?;
+    let cfg = ModelConfig::from_gguf(&g)?;
+    let input = PlanInput::new(&g, &cfg);
+    let sector = DirectFile::open(std::path::Path::new(&model), DEFAULT_CHUNK, 1)?.sector as u64;
+    let params = PlanParams::new(budget, max_pos, slots, sector);
+    let plan = MemoryPlan::compute(&input, &params);
+    print!("{}", plan.table());
+    println!("  (header parsed and plan computed in {:.0} ms; tensor bytes read: {}; process peak RSS now {} bytes = {:.1} MiB, against the plan's baseline reserve of {} bytes)", t0.elapsed().as_secs_f64() * 1e3, g.tensor_bytes_read(), peak_rss_bytes().map_or("n/a".to_string(), group), peak_rss_bytes().unwrap_or(0) as f64 / 1048576.0, group(params.baseline));
+    match plan.check() {
+        Ok(()) => Ok(true),
+        Err(e) => {
+            println!("REFUSED: {e}");
+            Ok(false)
+        }
+    }
 }
 
 fn yn(b: bool) -> &'static str {

@@ -33,6 +33,11 @@ impl Q8KRow {
         Q8KRow { n: 0, d: Vec::with_capacity(nb), qs: Vec::with_capacity(n), bsums: Vec::with_capacity(nb * 16), q8s: Vec::with_capacity(nb * 8) }
     }
 
+    /// Bytes this row's buffers hold (capacities), for the memory plan.
+    pub fn bytes(&self) -> usize {
+        self.d.capacity() * 4 + self.qs.capacity() + self.bsums.capacity() * 2 + self.q8s.capacity() * 2
+    }
+
     /// Quantise `x` (length a multiple of 256). AVX2 when available (bit-identical, `avx2.rs`), else scalar.
     pub fn quantize(x: &[f32]) -> Q8KRow {
         let mut r = Q8KRow::with_capacity(x.len());

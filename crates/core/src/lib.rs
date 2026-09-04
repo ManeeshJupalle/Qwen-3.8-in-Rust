@@ -1,5 +1,6 @@
 //! aqueduct-core: GGUF header/index, config from GGUF metadata, tokenizer wrapper, dequantisation (Phase 1);
-//! kernels and layers (Phase 2); the resident model and its per-token forward (Phase 3). No tiering yet.
+//! kernels and layers (Phase 2); the model and its per-token forward (Phase 3); the memory plan, pinned
+//! arenas and the streaming ring (Phase 4, `tier.rs` / `os.rs`).
 
 pub mod arch;
 pub mod config;
@@ -8,9 +9,11 @@ pub mod gguf;
 pub mod kernels;
 pub mod layers;
 pub mod model;
+pub mod os;
 pub mod prof;
 pub mod quant;
 pub mod rss;
+pub mod tier;
 pub mod tok;
 
 pub use arch::{arch_consts, stop_ids, ArchConsts};

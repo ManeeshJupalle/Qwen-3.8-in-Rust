@@ -163,6 +163,15 @@ impl Scratch {
             at.reserve(max_pos);
         }
     }
+
+    /// Bytes held (capacities), for the memory plan.
+    pub fn bytes(&self) -> usize {
+        (self.normed.capacity() + self.mixed.capacity() + self.resid.capacity()) * 4
+            + self.act.bytes()
+            + self.mlp.bytes()
+            + self.dn.as_ref().map_or(0, |d| d.bytes())
+            + self.at.as_ref().map_or(0, |a| a.bytes())
+    }
 }
 
 /// `h = x + mixer(attn_norm(x)); y = h + mlp(post_attention_norm(h))` (Qwen3_5DecoderLayer lines 757-797).

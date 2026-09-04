@@ -1,0 +1,10 @@
+{
+ "source": "docs/data/phase3_timing.txt, Phase 3.6 run (Q8_K activations, physical-core threads, fully resident): the 32 greedy ids per prompt after the batched prefill; identical in the Phase 3.5 runs at 6 and 12 threads",
+ "prompts": "tests/fixtures/prompts.json",
+ "max_tokens": 32,
+ "ids": {
+  "capital": [11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369],
+  "fib": [198,262,413,307,2564,220,16,25,198,285,460,307,198,262,745,25,198,285,460,73111,1393,12,16,8,478,73111,1393,12,17,8,271,2],
+  "sentence": [733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446,321,4172,31717,430,781,87805,13,561,916,1315,314,1439,8177,2218,6067,289]
+ }
+}

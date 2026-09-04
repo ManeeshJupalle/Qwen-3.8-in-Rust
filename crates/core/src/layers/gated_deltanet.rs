@@ -45,6 +45,11 @@ impl DeltaScratch {
             act: ActBuf::with_capacity(vd),
         }
     }
+
+    /// Bytes held (capacities), for the memory plan.
+    pub fn bytes(&self) -> usize {
+        (self.mixed.capacity() + self.z.capacity() + self.ga.capacity() + self.gb.capacity() + self.conved.capacity() + self.heads.capacity() + self.qn.capacity() + self.kn.capacity() + self.o.capacity()) * 4 + self.act.bytes()
+    }
 }
 
 pub struct GatedDeltaNet {
@@ -75,6 +80,12 @@ pub struct GatedDeltaNet {
 pub struct DeltaState {
     pub conv: Vec<f32>,
     pub rec: Vec<f32>,
+}
+
+impl DeltaState {
+    pub fn bytes(&self) -> usize {
+        (self.conv.capacity() + self.rec.capacity()) * 4
+    }
 }
 
 impl GatedDeltaNet {

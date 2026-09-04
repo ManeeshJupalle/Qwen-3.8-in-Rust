@@ -40,6 +40,11 @@ impl Q8Row {
         }
     }
 
+    /// Bytes this row's buffers hold (capacities, i.e. what `with_capacity` reserved), for the memory plan.
+    pub fn bytes(&self) -> usize {
+        self.d.capacity() * 2 + self.qs.capacity() + self.d32.capacity() * 4 + self.dxs.capacity() * 4 + self.off6.capacity() * 4
+    }
+
     /// Quantise `x` (length a multiple of 32). AVX2 when available (bit-identical, `avx2.rs`), else scalar.
     pub fn quantize(x: &[f32]) -> Q8Row {
         let mut r = Q8Row::with_capacity(x.len());

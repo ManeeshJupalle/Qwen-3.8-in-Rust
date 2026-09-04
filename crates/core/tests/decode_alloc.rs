@@ -11,6 +11,12 @@
 //! the per-token path is where an OOM comes from. A decode step whose working set is entirely
 //! preallocated in `State` cannot fail that way, and its peak RSS is known before the first token.
 //!
+//! Phase 4 extends the same test to the streaming tier (part c): the model is loaded under a budget that
+//! pins 2 of the 9 layers and streams the other 7 through a 2-slot ring, and the count must still be zero.
+//! The counter is global, so it also sees the ring's I/O thread: its per-token work (waiting on a slot,
+//! one unbuffered read into a preallocated arena, the counters) allocates nothing either. The streamed
+//! ids are compared with the resident ones from part (b) at the same thread count.
+//!
 //! **This file holds exactly one `#[test]`, deliberately.** The allocator counter is global, so it also
 //! sees allocations made by any other test running at the same time, and cargo runs the tests in a binary
 //! concurrently. One test per binary is what makes the count mean what it says.
@@ -20,7 +26,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 mod common;
 
-use aqueduct_core::model::{argmax, Model};
+use aqueduct_core::model::{argmax, LoadOpts, Model};
+use aqueduct_core::os::{arena_bytes, DirectFile, DEFAULT_CHUNK};
+use aqueduct_core::tier::{MemoryPlan, PlanInput, PlanParams};
+use aqueduct_core::{Gguf, ModelConfig};
 
 static ALLOCS: AtomicUsize = AtomicUsize::new(0);
 static ARMED: AtomicBool = AtomicBool::new(false);
@@ -101,6 +110,7 @@ fn decode_is_allocation_free_and_matches_the_allocating_path() {
     // ---- (b) zero allocations across 32 decode steps, at several thread counts: the pool partitions
     // heads and rows differently, so a buffer that is per-participant rather than per-head or per-row
     // would only show up above one participant.
+    let mut resident_ids: Vec<(usize, [u32; STEPS])> = Vec::new();
     for threads in [1usize, 2, 6] {
         let model = Model::load(&path, threads).expect("load tiny model");
         let vocab = model.vocab();
@@ -124,5 +134,51 @@ fn decode_is_allocation_free_and_matches_the_allocating_path() {
         });
         assert_eq!(allocs, 0, "{threads} threads: {allocs} allocations across {STEPS} decode steps (want 0)");
         println!("{threads} threads: 0 allocations across {STEPS} decode steps, {} positions carried", state.pos);
+        resident_ids.push((threads, ids));
+    }
+
+    // ---- (c) Phase 4: the same, streaming 7 of the 9 layers through a 2-slot ring. The I/O thread is
+    // counted too (the allocator is global), so the ring's per-token work must be allocation-free as well.
+    {
+        let g = Gguf::open(&path).expect("open");
+        let cfg = ModelConfig::from_gguf(&g).expect("config");
+        let input = PlanInput::new(&g, &cfg);
+        let sector = DirectFile::open(&path, DEFAULT_CHUNK, 1).expect("direct open").sector as u64;
+        let (pinned, n_slots) = (2u32, 2usize);
+        let base = MemoryPlan::compute(&input, &PlanParams::new(Some(0), STEPS as u64 + 2, n_slots, sector)).resident_bytes;
+        let largest = (pinned..cfg.n_layer).map(|i| input.layer_bytes(i as usize)).max().unwrap();
+        let prefix: u64 = (0..pinned).map(|i| arena_bytes(input.layer_bytes(i as usize), sector)).sum();
+        let budget = base + n_slots as u64 * arena_bytes(largest, sector) + prefix;
+        drop(g);
+        for &(threads, expect) in &resident_ids {
+            let opts = LoadOpts { budget: Some(budget), max_pos: STEPS + 2, n_slots, large_pages: false, verbose: false, ..LoadOpts::default() };
+            let model = Model::load_with(&path, threads, &opts).expect("streamed load");
+            assert_eq!((model.plan.pinned, model.plan.n_slots), (pinned, n_slots));
+            let vocab = model.vocab();
+            let mut logits = vec![0f32; vocab];
+            let mut state = model.new_state();
+            state.reserve(STEPS + 2);
+            let mut ids = [0u32; STEPS];
+            let mut tok = 1u32;
+            model.forward_token(tok, &mut state, &mut logits);
+            tok = argmax(&logits);
+            let before = model.stream_stats().unwrap();
+            let allocs = count_allocs(|| {
+                for slot in ids.iter_mut() {
+                    model.forward_token(tok, &mut state, &mut logits);
+                    tok = argmax(&logits);
+                    *slot = tok;
+                }
+            });
+            let after = model.stream_stats().unwrap();
+            assert_eq!(allocs, 0, "{threads} threads, streaming: {allocs} allocations across {STEPS} decode steps (want 0)");
+            assert_eq!(ids, expect, "{threads} threads: streamed ids differ from resident");
+            assert_eq!(after.consumed_bytes - before.consumed_bytes, STEPS as u64 * model.streamed_bytes_per_pass(), "disk bytes over {STEPS} steps");
+            println!(
+                "{threads} threads, {pinned} pinned + {} streamed through {n_slots} slots: 0 allocations across {STEPS} decode steps, {} bytes from disk per token, ids identical to resident",
+                cfg.n_layer - pinned,
+                model.streamed_bytes_per_pass()
+            );
+        }
     }
 }

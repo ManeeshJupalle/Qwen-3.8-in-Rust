@@ -65,6 +65,11 @@ impl AttnScratch {
         self.scores = vec![0f32; self.n_head * max_pos];
         self.probs = vec![0f32; self.n_head * max_pos];
     }
+
+    /// Bytes held (capacities), for the memory plan.
+    pub fn bytes(&self) -> usize {
+        (self.qg.capacity() + self.k.capacity() + self.v.capacity() + self.cos.capacity() + self.sin.capacity() + self.q.capacity() + self.gate.capacity() + self.tmp.capacity() + self.attn.capacity() + self.scores.capacity() + self.probs.capacity()) * 4 + self.act.bytes()
+    }
 }
 
 pub struct GqaAttention {
@@ -96,8 +101,13 @@ impl KvCache {
     /// Preallocate for `max_pos` positions so `forward_token` never grows the cache mid-decode.
     pub fn reserve(&mut self, max_pos: usize) {
         let want = max_pos * self.stride;
-        self.k.reserve(want.saturating_sub(self.k.len()));
-        self.v.reserve(want.saturating_sub(self.v.len()));
+        self.k.reserve_exact(want.saturating_sub(self.k.len()));
+        self.v.reserve_exact(want.saturating_sub(self.v.len()));
+    }
+
+    /// Bytes held (capacities), for the memory plan.
+    pub fn bytes(&self) -> usize {
+        (self.k.capacity() + self.v.capacity()) * 4
     }
 }
 

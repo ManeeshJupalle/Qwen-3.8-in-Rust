@@ -17,6 +17,11 @@ impl MlpScratch {
     pub fn new(inter: usize) -> MlpScratch {
         MlpScratch { g: vec![0f32; inter], u: vec![0f32; inter], h: vec![0f32; inter], act: ActBuf::with_capacity(inter) }
     }
+
+    /// Bytes held (capacities), for the memory plan.
+    pub fn bytes(&self) -> usize {
+        (self.g.capacity() + self.u.capacity() + self.h.capacity()) * 4 + self.act.bytes()
+    }
 }
 
 pub struct Mlp {

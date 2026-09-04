@@ -1,0 +1,35 @@
+# aqueduct doctor: maneesh-msi, windows x86_64, 2026-09-04 22:31 UTC
+# model: C:\models\Qwen3.8-27B-Q4_K_M.gguf
+cores      : 6 physical, 12 logical (the engine runs 6 threads)
+RAM        : 31.85 GiB total, 18.23 GiB free now (34,197,413,888 / 19,577,856,000 bytes)
+membw      : 30.06 GB/s at 6 threads (1 GiB sum-reduce, best of 3: 28.34 29.12 30.06)
+disk       : C: sector 4096 bytes (queried); largest layer 62: 269,681,536 bytes = 257.19 MiB; read size 269,684,736 bytes; chunk 32 MiB
+disk qd1   : best 2.95 GB/s, worst 1.72; runs 1.72 2.95 2.95 2.84 2.93 (unbuffered, 5 reads of 257.2 MiB at layers [0, 12, 24, 36, 48])
+disk qd2   : best 3.30 GB/s, worst 3.29; runs 3.29 3.30 3.30 3.30 3.30 (unbuffered, 5 reads of 257.2 MiB at layers [0, 12, 24, 36, 48])
+disk qd4   : best 3.29 GB/s, worst 3.28; runs 3.29 3.28 3.29 3.28 3.29 (unbuffered, 5 reads of 257.2 MiB at layers [0, 12, 24, 36, 48])
+disk cold  : 3.28 GB/s at qd2 for layer 0 after 2.01 GiB of other data (3.29 GB/s while pulling it)
+large pages: unavailable: SeLockMemoryPrivilege is not held by this user (Local Security Policy > Lock pages in memory); not changing policy
+plan for this machine (budget free RAM now: 19,577,856,000):
+  memory plan: budget 19,577,856,000 bytes = 18.23 GiB; max_pos 4096; sector 4096; ring 2 slots
+    category                                                                                              bytes      running total
+    non-layer arena [output.weight 1042944000, output_norm.weight 20480, token_embd.weigh...      1,758,130,176      1,758,130,176
+    MTP block blk.64 arena (loaded, unused)                                                         238,989,312      1,997,119,488
+    per-layer small tensors, 64 layers (norms, conv, dt/a; resident copies)                          10,561,536      2,007,681,024
+    DeltaNet carried state (48 layers)                                                              156,893,184      2,164,574,208
+    KV cache (16 layers x 4096 positions)                                                           536,870,912      2,701,445,120
+    scratch buffers, activation rows, logits                                                          2,589,680      2,704,034,800
+    process baseline reserve (binary, GGUF header index, thread stacks, allocator)                  268,435,456      2,972,470,256
+    tier 1 (pinned): layers 0..64 (64 layers), aligned arenas                                    15,764,881,408     18,737,351,664
+    total                                                                                        18,737,351,664
+    budget                                                                                       19,577,856,000
+    headroom                                                                                        840,504,336   fits
+    tier 2 (streamed): layers 64..64 (0 layers), 0 bytes = 0.000 GB per token from disk
+cost model : t = bytes_ram / 30.06 GB/s + bytes_disk / 3.30 GB/s (qd2; qd1 2.95) + 0.053 s; bytes per token through the CPU 16.807 GB
+      budget  pinned  streamed  GB disk/token   GB ram/token   pred s/tok   pred tok/s
+       6 GiB      11        53         12.906          3.902        4.088         0.24
+       8 GiB      20        44         10.760          6.048        3.510         0.28
+      12 GiB      38        26          6.452         10.356        2.350         0.43
+      16 GiB      56         8          2.127         14.680        1.185         0.84
+      32 GiB      64         0          0.000         16.807        0.612         1.63
+  18.2 GiB free      64         0          0.000         16.807        0.612         1.63
+    resident      64         0          0.000         16.807        0.612         1.63
