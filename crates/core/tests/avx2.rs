@@ -190,7 +190,8 @@ fn avx2_q8_quantize_matches_scalar() {
         }
         let a = Q8Row::quantize(&row);
         let s = Q8Row::quantize_scalar(&row);
-        assert_eq!(a, s, "random q8 row {i} (width {width}) differs");
+        // the ggml layout (scales + codes); the derived per-block fields of an overflowed (inf) scale are NaN
+        assert_eq!(a.to_ggml_bytes(), s.to_ggml_bytes(), "random q8 row {i} (width {width}) differs");
     }
     println!("q8 quantize: fixtures + 1000 random rows ({ties} with exact .5 ties) bit-identical");
 }

@@ -14,7 +14,7 @@ use aqueduct_core::kernels::q8::Q8Row;
 use aqueduct_core::kernels::rmsnorm::{rmsnorm, rmsnorm_gated};
 use aqueduct_core::kernels::rope::{apply_rope, cos_sin, inv_freq};
 use aqueduct_core::kernels::softmax::{softmax, softmax_causal_row};
-use aqueduct_core::GgmlType;
+use aqueduct_core::{dequantize, GgmlType};
 
 const EPS: f64 = f32::EPSILON as f64;
 
@@ -227,9 +227,15 @@ fn dot_kernels_within_budget() {
         let terms = c["max_abs_term"].as_array().unwrap();
         for r in 0..n_rows {
             let x = Q8Row::from_ggml_bytes(&x_raw[r * xrb..(r + 1) * xrb], width);
-            let got = dot_q8(t, &w_raw[r * wrb..(r + 1) * wrb], &x) as f64;
+            let wrow = &w_raw[r * wrb..(r + 1) * wrb];
+            let got = dot_q8(t, wrow, &x) as f64;
             let want = refs[r].as_f64().unwrap();
-            let bud = budget(fx.k(), width, terms[r].as_f64().unwrap());
+            // K-quants: Phase 3 kernels, budget from the term magnitudes (common::kquant_terms_budget)
+            let bud = if common::is_kquant(t) {
+                common::kquant_terms_budget(t, wrow, &dequantize(t, wrow, width).unwrap(), &x.dequantize(), fx.k())
+            } else {
+                budget(fx.k(), width, terms[r].as_f64().unwrap())
+            };
             let d = (got - want).abs();
             let label = format!("{} row {} ({})", c["case"].as_str().unwrap(), r, c["rows"][r].as_str().unwrap());
             assert!(d <= bud, "{label}: got {got} want {want} diff {d:e} > budget {bud:e}");
@@ -255,8 +261,13 @@ fn matvec_within_budget_and_thread_invariant() {
         let terms: Vec<f64> = c["max_abs_term"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
         let mut y1 = vec![0f32; rows];
         matvec(&w, Act::Q8(&x), &mut y1, 1);
+        let xd = x.dequantize();
         for r in 0..rows {
-            let bud = budget(fx.k(), width, terms[r]);
+            let bud = if common::is_kquant(t) {
+                common::kquant_terms_budget(t, w.row(r), &dequantize(t, w.row(r), width).unwrap(), &xd, fx.k())
+            } else {
+                budget(fx.k(), width, terms[r])
+            };
             let d = (y1[r] as f64 - refs[r]).abs();
             assert!(d <= bud, "{} row {r}: diff {d:e} > budget {bud:e}", c["case"]);
         }

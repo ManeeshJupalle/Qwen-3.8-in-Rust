@@ -6,6 +6,7 @@
 use super::{Linear, Result, TensorSource};
 use crate::kernels::conv::causal_conv1d_step;
 use crate::kernels::deltanet::{deltanet_step, gate_beta, gate_g, l2norm};
+use crate::kernels::matvec::ActVec;
 use crate::kernels::rmsnorm::rmsnorm_gated;
 
 pub struct GatedDeltaNet {
@@ -78,14 +79,16 @@ impl GatedDeltaNet {
         let kd = n_k * dk;
         let vd = n_v * dv;
         let conv_dim = self.conv_dim();
+        // one quantisation of `x`, shared by the four projections
+        let xa = ActVec::new(x);
         let mut mixed = vec![0f32; conv_dim];
-        self.qkv.forward(x, &mut mixed, threads);
+        self.qkv.forward_act(&xa, &mut mixed, threads);
         let mut z = vec![0f32; vd];
-        self.gate_z.forward(x, &mut z, threads);
+        self.gate_z.forward_act(&xa, &mut z, threads);
         let mut a = vec![0f32; n_v];
-        self.alpha.forward(x, &mut a, threads);
+        self.alpha.forward_act(&xa, &mut a, threads);
         let mut b = vec![0f32; n_v];
-        self.beta.forward(x, &mut b, threads);
+        self.beta.forward_act(&xa, &mut b, threads);
         let mut conved = vec![0f32; conv_dim];
         causal_conv1d_step(&mut state.conv, &self.conv_w, self.kernel, &mixed, &mut conved, true);
         let (q_all, rest) = conved.split_at(kd);

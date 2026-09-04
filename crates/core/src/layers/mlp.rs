@@ -2,6 +2,7 @@
 
 use super::{Linear, Result, TensorSource};
 use crate::kernels::act::swiglu;
+use crate::kernels::matvec::{matvec2, ActVec};
 
 pub struct Mlp {
     pub gate: Linear,
@@ -19,12 +20,12 @@ impl Mlp {
         })
     }
 
+    /// Gate and up are one fused pass over `x` (quantised once); then SwiGLU and down.
     pub fn forward(&self, x: &[f32], y: &mut [f32], threads: usize) {
         let inter = self.gate.out_features();
         let mut g = vec![0f32; inter];
         let mut u = vec![0f32; inter];
-        self.gate.forward(x, &mut g, threads);
-        self.up.forward(x, &mut u, threads);
+        matvec2(&self.gate.w, &self.up.w, &ActVec::new(x), &mut g, &mut u, threads);
         let mut h = vec![0f32; inter];
         swiglu(&g, &u, &mut h);
         self.down.forward(&h, y, threads);

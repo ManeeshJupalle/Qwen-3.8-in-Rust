@@ -6,6 +6,7 @@
 
 use super::{Linear, Result, TensorSource};
 use crate::kernels::act::sigmoid;
+use crate::kernels::matvec::ActVec;
 use crate::kernels::rmsnorm::rmsnorm;
 use crate::kernels::rope::{apply_rope, cos_sin, inv_freq};
 use crate::kernels::softmax::softmax;
@@ -63,12 +64,13 @@ impl GqaAttention {
     pub fn forward_token(&self, x: &[f32], pos: u32, cache: &mut KvCache, y: &mut [f32], threads: usize) {
         let (nh, nkv, hd, rd) = (self.n_head, self.n_head_kv, self.head_dim, self.rope_dim);
         let group = nh / nkv;
+        let xa = ActVec::new(x);
         let mut qg = vec![0f32; 2 * nh * hd];
-        self.q.forward(x, &mut qg, threads);
+        self.q.forward_act(&xa, &mut qg, threads);
         let mut k = vec![0f32; nkv * hd];
-        self.k.forward(x, &mut k, threads);
+        self.k.forward_act(&xa, &mut k, threads);
         let mut v = vec![0f32; nkv * hd];
-        self.v.forward(x, &mut v, threads);
+        self.v.forward_act(&xa, &mut v, threads);
 
         let mut cos = vec![0f32; rd];
         let mut sin = vec![0f32; rd];

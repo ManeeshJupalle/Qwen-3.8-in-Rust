@@ -2,15 +2,26 @@
 //! `quantize_row_q8_0_ref` and gguf-py's `Q8_0.quantize_blocks`:
 //! `amax = max |x|` (left to right), `d = amax / 127` (f32), `id = d != 0 ? 1/d : 0` (from the unrounded d),
 //! `q = round_half_away_from_zero(x * id)`, stored `d` is `f16(d)`.
+//!
+//! Phase 3: the row also carries what the K-quant kernels (`docs/kquant-dot.md`) read per block, derived once
+//! per quantisation: `d32` (the scale as f32), `dxs = d32 * sum(q)` (exact: 11 x 12 significant bits) for the
+//! Q4_K / Q5_K mins, and `off6` (`[32 * sum(q[0..16]), 0, 0, 0, 32 * sum(q[16..32]), 0, 0, 0]`) for the
+//! Q6_K offset. None of it is part of the ggml layout.
 
 use crate::quant::f16_to_f32;
 
 /// One row of Q8_0 blocks. `d` holds the f16 bits of each block scale; `qs` the int8 codes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Q8Row {
     pub n: usize,
     pub d: Vec<u16>,
     pub qs: Vec<i8>,
+    /// Derived: block scales as f32.
+    pub d32: Vec<f32>,
+    /// Derived: `d32 * sum(q)` per block.
+    pub dxs: Vec<f32>,
+    /// Derived: 8 i32 per block, the Q6_K offset lanes.
+    pub off6: Vec<i32>,
 }
 
 impl Q8Row {
@@ -25,7 +36,7 @@ impl Q8Row {
             let mut qs = Vec::with_capacity(x.len());
             // SAFETY: `use_avx2` is only true when the CPU reports AVX2 and F16C.
             unsafe { super::avx2::quantize_row(x, &mut d, &mut qs) };
-            return Q8Row { n: x.len(), d, qs };
+            return Q8Row::from_parts(x.len(), d, qs);
         }
         Self::quantize_scalar(x)
     }
@@ -52,7 +63,24 @@ impl Q8Row {
                 qs.push((v * id).round() as i8);
             }
         }
-        Q8Row { n: x.len(), d, qs }
+        Q8Row::from_parts(x.len(), d, qs)
+    }
+
+    /// Assemble a row from its scales and codes and compute the derived per-block data.
+    pub fn from_parts(n: usize, d: Vec<u16>, qs: Vec<i8>) -> Q8Row {
+        let nb = d.len();
+        assert_eq!(qs.len(), nb * Self::BLOCK);
+        let d32: Vec<f32> = d.iter().map(|&b| f16_to_f32(b)).collect();
+        let mut dxs = Vec::with_capacity(nb);
+        let mut off6 = Vec::with_capacity(nb * 8);
+        for b in 0..nb {
+            let q = &qs[b * Self::BLOCK..(b + 1) * Self::BLOCK];
+            let lo: i32 = q[..16].iter().map(|&v| v as i32).sum();
+            let hi: i32 = q[16..].iter().map(|&v| v as i32).sum();
+            dxs.push(d32[b] * (lo + hi) as f32);
+            off6.extend_from_slice(&[32 * lo, 0, 0, 0, 32 * hi, 0, 0, 0]);
+        }
+        Q8Row { n, d, qs, d32, dxs, off6 }
     }
 
     /// Parse a ggml Q8_0 row (`n/32` blocks of `f16 d` + 32 bytes), e.g. from a fixture.
@@ -67,7 +95,7 @@ impl Q8Row {
             d.push(u16::from_le_bytes([blk[0], blk[1]]));
             qs.extend(blk[2..34].iter().map(|&x| x as i8));
         }
-        Q8Row { n, d, qs }
+        Q8Row::from_parts(n, d, qs)
     }
 
     pub fn n_blocks(&self) -> usize {

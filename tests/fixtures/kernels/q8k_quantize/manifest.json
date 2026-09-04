@@ -1,0 +1,100 @@
+{
+ "group": "q8k_quantize",
+ "torch": "2.14.0+cpu",
+ "f32_eps": 1.1920928955078125e-07,
+ "source": "tools/fixtures/gen_q8k.py: port of ggml quantize_row_q8_K_ref (iscale = -127/max, nearest-even, min 127, bsums per 16, d = 1/iscale)",
+ "exact": true,
+ "block_bytes": 292,
+ "cases": [
+  {
+   "case": "q8k_w256",
+   "kind": "q8k_quantize",
+   "width": 256,
+   "rows": [
+    "random",
+    "large",
+    "tiny",
+    "denormal_mixed",
+    "neg_zero",
+    "all_equal",
+    "max_last_negative",
+    "ties_even",
+    "first_max_positive",
+    "first_max_negative",
+    "zero_block",
+    "alternating"
+   ],
+   "x": {
+    "file": "q8k_w256__x.npy",
+    "shape": [
+     12,
+     256
+    ]
+   },
+   "raw": {
+    "file": "q8k_w256__raw.bin",
+    "bytes": 3504
+   }
+  },
+  {
+   "case": "q8k_w512",
+   "kind": "q8k_quantize",
+   "width": 512,
+   "rows": [
+    "random",
+    "large",
+    "tiny",
+    "denormal_mixed",
+    "neg_zero",
+    "all_equal",
+    "max_last_negative",
+    "ties_even",
+    "first_max_positive",
+    "first_max_negative",
+    "zero_block",
+    "alternating"
+   ],
+   "x": {
+    "file": "q8k_w512__x.npy",
+    "shape": [
+     12,
+     512
+    ]
+   },
+   "raw": {
+    "file": "q8k_w512__raw.bin",
+    "bytes": 7008
+   }
+  },
+  {
+   "case": "q8k_w5120",
+   "kind": "q8k_quantize",
+   "width": 5120,
+   "rows": [
+    "random",
+    "large",
+    "tiny",
+    "denormal_mixed",
+    "neg_zero",
+    "all_equal",
+    "max_last_negative",
+    "ties_even",
+    "first_max_positive",
+    "first_max_negative",
+    "zero_block",
+    "alternating"
+   ],
+   "x": {
+    "file": "q8k_w5120__x.npy",
+    "shape": [
+     12,
+     5120
+    ]
+   },
+   "raw": {
+    "file": "q8k_w5120__raw.bin",
+    "bytes": 70080
+   }
+  }
+ ]
+}

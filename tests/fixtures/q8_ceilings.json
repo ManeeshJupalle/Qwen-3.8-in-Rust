@@ -1,0 +1,599 @@
+{
+ "source": "docs/data/phase2b_parity_0_63_final.log (commit 6456a19): engine q8 mode vs tests/fixtures/ref_gguf, max|diff| / max|ref| per layer and prompt, AVX2 kernels with Q8_0 activations",
+ "rule": "ceiling = factor * measured; crates/core/tests/real_layers.rs fails if the q8 mode's relative error after any layer, or the last-position logits max|diff| vs ref_gguf, exceeds its ceiling",
+ "factor": 2.0,
+ "measured": {
+  "layers": [
+   {
+    "layer": 0,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.00087,
+     "fib": 0.00086,
+     "sentence": 0.0024
+    }
+   },
+   {
+    "layer": 1,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0016,
+     "fib": 0.002,
+     "sentence": 0.0019
+    }
+   },
+   {
+    "layer": 2,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.00053,
+     "fib": 0.0023,
+     "sentence": 0.0028
+    }
+   },
+   {
+    "layer": 3,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0017,
+     "fib": 0.0028,
+     "sentence": 0.0029
+    }
+   },
+   {
+    "layer": 4,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0012,
+     "fib": 0.0014,
+     "sentence": 0.0027
+    }
+   },
+   {
+    "layer": 5,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0012,
+     "fib": 0.0019,
+     "sentence": 0.0027
+    }
+   },
+   {
+    "layer": 6,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0012,
+     "fib": 0.0015,
+     "sentence": 0.0017
+    }
+   },
+   {
+    "layer": 7,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0021,
+     "fib": 0.0017,
+     "sentence": 0.0023
+    }
+   },
+   {
+    "layer": 8,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0016,
+     "fib": 0.00063,
+     "sentence": 0.0028
+    }
+   },
+   {
+    "layer": 9,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0011,
+     "sentence": 0.0029
+    }
+   },
+   {
+    "layer": 10,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.00088,
+     "fib": 0.0013,
+     "sentence": 0.002
+    }
+   },
+   {
+    "layer": 11,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0011,
+     "fib": 0.0011,
+     "sentence": 0.0021
+    }
+   },
+   {
+    "layer": 12,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.00099,
+     "fib": 0.00094,
+     "sentence": 0.0018
+    }
+   },
+   {
+    "layer": 13,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0011,
+     "fib": 0.00081,
+     "sentence": 0.0016
+    }
+   },
+   {
+    "layer": 14,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.00045,
+     "fib": 0.0016,
+     "sentence": 0.0013
+    }
+   },
+   {
+    "layer": 15,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.00035,
+     "fib": 0.0015,
+     "sentence": 0.0013
+    }
+   },
+   {
+    "layer": 16,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.00066,
+     "fib": 0.0016,
+     "sentence": 0.0014
+    }
+   },
+   {
+    "layer": 17,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.00072,
+     "fib": 0.0014,
+     "sentence": 0.0015
+    }
+   },
+   {
+    "layer": 18,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.00074,
+     "fib": 0.00094,
+     "sentence": 0.0015
+    }
+   },
+   {
+    "layer": 19,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.00079,
+     "fib": 0.0011,
+     "sentence": 0.0011
+    }
+   },
+   {
+    "layer": 20,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.002,
+     "sentence": 0.0018
+    }
+   },
+   {
+    "layer": 21,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0013,
+     "fib": 0.0026,
+     "sentence": 0.0011
+    }
+   },
+   {
+    "layer": 22,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0013,
+     "fib": 0.0026,
+     "sentence": 0.0012
+    }
+   },
+   {
+    "layer": 23,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0013,
+     "fib": 0.0028,
+     "sentence": 0.0013
+    }
+   },
+   {
+    "layer": 24,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0013,
+     "fib": 0.0027,
+     "sentence": 0.0012
+    }
+   },
+   {
+    "layer": 25,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0026,
+     "sentence": 0.0011
+    }
+   },
+   {
+    "layer": 26,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0017,
+     "fib": 0.0026,
+     "sentence": 0.0014
+    }
+   },
+   {
+    "layer": 27,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0018,
+     "fib": 0.0027,
+     "sentence": 0.0015
+    }
+   },
+   {
+    "layer": 28,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0027,
+     "sentence": 0.0014
+    }
+   },
+   {
+    "layer": 29,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0028,
+     "sentence": 0.0011
+    }
+   },
+   {
+    "layer": 30,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0029,
+     "sentence": 0.0014
+    }
+   },
+   {
+    "layer": 31,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0029,
+     "sentence": 0.0016
+    }
+   },
+   {
+    "layer": 32,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0029,
+     "sentence": 0.0011
+    }
+   },
+   {
+    "layer": 33,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0029,
+     "sentence": 0.0013
+    }
+   },
+   {
+    "layer": 34,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0027,
+     "sentence": 0.0015
+    }
+   },
+   {
+    "layer": 35,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0028,
+     "sentence": 0.0014
+    }
+   },
+   {
+    "layer": 36,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0028,
+     "sentence": 0.0013
+    }
+   },
+   {
+    "layer": 37,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0029,
+     "sentence": 0.0014
+    }
+   },
+   {
+    "layer": 38,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.002,
+     "fib": 0.003,
+     "sentence": 0.0013
+    }
+   },
+   {
+    "layer": 39,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0017,
+     "fib": 0.0031,
+     "sentence": 0.0014
+    }
+   },
+   {
+    "layer": 40,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0019,
+     "fib": 0.0033,
+     "sentence": 0.0014
+    }
+   },
+   {
+    "layer": 41,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.002,
+     "fib": 0.0035,
+     "sentence": 0.001
+    }
+   },
+   {
+    "layer": 42,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0018,
+     "fib": 0.0034,
+     "sentence": 0.0016
+    }
+   },
+   {
+    "layer": 43,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0035,
+     "sentence": 0.0011
+    }
+   },
+   {
+    "layer": 44,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0015,
+     "fib": 0.0036,
+     "sentence": 0.0012
+    }
+   },
+   {
+    "layer": 45,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0014,
+     "fib": 0.0037,
+     "sentence": 0.0014
+    }
+   },
+   {
+    "layer": 46,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0012,
+     "fib": 0.0039,
+     "sentence": 0.0016
+    }
+   },
+   {
+    "layer": 47,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.00092,
+     "fib": 0.0049,
+     "sentence": 0.0017
+    }
+   },
+   {
+    "layer": 48,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0011,
+     "fib": 0.0065,
+     "sentence": 0.0025
+    }
+   },
+   {
+    "layer": 49,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0015,
+     "fib": 0.0073,
+     "sentence": 0.0022
+    }
+   },
+   {
+    "layer": 50,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0016,
+     "fib": 0.0032,
+     "sentence": 0.0042
+    }
+   },
+   {
+    "layer": 51,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0068,
+     "fib": 0.0065,
+     "sentence": 0.0058
+    }
+   },
+   {
+    "layer": 52,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0028,
+     "fib": 0.0088,
+     "sentence": 0.0035
+    }
+   },
+   {
+    "layer": 53,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0031,
+     "fib": 0.0089,
+     "sentence": 0.016
+    }
+   },
+   {
+    "layer": 54,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0013,
+     "fib": 0.01,
+     "sentence": 0.0095
+    }
+   },
+   {
+    "layer": 55,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0019,
+     "fib": 0.0085,
+     "sentence": 0.012
+    }
+   },
+   {
+    "layer": 56,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0023,
+     "fib": 0.0065,
+     "sentence": 0.0084
+    }
+   },
+   {
+    "layer": 57,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0022,
+     "fib": 0.0058,
+     "sentence": 0.0084
+    }
+   },
+   {
+    "layer": 58,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0011,
+     "fib": 0.0087,
+     "sentence": 0.0051
+    }
+   },
+   {
+    "layer": 59,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.0076,
+     "fib": 0.0073,
+     "sentence": 0.01
+    }
+   },
+   {
+    "layer": 60,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0025,
+     "fib": 0.0067,
+     "sentence": 0.0095
+    }
+   },
+   {
+    "layer": 61,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.0022,
+     "fib": 0.0053,
+     "sentence": 0.0089
+    }
+   },
+   {
+    "layer": 62,
+    "kind": "linear_attention",
+    "rel": {
+     "capital": 0.004,
+     "fib": 0.0064,
+     "sentence": 0.011
+    }
+   },
+   {
+    "layer": 63,
+    "kind": "full_attention",
+    "rel": {
+     "capital": 0.014,
+     "fib": 0.0045,
+     "sentence": 0.01
+    }
+   }
+  ],
+  "logits": {
+   "capital": {
+    "vs_ref_gguf_max_diff": 0.1984,
+    "vs_llamacpp_max_diff": 0.4393
+   },
+   "fib": {
+    "vs_ref_gguf_max_diff": 0.1187,
+    "vs_llamacpp_max_diff": 0.2947
+   },
+   "sentence": {
+    "vs_ref_gguf_max_diff": 0.1745,
+    "vs_llamacpp_max_diff": 0.3783
+   }
+  }
+ }
+}

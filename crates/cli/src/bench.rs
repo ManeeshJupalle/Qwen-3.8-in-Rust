@@ -6,8 +6,9 @@
 
 use std::time::Instant;
 
-use aqueduct_core::kernels::matvec::{matvec, Act, WeightMat};
+use aqueduct_core::kernels::matvec::{matvec, Act, ActVec, WeightMat};
 use aqueduct_core::kernels::q8::Q8Row;
+use aqueduct_core::kernels::q8k::Q8KRow;
 use aqueduct_core::kernels::rmsnorm::rmsnorm;
 use aqueduct_core::kernels::simd::{avx2_detected, force_scalar};
 use aqueduct_core::kernels::softmax::softmax;
@@ -52,25 +53,42 @@ pub fn kernels(args: &[String]) -> Result<(), String> {
     let cols = arg(args, "--cols", 5120)?;
     let reps = arg(args, "--reps", 3)?;
     let avx2 = avx2_detected();
-    println!("# aqueduct bench kernels: rows={rows} cols={cols} reps>={reps}, threads: 1 and {threads} (available {all_threads}); avx2+f16c detected: {avx2}");
+    let with_scalar = !args.iter().any(|a| a == "--no-scalar");
+    let mut thread_list = vec![1usize];
+    if threads >= 4 {
+        thread_list.push(threads / 2);
+    }
+    if threads > 1 {
+        thread_list.push(threads);
+    }
+    println!("# aqueduct bench kernels: rows={rows} cols={cols} reps>={reps}, threads {thread_list:?} (available {all_threads}); avx2+f16c detected: {avx2}");
     println!("# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)");
+    println!("# act: q8_0 = Q8_0 activations (the production path for every type); q8_k = ggml's Q8_K activations (opt-in for K-quants)");
     let mut rng = Rng(0x1234_5678_9ABC_DEF1);
     let x: Vec<f32> = (0..cols).map(|_| rng.f32()).collect();
-    let xq = Q8Row::quantize(&x);
-    let paths: Vec<(&str, bool)> = if avx2 { vec![("scalar", true), ("avx2", false)] } else { vec![("scalar", true)] };
-    println!("{:<8} {:<7} {:>4} {:>12} {:>10} {:>10}", "kernel", "path", "thr", "ms/matvec", "GB/s", "Gelem/s");
-    for t in [GgmlType::Q4_0, GgmlType::Q8_0, GgmlType::Q4_K, GgmlType::Q5_K, GgmlType::Q6_K] {
+    let xa = ActVec::new(&x);
+    let paths: Vec<(&str, bool)> = match (avx2, with_scalar) {
+        (true, true) => vec![("scalar", true), ("avx2", false)],
+        (true, false) => vec![("avx2", false)],
+        (false, _) => vec![("scalar", true)],
+    };
+    println!("{:<8} {:<5} {:<7} {:>4} {:>12} {:>10} {:>10}", "kernel", "act", "path", "thr", "ms/matvec", "GB/s", "Gelem/s");
+    for t in [GgmlType::Q4_K, GgmlType::Q5_K, GgmlType::Q6_K, GgmlType::Q8_0, GgmlType::Q4_0] {
         let (bs, ts) = t.block_layout();
         let row_bytes = (cols as u64 / bs * ts) as usize;
         let data: Vec<u8> = (0..rows * row_bytes).map(|_| (rng.next() >> 24) as u8).collect();
         let w = WeightMat::new(t, rows, cols, data);
         let bytes = (rows * row_bytes) as f64;
         let mut y = vec![0f32; rows];
-        for (name, scalar) in &paths {
-            for &thr in &[1usize, threads] {
-                force_scalar(*scalar);
-                let s = time_it(|| matvec(&w, Act::Q8(&xq), &mut y, thr), reps, 1.0);
-                println!("{:<8} {:<7} {:>4} {:>12.2} {:>10.2} {:>10.2}", t.name(), name, thr, s * 1e3, bytes / s / 1e9, (rows * cols) as f64 / s / 1e9);
+        let kquant = matches!(t, GgmlType::Q4_K | GgmlType::Q5_K | GgmlType::Q6_K);
+        let acts: Vec<(&str, Act<'_>)> = if kquant { vec![("q8_0", Act::Q8(xa.q8())), ("q8_k", Act::Q8K(xa.q8k()))] } else { vec![("q8_0", Act::Q8(xa.q8()))] };
+        for (act_name, act) in &acts {
+            for (name, scalar) in &paths {
+                for &thr in &thread_list {
+                    force_scalar(*scalar);
+                    let s = time_it(|| matvec(&w, *act, &mut y, thr), reps, 1.0);
+                    println!("{:<8} {:<5} {:<7} {:>4} {:>12.2} {:>10.2} {:>10.2}", t.name(), act_name, name, thr, s * 1e3, bytes / s / 1e9, (rows * cols) as f64 / s / 1e9);
+                }
             }
         }
     }
@@ -93,6 +111,16 @@ pub fn kernels(args: &[String]) -> Result<(), String> {
             0.5,
         ) / n_rows as f64;
         println!("{:<12} {:<7} {:>12.2} {:>10.2}", "q8_quantize", name, s * 1e6, (cols * 4) as f64 / s / 1e9);
+        let s = time_it(
+            || {
+                for r in 0..n_rows {
+                    std::hint::black_box(Q8KRow::quantize(&xs[r * cols..(r + 1) * cols]));
+                }
+            },
+            reps,
+            0.5,
+        ) / n_rows as f64;
+        println!("{:<12} {:<7} {:>12.2} {:>10.2}", "q8k_quantize", name, s * 1e6, (cols * 4) as f64 / s / 1e9);
         let mut y = vec![0f32; cols];
         let s = time_it(
             || {

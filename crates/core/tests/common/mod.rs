@@ -24,7 +24,7 @@ pub fn gguf_path() -> PathBuf {
     let p = std::env::var_os("AQUEDUCT_GGUF").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(DEFAULT_GGUF));
     assert!(
         p.exists(),
-        "primary GGUF missing at {}\nrun: hf download bartowski/Qwen3.8-27B-GGUF Qwen3.8-27B-Q4_K_M.gguf --local-dir C:\models (or set AQUEDUCT_GGUF)",
+        "primary GGUF missing at {}\nrun: hf download bartowski/Qwen3.8-27B-GGUF Qwen3.8-27B-Q4_K_M.gguf --local-dir C:/models (or set AQUEDUCT_GGUF)",
         p.display()
     );
     p
@@ -87,4 +87,33 @@ pub fn compare_bits(a: &[f32], b: &[f32]) -> (usize, f64, Option<usize>) {
         }
     }
     (n, max, first)
+}
+
+/// Phase 3 accuracy model of the K-quant kernels (docs/kquant-dot.md): their f32 lanes are partial sums that
+/// cancel against each other, so the rounding error is bounded by the term magnitudes,
+/// `k * eps * sum_j (|main_j| + |min_j|) |x_j|`, with `main`/`min` the two parts of each dequantised weight
+/// (`w = main - min`, `min = dmin * m` for Q4_K / Q5_K, 0 for Q6_K), not by `sqrt(n) * max|term|`.
+pub fn kquant_terms_budget(t: aqueduct_core::GgmlType, wrow: &[u8], w_deq: &[f32], x_deq: &[f32], k: f64) -> f64 {
+    use aqueduct_core::GgmlType;
+    let width = w_deq.len();
+    assert_eq!(x_deq.len(), width);
+    let nsb = width / 256;
+    let bb = wrow.len() / nsb;
+    let mut mags = 0f64;
+    for sb in 0..nsb {
+        let wb = &wrow[sb * bb..(sb + 1) * bb];
+        let dmin = if t == GgmlType::Q6_K { 0.0 } else { half::f16::from_le_bytes([wb[2], wb[3]]).to_f64() };
+        for s in 0..8 {
+            let m = if t == GgmlType::Q6_K { 0 } else { aqueduct_core::quant::get_scale_min_k4(s, &wb[4..16]).1 };
+            let min_part = dmin * m as f64;
+            for j in sb * 256 + s * 32..sb * 256 + (s + 1) * 32 {
+                mags += ((w_deq[j] as f64 + min_part).abs() + min_part.abs()) * (x_deq[j] as f64).abs();
+            }
+        }
+    }
+    k * f32::EPSILON as f64 * mags
+}
+
+pub fn is_kquant(t: aqueduct_core::GgmlType) -> bool {
+    matches!(t, aqueduct_core::GgmlType::Q4_K | aqueduct_core::GgmlType::Q5_K | aqueduct_core::GgmlType::Q6_K)
 }

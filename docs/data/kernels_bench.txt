@@ -127,3 +127,154 @@ Q6_K     scalar     1   0.13
 Q6_K     scalar    12   0.49
 Q6_K     avx2       1   1.23
 Q6_K     avx2      12   2.41
+
+# ================================================================================================== Phase 3
+# 2026-09-03, same machine, release build; kernels rebuilt (docs/kquant-dot.md): exact integer inner loops, 8-lane f32 accumulation,
+# one reduction per row, software prefetch 1 KB ahead, persistent pool (spin 60 us then block), contiguous row chunks.
+# act q8_0 = Q8_0 activations (production path, per-32 scales); act q8_k = ggml Q8_K activations (opt-in --q8k; exceeds the frozen 2b ceilings at layer 0).
+# membw (docs/data/membw.txt): 14.4 GB/s single thread, 28.9 GB/s all threads. Numbers were taken on a machine that had been busy for hours (throttling caveat).
+# 5120 x 5120 (the gate shape; 14.7 MB Q4_K, larger than L3):
+# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
+# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
+# act: q8_0 = Q8_0 activations (the production path for every type); q8_k = ggml's Q8_K activations (opt-in for K-quants)
+kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
+Q4_K     q8_0  scalar     1        42.83       0.34       0.61
+Q4_K     q8_0  scalar     6         9.21       1.60       2.85
+Q4_K     q8_0  scalar    12         8.48       1.74       3.09
+Q4_K     q8_0  avx2       1         3.28       4.50       8.00
+Q4_K     q8_0  avx2       6         1.62       9.09      16.16
+Q4_K     q8_0  avx2      12         1.65       8.91      15.85
+Q4_K     q8_k  scalar     1        59.52       0.25       0.44
+Q4_K     q8_k  scalar     6        20.60       0.72       1.27
+Q4_K     q8_k  scalar    12        10.87       1.36       2.41
+Q4_K     q8_k  avx2       1         2.50       5.91      10.50
+Q4_K     q8_k  avx2       6         1.36      10.81      19.22
+Q4_K     q8_k  avx2      12         1.59       9.30      16.54
+Q5_K     q8_0  scalar     1       128.32       0.14       0.20
+Q5_K     q8_0  scalar     6        31.16       0.58       0.84
+Q5_K     q8_0  scalar    12        20.96       0.86       1.25
+Q5_K     q8_0  avx2       1         3.78       4.76       6.93
+Q5_K     q8_0  avx2       6         1.73      10.40      15.13
+Q5_K     q8_0  avx2      12         1.92       9.37      13.63
+Q5_K     q8_k  scalar     1       126.01       0.14       0.21
+Q5_K     q8_k  scalar     6        30.33       0.59       0.86
+Q5_K     q8_k  scalar    12        20.44       0.88       1.28
+Q5_K     q8_k  avx2       1         3.72       4.85       7.05
+Q5_K     q8_k  avx2       6         1.77      10.19      14.82
+Q5_K     q8_k  avx2      12         1.88       9.61      13.97
+Q6_K     q8_0  scalar     1       192.78       0.11       0.14
+Q6_K     q8_0  scalar     6        43.04       0.50       0.61
+Q6_K     q8_0  scalar    12        28.28       0.76       0.93
+Q6_K     q8_0  avx2       1         4.33       4.96       6.05
+Q6_K     q8_0  avx2       6         1.97      10.90      13.29
+Q6_K     q8_0  avx2      12         2.08      10.33      12.60
+Q6_K     q8_k  scalar     1       101.69       0.21       0.26
+Q6_K     q8_k  scalar     6        25.92       0.83       1.01
+Q6_K     q8_k  scalar    12        17.42       1.23       1.51
+Q6_K     q8_k  avx2       1         3.17       6.79       8.28
+Q6_K     q8_k  avx2       6         1.71      12.54      15.29
+Q6_K     q8_k  avx2      12         1.92      11.20      13.66
+Q8_0     q8_0  scalar     1        65.61       0.42       0.40
+Q8_0     q8_0  scalar     6        15.31       1.82       1.71
+Q8_0     q8_0  scalar    12        10.30       2.70       2.55
+Q8_0     q8_0  avx2       1         7.69       3.62       3.41
+Q8_0     q8_0  avx2       6         2.87       9.71       9.14
+Q8_0     q8_0  avx2      12         2.82       9.87       9.29
+Q4_0     q8_0  scalar     1        57.94       0.25       0.45
+Q4_0     q8_0  scalar     6        14.83       0.99       1.77
+Q4_0     q8_0  scalar    12         9.59       1.54       2.73
+Q4_0     q8_0  avx2       1         8.01       1.84       3.27
+Q4_0     q8_0  avx2       6         3.05       4.84       8.60
+Q4_0     q8_0  avx2      12         3.00       4.91       8.73
+
+row kernel   path          us/row    GB/s in
+q8_quantize  scalar         76.14       0.27
+q8k_quantize scalar         57.16       0.36
+rmsnorm      scalar         10.87       1.88
+softmax      scalar         80.98       0.25
+q8_quantize  avx2           13.81       1.48
+q8k_quantize avx2            9.57       2.14
+rmsnorm      avx2            3.07       6.68
+softmax      avx2           69.18       0.30
+# 17408 x 5120 (ffn_gate shape, AVX2 only):
+# aqueduct bench kernels: rows=17408 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
+# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
+# act: q8_0 = Q8_0 activations (the production path for every type); q8_k = ggml's Q8_K activations (opt-in for K-quants)
+kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
+Q4_K     q8_0  avx2       1         8.25       6.08      10.81
+Q4_K     q8_0  avx2       6         2.22      22.59      40.16
+Q4_K     q8_0  avx2      12         2.49      20.15      35.82
+Q4_K     q8_k  avx2       1         8.94       5.61       9.97
+Q4_K     q8_k  avx2       6         3.23      15.51      27.58
+Q4_K     q8_k  avx2      12         3.28      15.26      27.13
+Q5_K     q8_0  avx2       1        12.67       4.84       7.04
+Q5_K     q8_0  avx2       6         4.21      14.54      21.15
+Q5_K     q8_0  avx2      12         3.99      15.36      22.35
+Q5_K     q8_k  avx2       1        12.20       5.02       7.31
+Q5_K     q8_k  avx2       6         3.96      15.48      22.51
+Q5_K     q8_k  avx2      12         3.80      16.12      23.45
+Q6_K     q8_0  avx2       1        13.68       5.34       6.52
+Q6_K     q8_0  avx2       6         4.80      15.23      18.56
+Q6_K     q8_0  avx2      12         4.07      17.94      21.88
+Q6_K     q8_k  avx2       1        10.93       6.69       8.15
+Q6_K     q8_k  avx2       6         3.91      18.69      22.78
+Q6_K     q8_k  avx2      12         3.90      18.75      22.86
+Q8_0     q8_0  avx2       1        26.20       3.61       3.40
+Q8_0     q8_0  avx2       6         7.62      12.43      11.70
+Q8_0     q8_0  avx2      12         5.88      16.11      15.17
+Q4_0     q8_0  avx2       1        27.48       1.82       3.24
+Q4_0     q8_0  avx2       6         8.16       6.15      10.92
+Q4_0     q8_0  avx2      12         6.20       8.08      14.37
+
+row kernel   path          us/row    GB/s in
+q8_quantize  avx2           13.62       1.50
+q8k_quantize avx2            9.14       2.24
+rmsnorm      avx2            3.10       6.60
+softmax      avx2           69.36       0.30
+# ---- consistent-state pair (membw, then AVX2 kernels at 5120 x 5120, then membw again; same thermal state, machine busy for hours):
+# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; hardware threads 12
+# fill + first pass: 1.39 s
+threads   best GB/s worst GB/s   runs (GB/s)
+1             16.71      15.71   16.71 15.71 15.88
+6             29.70      28.24   28.50 29.70 28.24
+12            30.13      29.46   29.67 30.13 29.46
+# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
+# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
+# act: q8_0 = Q8_0 activations (the production path for every type); q8_k = ggml's Q8_K activations (opt-in for K-quants)
+kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
+Q4_K     q8_0  avx2       1         2.49       5.91      10.51
+Q4_K     q8_0  avx2       6         0.81      18.21      32.37
+Q4_K     q8_0  avx2      12         0.80      18.49      32.87
+Q4_K     q8_k  avx2       1         2.68       5.50       9.79
+Q4_K     q8_k  avx2       6         1.50       9.83      17.48
+Q4_K     q8_k  avx2      12         1.58       9.36      16.64
+Q5_K     q8_0  avx2       1         4.12       4.38       6.37
+Q5_K     q8_0  avx2       6         2.25       7.99      11.63
+Q5_K     q8_0  avx2      12         2.04       8.83      12.84
+Q5_K     q8_k  avx2       1         4.05       4.44       6.47
+Q5_K     q8_k  avx2       6         1.77      10.16      14.78
+Q5_K     q8_k  avx2      12         1.90       9.48      13.78
+Q6_K     q8_0  avx2       1         4.29       5.02       6.12
+Q6_K     q8_0  avx2       6         2.08      10.32      12.58
+Q6_K     q8_0  avx2      12         2.09      10.27      12.52
+Q6_K     q8_k  avx2       1         3.25       6.61       8.05
+Q6_K     q8_k  avx2       6         1.72      12.49      15.23
+Q6_K     q8_k  avx2      12         1.91      11.24      13.70
+Q8_0     q8_0  avx2       1         8.30       3.35       3.16
+Q8_0     q8_0  avx2       6         3.18       8.77       8.25
+Q8_0     q8_0  avx2      12         2.63      10.57       9.95
+Q4_0     q8_0  avx2       1         8.15       1.81       3.22
+Q4_0     q8_0  avx2       6         3.04       4.86       8.63
+Q4_0     q8_0  avx2      12         2.85       5.18       9.20
+
+row kernel   path          us/row    GB/s in
+q8_quantize  avx2           13.77       1.49
+q8k_quantize avx2            9.19       2.23
+rmsnorm      avx2            3.22       6.35
+softmax      avx2           72.92       0.28
+# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; hardware threads 12
+# fill + first pass: 1.41 s
+threads   best GB/s worst GB/s   runs (GB/s)
+1             16.15      15.64   16.04 16.15 15.64
+6             30.68      29.35   29.35 30.11 30.68
+12            28.30      27.72   27.72 27.98 28.30

@@ -1,4 +1,5 @@
-//! aqueduct CLI: `info <gguf>`, `tok encode|decode` (Phase 1) and `bench kernels` (Phase 2b). No inference.
+//! aqueduct CLI: `info <gguf>`, `tok encode|decode` (Phase 1), `bench kernels|membw` (Phase 2b / 3) and
+//! `run` (Phase 3: fully resident greedy decode).
 
 use std::collections::BTreeMap;
 use std::process::ExitCode;
@@ -7,13 +8,16 @@ use std::time::Instant;
 use aqueduct_core::{layer_of, Gguf, ModelConfig, Tok};
 
 mod bench;
+mod rss;
+mod run;
 
 const DEFAULT_TOKENIZER: &str = "models/Qwen3.8-27B/tokenizer.json";
 
 fn usage() -> ExitCode {
     eprintln!(
         "usage:\n  aqueduct info <model.gguf>\n  aqueduct tok [--tokenizer <tokenizer.json>] encode <text>\n  aqueduct tok [--tokenizer <tokenizer.json>] decode <id,id,...>\n  aqueduct bench kernels [--threads N] [--rows R] [--cols C] [--reps N]
-  aqueduct bench membw [--gib 2] [--runs 5] [--threads N]"
+  aqueduct bench membw [--gib 2] [--runs 5] [--threads N]
+  aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] (--ids <csv> | --prompt <text>)"
     );
     ExitCode::from(2)
 }
@@ -36,6 +40,13 @@ fn main() -> ExitCode {
             }
         },
         Some("bench") if args.get(1).map(String::as_str) == Some("kernels") => match bench::kernels(&args[2..]) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("run") => match run::parse(&args[1..], DEFAULT_TOKENIZER).and_then(run::run) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");

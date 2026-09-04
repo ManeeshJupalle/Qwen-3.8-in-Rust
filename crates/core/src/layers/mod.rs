@@ -9,7 +9,7 @@ pub mod mlp;
 
 use crate::config::ModelConfig;
 use crate::gguf::{GgmlType, Gguf};
-use crate::kernels::matvec::{matvec_f32_in, WeightMat};
+use crate::kernels::matvec::{matvec_act, ActVec, WeightMat};
 use crate::kernels::rmsnorm::rmsnorm;
 use crate::quant::dequantize;
 
@@ -75,10 +75,15 @@ impl Linear {
     pub fn in_features(&self) -> usize {
         self.w.cols
     }
-    /// One vector in, one vector out. Quantised weights quantise `x` to Q8_0 first; F32 weights use f32.
+    /// One vector in, one vector out: `x` is quantised to the form the weight type consumes (Q8_K for
+    /// K-quants, Q8_0 for Q8_0 / Q4_0, f32 for F32) once, here.
     pub fn forward(&self, x: &[f32], y: &mut [f32], threads: usize) {
+        self.forward_act(&ActVec::new(x), y, threads);
+    }
+    /// As `forward` on an activation whose quantised forms are shared with other projections.
+    pub fn forward_act(&self, x: &ActVec<'_>, y: &mut [f32], threads: usize) {
         assert_eq!(x.len(), self.w.cols, "Linear: input length");
-        matvec_f32_in(&self.w, x, y, threads);
+        matvec_act(&self.w, x, y, threads);
     }
 }
 

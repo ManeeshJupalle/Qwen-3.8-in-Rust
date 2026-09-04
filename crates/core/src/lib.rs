@@ -1,11 +1,12 @@
-//! aqueduct-core, Phase 1: read the model. GGUF header/index, config from GGUF metadata,
-//! tokenizer wrapper, and scalar dequantisation. No forward pass, no kernels, no tiering.
+//! aqueduct-core: GGUF header/index, config from GGUF metadata, tokenizer wrapper, dequantisation (Phase 1);
+//! kernels and layers (Phase 2); the resident model and its per-token forward (Phase 3). No tiering yet.
 
 pub mod arch;
 pub mod config;
 pub mod gguf;
 pub mod kernels;
 pub mod layers;
+pub mod model;
 pub mod quant;
 pub mod tok;
 

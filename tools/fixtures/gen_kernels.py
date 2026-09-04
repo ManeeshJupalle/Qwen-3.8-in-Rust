@@ -405,10 +405,13 @@ def gen_deltanet():
 
 
 if __name__ == "__main__":
+    from gen_q8k import gen_q8k  # Phase 3: Q8_K activation quantiser (ported reference, gguf-py has none)
+
     gen_rmsnorm()
     gen_act()
     gen_softmax()
     gen_q8()
+    gen_q8k()
     gen_dot()
     gen_matvec()
     gen_rope()
