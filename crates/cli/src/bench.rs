@@ -12,7 +12,7 @@ use aqueduct_core::kernels::q8k::Q8KRow;
 use aqueduct_core::kernels::rmsnorm::rmsnorm;
 use aqueduct_core::kernels::simd::{avx2_detected, force_scalar};
 use aqueduct_core::kernels::softmax::softmax;
-use aqueduct_core::GgmlType;
+use aqueduct_core::{logical_cores, physical_cores, GgmlType};
 
 struct Rng(u64);
 impl Rng {
@@ -47,21 +47,22 @@ fn time_it(mut f: impl FnMut(), reps: usize, min_secs: f64) -> f64 {
 }
 
 pub fn kernels(args: &[String]) -> Result<(), String> {
-    let all_threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
-    let threads = arg(args, "--threads", all_threads)?;
+    let (physical, logical) = (physical_cores(), logical_cores());
+    let threads = arg(args, "--threads", logical)?;
     let rows = arg(args, "--rows", 17408)?;
     let cols = arg(args, "--cols", 5120)?;
     let reps = arg(args, "--reps", 3)?;
     let avx2 = avx2_detected();
     let with_scalar = !args.iter().any(|a| a == "--no-scalar");
+    // one thread, the physical cores (the engine's default) and the hardware threads, so the SMT step is visible
     let mut thread_list = vec![1usize];
-    if threads >= 4 {
-        thread_list.push(threads / 2);
+    if physical > 1 && physical < threads {
+        thread_list.push(physical);
     }
     if threads > 1 {
         thread_list.push(threads);
     }
-    println!("# aqueduct bench kernels: rows={rows} cols={cols} reps>={reps}, threads {thread_list:?} (available {all_threads}); avx2+f16c detected: {avx2}");
+    println!("# aqueduct bench kernels: rows={rows} cols={cols} reps>={reps}, threads {thread_list:?} ({physical} physical cores, {logical} logical; the engine defaults to {physical}); avx2+f16c detected: {avx2}");
     println!("# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)");
     println!("# act: q8_k = ggml's Q8_K activations (the production path for K-quant weights, Phase 3.5); q8_0 = Q8_0 activations (--q8-fine for K-quants; the only form for Q8_0 / Q4_0 weights)");
     let mut rng = Rng(0x1234_5678_9ABC_DEF1);
@@ -206,13 +207,16 @@ fn sum_threads(buf: &[u64], threads: usize) -> (u64, f64) {
 /// at half the hardware threads (the physical cores on an SMT machine) and at every hardware thread.
 /// Best of `runs` is the ceiling; all runs are printed so throttling is visible.
 pub fn membw(args: &[String]) -> Result<(), String> {
-    let all_threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    let (physical, all_threads) = (physical_cores(), logical_cores());
     let gib = arg(args, "--gib", 2)?;
     let runs = arg(args, "--runs", 5)?;
     let extra = arg(args, "--threads", 0)?;
     let n = gib << 27; // u64 elements
     let bytes = (n * 8) as f64;
-    println!("# aqueduct bench membw: {gib} GiB buffer of u64, sum-reduce (AVX2 loads: {}), best of {runs}; hardware threads {all_threads}", cfg!(target_arch = "x86_64") && is_x86_feature_detected!("avx2"));
+    println!(
+        "# aqueduct bench membw: {gib} GiB buffer of u64, sum-reduce (AVX2 loads: {}), best of {runs}; {physical} physical cores, {all_threads} logical",
+        cfg!(target_arch = "x86_64") && is_x86_feature_detected!("avx2")
+    );
     let t0 = Instant::now();
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
     let mut buf: Vec<u64> = Vec::with_capacity(n);
@@ -220,8 +224,8 @@ pub fn membw(args: &[String]) -> Result<(), String> {
     let expected = sum_chunk(&buf);
     println!("# fill + first pass: {:.2} s", t0.elapsed().as_secs_f64());
     let mut list = vec![1usize];
-    if all_threads >= 4 {
-        list.push(all_threads / 2);
+    if physical > 1 && physical < all_threads {
+        list.push(physical);
     }
     list.push(all_threads);
     if extra > 0 && !list.contains(&extra) {

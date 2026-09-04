@@ -2,10 +2,12 @@
 
 Source read: ggml `ggml-quants.c` (`quantize_row_q8_K_ref`, `nearest_int`) and
 `ggml-cpu/arch/x86/quants.c` (`ggml_vec_dot_q4_K_q8_K`, `q5_K`, `q6_K`, AVX2 branches) in the
-`models/llama.cpp` checkout. Engine files: `crates/core/src/kernels/dot.rs` + `avx2.rs` (the production
-K-quant kernels, Q8_0-grain activations), `q8.rs` (activation row with the derived per-block data), `q8k.rs` +
-`kdot.rs` (ggml's Q8_K row and kernels, opt-in), `matvec.rs` (row partition, `ActVec`, fused and batched
-forms), `pool.rs` (persistent workers). Numbers: `docs/data/membw.txt`, `docs/data/kernels_bench.txt`.
+`models/llama.cpp` checkout. Engine files: `q8k.rs` + `kdot.rs` + `avx2.rs` (ggml's Q8_K activation row and
+the K-quant kernels that consume it: the production path since 3.5), `dot.rs` + `avx2.rs` and `q8.rs` (the
+Q8_0-grain row and its K-quant kernels, `--q8-fine`, and the only form Q8_0 / Q4_0 weights take),
+`matvec.rs` (row partition, `ActVec`, fused and batched forms), `pool.rs` (persistent workers),
+`cpu.rs` (the physical-core default). Numbers: `docs/data/membw.txt`, `docs/data/kernels_bench.txt`,
+`docs/data/bench_rounds.log`.
 
 **Outcome in one paragraph.** ggml's structure (exact integer inner loops, 8 f32 lanes accumulated across the
 row, one reduction per row, mins folded through activation sums) is what makes the kernels memory-bound; ggml's
@@ -152,13 +154,14 @@ an interleaved in-process A/B (the two variants alternated 21 times per line, me
 0.85 to 0.95, worst for Q6_K (0.65 to 0.93), at one thread as much as at six. The likely cause is register
 pressure (two rows of unpacked codes, two accumulator sets and the masks exceed the 16 ymm registers, and
 the Q8_K kernels have no accumulator-latency problem to solve in the first place). It was removed again;
-rows stay one per pass. The same A/B gave the only burst measurement of the 3.5 kernels on this box: with
-the clock up for a fraction of a second, the single-row Q8_K kernels read 27 to 34 GB/s at 6 threads on
-17408 x 5120 (no cache help), at or above the membw of the same minutes (27 to 32 GB/s): they are
-memory-bound when the clock is available. The sustained numbers (`docs/data/bench_rounds.log`, protocol
-`tools/bench_rounds.ps1`: plugged in, 5 minutes idle, then rounds of `membw` followed by the kernels at both
-shapes, every round filed with the thermal zone, clock ratio and other load next to it) are the box's
-throttled state under a runaway service (`docs/payload-vs-doc.md` finding 47), not the kernels.
+rows stay one per pass. That is what a memory-bound kernel should do: sharing the activation loads between
+two rows saves work the machine was not waiting on. And these kernels are memory-bound. Three rounds of
+`tools/bench_rounds.ps1` (plugged in, 5 minutes idle, membw then kernels back to back, every round filed with
+a correctly measured account of what else the machine was doing) put the production Q8_K kernels at 6 threads
+at 68 to 77 % (Q4_K), 74 to 79 % (Q5_K) and 84 to 85 % (Q6_K) of that round's memory bandwidth at
+5120 x 5120, and 75 to 89 % at 17408 x 5120 (`docs/data/kernels_bench.txt`, `docs/payload-vs-doc.md`
+finding 49). Six threads beat twelve on every one of those lines (finding 51), which is why the engine
+defaults to the physical core count.
 
 ## Other choices
 

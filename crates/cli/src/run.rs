@@ -26,7 +26,9 @@ pub struct RunArgs {
 }
 
 pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String> {
-    let all = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    // physical cores, not hardware threads: the matvec kernels are memory-bound, so SMT siblings contend
+    // rather than add bandwidth (`aqueduct_core::cpu`, finding 51). `--threads N` overrides.
+    let all = aqueduct_core::physical_cores();
     let mut a = RunArgs { model: DEFAULT_GGUF.into(), tokenizer: default_tokenizer.into(), threads: all, max_tokens: 32, ids: None, prompt: None, ids_only: false, sequential_prefill: false, verbose: false };
     let mut i = 0;
     while i < args.len() {

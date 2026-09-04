@@ -1,7 +1,8 @@
 # Phase 3.5 A/B of the two-row K-quant kernels (not shipped): 'aqueduct bench kernels --ab', a mode that alternated the two-row matvec and the
 # single-row path (matmul with a batch of one, the same kernels one row at a time) 21 times per line in one process and reported the median GB/s of
-# each and the ratio, so both variants saw the same machine state. Taken 2026-09-04 02:12 right after docs/data/bench_rounds.log, bthserv at 10 cores,
-# thermal zone 96 C (finding 47). Two-row is slower on 51 of 54 lines (ratio 0.65 to 1.16, mostly 0.85 to 0.95; Q6_K worst), so matvec stays one row
+# each and the ratio, so both variants saw the same machine state. Taken 2026-09-04 02:12 right after the first bench_rounds run. (The annotation on
+# that run claimed a runaway service and a 96 C box; it was a broken performance counter and the machine was idle -- finding 47. An interleaved A/B is
+# immune to that either way: both variants see whatever the machine is doing.) Two-row is slower on 51 of 54 lines (ratio 0.65 to 1.16, mostly 0.85 to 0.95; Q6_K worst), so matvec stays one row
 # per pass and the dot2_* kernels and the --ab mode were removed again (finding 49). The single-row numbers are also the only burst measurement of the
 # Phase 3.5 kernels on this box: at 17408 x 5120 (no cache help) the Q8_K kernels read 27 to 34 GB/s at 6 threads = at or above the round's membw
 # (27 to 32 GB/s): memory-bound when the clock is up. 5120 x 5120 (21.5 MB Q6_K, 14.7 MB Q4_K) is partly L3-assisted between alternations, hence > membw.

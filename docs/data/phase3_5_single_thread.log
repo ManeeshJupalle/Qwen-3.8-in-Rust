@@ -1,5 +1,6 @@
 # Phase 3.5 single-thread alternation, 2026-09-04 02:35 to 02:55: the Phase 3 binary (commit 73b1850) and the 3.5 binary run one after the other,
-# 'bench kernels --threads 1 --rows 5120 --cols 5120 --no-scalar', three passes each, so the machine state is shared; bthserv at ~10 cores, thermal zone 96 C.
+# 'bench kernels --threads 1 --rows 5120 --cols 5120 --no-scalar', three passes each, so the machine state is shared. (The session's state annotations
+# claimed a saturated box; that was a broken performance counter, finding 47. Alternating the two binaries is immune to it either way.)
 # Position effect: whichever activation form runs SECOND on the Q5_K matrix reads ~30 % lower at one thread, in both binaries and both orders
 # (the 3.5 binary ran q8_k first in the first two blocks; the last block is the 3.5 binary with the Phase 3 order, q8_0 first, which is the shipped order).
 # Read Q5_K rows against the same position only. Q4_K and Q6_K show no position effect.

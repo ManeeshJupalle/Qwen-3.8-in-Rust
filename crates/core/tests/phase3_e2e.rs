@@ -57,7 +57,8 @@ fn top2(v: &[f32]) -> (u32, f32, u32, f32) {
 #[test]
 #[ignore = "loads the whole 17.8 GB model; minutes; run with --release --ignored --nocapture"]
 fn prefill_gate_and_end_to_end() {
-    let threads = std::env::var("AQUEDUCT_THREADS").ok().and_then(|s| s.parse().ok()).unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1));
+    // the engine default is the physical core count (finding 51); AQUEDUCT_THREADS overrides
+    let threads = std::env::var("AQUEDUCT_THREADS").ok().and_then(|s| s.parse().ok()).unwrap_or_else(aqueduct_core::physical_cores);
     let membw: f64 = std::env::var("AQUEDUCT_MEMBW").ok().and_then(|s| s.parse().ok()).unwrap_or(28.9);
     let t_load = Instant::now();
     let model = Model::load(common::gguf_path(), threads).expect("load");

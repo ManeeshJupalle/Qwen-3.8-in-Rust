@@ -596,22 +596,42 @@ production Q5_K and Q6_K kernels therefore did not demonstrate the 50 % gate at 
 state measured today (53 % and 62 % at 17408 x 5120, throttled); `docs/phase3-report.md` lists what to try.
 # Phase 3.5 findings (kernel decision)
 
-## 47. The box hosts a runaway Bluetooth service at 5 to 9 cores; Phase 3's "throttling" was at least partly that
+## 47. This box's performance counters report cumulative CPU time as a rate, and that invented a runaway service
 
-At the start of Phase 3.5 the idle machine read 100 % CPU busy, 120 % of nominal clock and 97 C at the ACPI
-thermal zone (the `Thermal Zone Information` counter, readable without admin), while the user's visible
-processes summed to about one core. The WMI formatted per-process counters
-(`Win32_PerfFormattedData_PerfProc_Process`, which see SYSTEM processes) put `svchost.exe` pid 1180, hosting
-only `bthserv` (Bluetooth Support Service), at 530 to 910 % of one core, continuously, for the whole session.
-Turning Bluetooth off in the UI did not stop it; `Restart-Service bthserv` needs an elevated shell, which the
-session does not have. So every number in findings 40, 43 and 46 and every number in this phase was taken
-with 5 to 9 of the 12 hardware threads consumed by that service, and the laptop at its thermal limit because
-of it: the "throttled floor" is in part this. `tools/bench_rounds.ps1` (the 3.5 bench protocol: plugged in,
-5 minutes idle, then rounds of `membw` followed by the kernels at both shapes, every round filed) samples the
-thermal zone, clock ratio, total busy % and the three busiest other processes before and after every step and
-writes them next to the numbers (`docs/data/bench_rounds.log`). "Idle 5 minutes" cannot produce an idle
-machine in this state; the Phase 3.5 kernel numbers are the floor under that load, and the first thing to do
-before believing any of them is to restart the service as admin and rerun the protocol.
+Phase 3.5 first read the machine with the Windows performance-counter subsystem and concluded that a runaway
+`bthserv` svchost was holding 5 to 11 of the 12 hardware threads, so it filed its own throughput results as a
+"floor under that load" and discarded them. **That service did not exist and the results were good.** What the
+counters actually report:
+
+| source | pid 1180 (`svchost`, hosting only `bthserv`) |
+|---|---|
+| `Win32_PerfFormattedData_PerfProc_Process.PercentProcessorTime` | 530 to 1085 "%" |
+| `Get-Counter '\Process(*)\% Processor Time'`, single sample | same order (an "NVIDIA app" read 5089 "%") |
+| `Win32_PerfRawData_PerfProc_Process.PercentProcessorTime` | 2.2e13 (100-ns units) = **611 CPU-hours**, against 561 hours of uptime |
+| `Process.TotalProcessorTime` delta (kernel `GetProcessTimes`) over 4 s | **0.00 cpu-s = 0 %** |
+
+The raw counter is cumulative CPU time since boot, and both the "formatted" class and PDH's single-sample
+path present that total as though it were a rate, so a long-lived process reads as hundreds of percent
+forever. `\Processor(_Total)\% Idle Time` is pinned at 0 and `% Processor Time` at exactly 100.0 on this
+machine for the same reason; even `GetSystemTimes` returns a zero idle delta here, so nothing derived from
+system-wide idle accounting can be trusted on this box either. Measured properly, the machine is quiet: the
+busiest processes are the editor and the VPN client at 8 to 15 % of one core each, 0.27 to 0.44 of 12 cores
+in total.
+
+The rule this leaves: **to measure what else a machine is doing, sample per-process `GetProcessTimes` twice
+over a fixed interval and divide by elapsed wall time.** `tools/bench_rounds.ps1` does that and prints
+"other load N.NN of 12 cores" next to every step (`docs/data/bench_rounds.log`); it no longer reads the
+thermal zone or the clock ratio, which come from the same subsystem and cannot be validated here.
+
+Consequences for what was already filed. The counters were only ever used to *annotate* runs, never inside a
+kernel or a timing path, so no measured number in any phase changes; what changes is their interpretation.
+The Phase 3.5 throughput results stand as taken on a quiet machine (finding 49). Finding 40's thermal reading
+is separately supported by its own evidence (the same kernel measuring 26 GB/s early and 9 to 18 GB/s after an
+hour of load, with membw flat), so it is not withdrawn, but any part of it that leaned on a "% Processor
+Performance" or "% busy" reading is unsupported. The lesson is the one Phase 3 already wrote down for
+throughput and did not apply to the machine itself: pair every number with a measurement you have validated,
+and when an annotation says the box is saturated while the box is producing its best-ever bandwidth figure
+(31.6 GB/s here, against 28.9 on the "cool" Phase 3 machine), disbelieve the annotation, not the result.
 
 ## 48. Q8_K activations meet the promotion criterion; rule 5 is now per activation format
 
@@ -636,55 +656,96 @@ it. (b) The Q8_K path is now about as far from llama.cpp (0.23 to 0.39) as from 
 0.36), where the Q8_0 path was nearer to f32 (0.12 to 0.15) than to llama.cpp (0.32 to 0.44): the two engines
 now round the same way.
 
-## 49. The kernel fix: the two-row pass is slower and was dropped, the table / shift rewrites are bit-identical and unmeasurable here, and the sustained bench is dominated by the machine, not the kernels
+## 49. The kernel gate is met: the production K-quant kernels run at 68 to 89 % of memory bandwidth, and the two-row pass that was supposed to get them there is slower
 
 The Phase 3 report proposed precomputed factor tables plus a two-row pass for the production Q5_K / Q6_K
-tail. Both were built for both activation forms, bit-identical to the scalar references (tests on 900
-random row pairs and `matvec` at 1 / 2 / 7 / 64 rows and 1 / 3 / 12 threads, max diff 0), and measured.
-**Two rows per pass** was measured with an in-process interleaved A/B (`docs/data/two_row_ab.log`: the
-two-row `matvec` and the single-row path alternated 21 times per line, medians compared, so both saw the
-same machine state): slower on 51 of 54 lines, ratio 0.65 to 1.16 and mostly 0.85 to 0.95, worst for Q6_K,
-at one thread as much as at six; likely register pressure (two rows of unpacked codes plus two accumulator
-sets exceed the 16 ymm registers), and the Q8_K kernels have no accumulator-latency problem to solve. It was
-removed; rows stay one per pass. **The factor tables** (Q4_K / Q6_K Q8_0-grain kernels), the two-mask Q6_K
-unpack and the fixed Q5_K high-bit shift (Q8_K kernel) are kept; their effect is inside this box's noise:
-alternating the Phase 3 and 3.5 binaries at one thread (`docs/data/phase3_5_single_thread.log`) gives Q4_K
-7.5 to 7.9 vs 7.5 to 7.7 (Q8_K rows), 6.0 to 6.3 vs 6.0 to 6.1 (Q8_0 rows), Q6_K 5.7 to 6.0 vs 5.4 to 5.9
-and 4.5 to 4.8 vs 4.0 to 4.7; the Q8_K Q5_K kernel reads 7.1 to 7.5 when it runs first on its matrix and 5.1
-when second, against the Phase 3 binary's 4.0 to 4.5 (always second), so the only likely gain is that one,
-by 15 to 60 % depending on which position is compared. The Q8_0-grain Q5_K kernel with the table + bit-serial
-shift measured 3.9 to 4.3 against 5.9 to 6.3 for the Phase 3 form in the same position, so it keeps the
-Phase 3 body; the same rewrite that helps the Q8_K kernel hurts this one, and neither direction is
-explained. Two measurement facts that a reader of any kernel number on this box must know: (1) at one
-thread, whichever activation form runs second on the Q5_K matrix reads about 30 % lower, in both binaries
-and both orders (Q4_K and Q6_K do not show it); (2) in the sustained `bench kernels` runs the all-core turbo
-budget is spent a few seconds in, so the first configuration of a run (Q4_K, first act form) reads 18 to 24
-GB/s at 6 threads and everything after it 6 to 11, whichever binary. The gate (>= 50 % of the same-state
-membw at 5120 x 5120 for the production Q5_K / Q6_K kernels) therefore reads 23 to 26 % (Q5_K) and 27 to
-35 % (Q6_K) sustained in all three rounds, Q4_K 66 to 76 %, and at 17408 x 5120 Q5_K 42 to 50 %, Q6_K 48 to
-53 %, Q4_K 59 to 73 % (`docs/data/bench_rounds.log`, membw 27.3 / 31.6 / 32.0 in the three rounds); the
-burst A/B in the same minutes put the same single-row kernels at 27 to 34 GB/s at 6 threads on 17408 x
-5120, at or above membw. Read together: the kernels are memory-bound when the clock is available and the box
-cannot sustain the clock under a runaway service at its thermal limit (finding 47). The gate is not
-demonstrated; it is not refuted either, and it has to be re-run with the service restarted, which the
-protocol script makes a one-line job.
+tail, because those kernels had never exceeded 35 % of membw at the 5120 x 5120 gate shape. Measured on a
+machine whose load was measured correctly (finding 47), the premise was wrong: **the kernels were already
+memory-bound**. Three rounds of `tools/bench_rounds.ps1` (plugged in, 5 minutes idle, membw then kernels back
+to back, every round filed, other load 0.09 to 0.23 of 12 cores throughout) give, at 6 threads and 5120 x
+5120, Q5_K **74 to 79 %** of that round's membw and Q6_K **84 to 85 %** (Q4_K 68 to 77 %); at 17408 x 5120,
+Q5_K 76 to 85 %, Q6_K 81 to 89 %, Q4_K 75 to 83 % (`docs/data/kernels_bench.txt`). The 50 % gate is met with
+room, on the production activation format, at the shape that was failing.
 
-## 50. End to end on the production config: the same `capital` text, a different but correct Fibonacci, 23 to 26 % of membw under the runaway service
+What the two proposed changes actually did:
 
-`tests/phase3_e2e.rs` on the production config (Q8_K activations, two-row kernels, 12 threads;
-`docs/data/phase3_timing.txt`): the batched prefill is bit-identical to the sequential feed on every prompt
-(hidden, logits, state, cache all 0), the last-position logits sit 0.362 / 0.281 / 0.357 from ref_gguf,
-exactly the parity harness's numbers (the resident model and the streamed harness compute the same bits),
-against ceilings 0.725 / 0.561 / 0.715; argmax per position 5/5, 4/4, 37/39, the two `sentence` flips at
-positions 26 (ours 491 vs ref 685, our top-1/top-2 margin 0.18) and 29 (23540 vs 2627, margin 0.067), both
-with the reference token as our runner-up. Greedy vs llama.cpp: `capital` 16/16 (the Phase 3 text, verbatim),
-`fib` 6/16 where the Q8_0 path had 16/16: at step 6 ours (" 1") beats llama.cpp's (" 0") by 0.095 and the
-continuation is `if n <= 1: return n ... return fibonacci(n-1) + fibonacci(n-2)`, a different correct
-Fibonacci; `sentence` 5/16 as before, margin 0.024 at the split ("glaciers" vs "rivers"), text coherent. So
-the Q8_K path loses one token-equality match that the Q8_0 path had by luck (a 0.06 to 0.10 margin at that
-step in both runs), inside finding 42's coin-toss reading; `--ids` against the reference logits stays the
-test channel. Timing: load 30.8 s, prefill 1.2 to 1.7 tok/s (Phase 3: 1.9 to 2.4), decode 2.24 to 2.51 s per
-token = 6.7 to 7.5 GB/s = 23 to 26 % of the 28.9 GB/s membw, with bthserv at 9 to 10 cores throughout
-(finding 47); peak RSS 17.977 GB against 17.686 expected, ratio 1.016. The >= 60 % end-to-end target is not
-met and cannot be judged on this box until the service is restarted; the kernel rounds (finding 49) say the
-same.
+- **Two rows per pass** (`dot2_*`, both activation forms, checked bit-identical on 900 random row pairs and
+  through `matvec` at 1 / 2 / 7 / 64 rows and 1 / 3 / 12 threads) is **slower**: an in-process interleaved
+  A/B, the two variants alternated 21 times per line and medians compared, made it slower on 51 of 54 lines,
+  ratio 0.65 to 1.16 and mostly 0.85 to 0.95, worst for Q6_K, at one thread as much as at six
+  (`docs/data/two_row_ab.log`). That is what a memory-bound kernel should do: sharing the activation loads
+  between two rows saves work the machine was not waiting on, while two rows of unpacked codes and two
+  accumulator sets exceed the 16 ymm registers. It was removed; rows stay one per pass.
+- **The factor tables**, the two-mask Q6_K unpack and the fixed Q5_K high-bit shift are kept and are
+  bit-identical to Phase 3. Alternating the Phase 3 and 3.5 binaries at one thread
+  (`docs/data/phase3_5_single_thread.log`) puts them inside this box's noise for Q4_K and Q6_K (7.5 to 7.9
+  against 7.5 to 7.7, and 5.7 to 6.0 against 5.4 to 5.9 GB/s); the Q8_K Q5_K kernel is the one clear win,
+  7.1 to 7.5 against 4.0 to 4.5. The same rewrite applied to the Q8_0-grain Q5_K kernel measured *slower*
+  (3.9 to 4.3 against 5.9 to 6.3), so that kernel keeps its Phase 3 body. Neither direction is explained;
+  there is no profiler on this box.
+
+One measurement effect in the first (discarded) bench run does not reproduce here: numbers there decayed
+within a run, the first configuration reading 18 to 24 GB/s and everything after it 6 to 11. In these three
+rounds there is no such decay (round 1 at 5120 runs 21.7, 19.9, 19.5, 21.5, 24.2, 24.8 GB/s in issue order,
+ending on its fastest). The likely cause is that the old script's own instrumentation -- a full WMI process
+enumeration plus `Get-Counter` calls against a broken counter subsystem, between every step -- was loading
+the machine it was trying to observe; that is not proven, and the old numbers are superseded rather than
+explained. The single-thread and A/B comparisons above are unaffected either way, because both alternate the
+variants under whatever the machine is doing.
+
+## 50. End to end on the production config: 1.15 s per token, 46 % of memory bandwidth, and the remaining 40 % of the token is not matvec
+
+`tests/phase3_e2e.rs` on the production config (Q8_K activations, 6 threads; `docs/data/phase3_timing.txt`,
+membw 31.6 GB/s measured in the same session). **Correctness**, unchanged from the parity harness and
+identical at 6 and 12 threads: the batched prefill is bit-identical to the sequential feed on every prompt
+(hidden, logits, state, cache all 0); last-position logits 0.362 / 0.281 / 0.357 from ref_gguf, exactly the
+streamed harness's numbers, against ceilings 0.725 / 0.561 / 0.715; argmax per position 5/5, 4/4, 37/39, the
+two `sentence` flips at positions 26 (ours 491 vs ref 685, margin 0.18) and 29 (23540 vs 2627, margin 0.067),
+both with the reference token as our runner-up. Greedy vs llama.cpp: `capital` 16/16 (the Phase 3 text
+verbatim), `fib` 6/16 where the Q8_0 path had 16/16 (at step 6 ours " 1" beats " 0" by 0.095 and the
+continuation is `if n <= 1: return n ... fibonacci(n-1) + fibonacci(n-2)`, a different correct Fibonacci),
+`sentence` 5/16 with a 0.024 margin at the split; text coherent on all three. So the Q8_K path loses one
+token-equality match the Q8_0 path had by luck, inside finding 42's coin-toss reading.
+
+**Speed**: load 22.4 s; prefill 1.7 to 2.0 tok/s; decode **1.151 / 1.154 / 1.178 s per token = 14.60 / 14.56
+/ 14.27 GB/s = 45 to 46 % of membw**; peak RSS 17.975 GB against 17.686 expected, ratio 1.016. The same test
+at 12 threads on the same quiet machine gives 1.443 / 1.454 / 1.446 s per token (11.6 GB/s, 37 %), so the
+physical-core default is worth 25 % end to end -- more than the 10 % the kernels alone show (finding 51),
+because the non-matvec work contends on SMT siblings too. Against Phase 3's best (1.403 to 1.562 s per
+token) this is 1.22 to 1.36 x faster per token.
+
+**The >= 60 % end-to-end target is not met, at 45 to 46 %, and the kernels are not the reason.** At 6 threads
+they run at 75 to 89 % of membw on the 17408 x 5120 shape (finding 49). At the file's type mix (58 % Q4_K,
+33 % Q6_K, 4.5 % Q8_0, 2.3 % Q5_K, 1.3 % Q4_0) and those measured per-type rates, the matvecs of one token
+account for about **0.69 s of the measured 1.15 s**. The other ~0.46 s per token, 40 % of the token, is the
+work the dot kernels do not cover: 48 DeltaNet recurrence steps of 48 x 128 x 128 f32 (still scalar,
+`docs/simd.md`), the causal conv, the norms and the per-token allocations. Closing that is the next speed
+item, and it is exactly what the Phase 3 report predicted would become visible once the kernels reached the
+bus. A 60 % token needs about 0.89 s, so roughly 0.26 s has to come out of that 0.46 s of non-matvec work.
+
+## 51. Six threads beat twelve on every K-quant kernel and on memory bandwidth itself, so the engine defaults to physical cores
+
+On this 6-core / 12-thread i7-9750H, running the matvec on all 12 hardware threads is slower than running it
+on 6 for every K-quant kernel: 35 of the 36 K-quant lines across three rounds, two shapes and both activation
+forms (the exception is one tie, 21.97 against 21.99 GB/s). At 5120 x 5120 with Q8_K activations the gap is
+Q4_K 68 to 77 % of membw at 6 threads against 64 to 68 % at 12, Q5_K 74 to 79 % against 65 to 69 %, Q6_K 84
+to 85 % against 69 to 75 %. The `membw` benchmark itself, which is nothing but AVX2 loads and adds, shows the
+same: 29.1 / 32.3 / 31.6 GB/s at 6 threads against 26.8 / 32.3 / 30.6 at 12. Two hardware threads on one core
+share its load ports, its L1 and its line-fill buffers; a kernel that is already waiting on DRAM gains no
+outstanding misses from the second thread and pays for the contention.
+
+So `aqueduct run` and `bench` default to the **physical** core count, and `--threads N` overrides
+(`crates/core/src/cpu.rs`: `GetLogicalProcessorInformationEx(RelationProcessorCore, ..)` on Windows, the
+distinct `thread_siblings_list` values under `/sys/devices/system/cpu/cpu*/topology` on Linux,
+`available_parallelism` as the fallback everywhere else). The determinism contract is untouched: the pool
+partitions rows the same way at any participant count, so nothing about the output moves with the default.
+The two `tests/phase3_e2e.rs` runs behind finding 50, at 6 and at 12 threads, agree on every number that is
+not a clock: the same logits vs ref_gguf (0.3623 / 0.2807 / 0.3573), the same argmax at every prompt
+position, hidden and state max|diff| 0, and the same 32 generated ids for all three prompts.
+
+Two kernels prefer 12 threads, and the decision deliberately ignores them: Q4_0 (26 to 30 % of membw at 6
+threads, 29 to 40 % at 12) and Q8_0 weights (52 to 63 % against 56 to 70 %). Both are still compute-bound and
+far enough from the bus that a second thread per core finds work to do. Together they are 5.8 % of this file
+against 93 % for the K-quants, so the default follows the K-quants; a file with a different mix would want
+the opposite, which is what `--threads` is for.
+

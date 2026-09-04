@@ -1,356 +1,249 @@
-﻿# bench_rounds 2026-09-04 02:00:04: exe target\release\aqueduct.exe, baseline C:\Users\manee\AppData\Local\Temp\scratch\d--Aqueduct\63f06c60-32ce-44c6-8d06-2b144263dcdd\scratchpad\aqueduct_p3.exe, rounds 3, idle 300 s
-# cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-# state [before idle] 02:00:13: thermal zone 96.9 C, clock 122 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 957%, Taskmgr 56%, NordVPN 51%
-# state [after idle] 02:05:17: thermal zone 96.9 C, clock 123 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 941%, NordVPN 65%, chrome#16 65%
+﻿# bench_rounds 2026-09-04 12:47:26: exe target\release\aqueduct.exe, rounds 3, idle 300 s, load sample 2 s
+# cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz (12 logical processors)
+# 'other load' is a GetProcessTimes delta over the sample window, NOT a performance counter (see the header of this script).
+# state [before idle] 12:47:30: other load 0.57 of 12 cores (4.7 % of the machine) over 2.0 s; busiest: Cursor 31 %, Cursor 12 %, powershell 3 %; ac power True
+# state [after idle] 12:52:32: other load 0.21 of 12 cores (1.8 % of the machine) over 2.0 s; busiest: Cursor 9 %, powershell 2 %, NordVPN 2 %; ac power True
 # ==== round 1 of 3 ====
 # > target\release\aqueduct.exe bench membw --runs 3
-# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; hardware threads 12
-# fill + first pass: 1.37 s
+# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; 6 physical cores, 12 logical
+# fill + first pass: 1.35 s
 threads   best GB/s worst GB/s   runs (GB/s)
-1             15.51      14.24   15.51 14.75 14.24
-6             27.34      26.51   26.51 27.34 26.93
-12            27.16      26.31   27.16 26.31 26.73
-# state [after membw] 02:05:24: thermal zone 95.9 C, clock 123 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 930%, System 89%, NordVPN 49%
+1             14.66      13.48   14.66 14.34 13.48
+6             29.13      28.53   28.99 29.13 28.53
+12            26.77      24.34   26.77 24.34 24.76
+# state [after membw] 12:52:37: other load 0.42 of 12 cores (3.5 % of the machine) over 2.0 s; busiest: Cursor 20 %, code-agent 4 %, powershell 3 %; ac power True
 # > target\release\aqueduct.exe bench kernels --rows 5120 --cols 5120 --no-scalar
-# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
+# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (6 physical cores, 12 logical; the engine defaults to 6); avx2+f16c detected: true
 # matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
 # act: q8_k = ggml's Q8_K activations (the production path for K-quant weights, Phase 3.5); q8_0 = Q8_0 activations (--q8-fine for K-quants; the only form for Q8_0 / Q4_0 weights)
 kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
-Q4_K     q8_k  avx2       1         2.37       6.22      11.05
-Q4_K     q8_k  avx2       6         0.82      18.05      32.08
-Q4_K     q8_k  avx2      12         0.94      15.69      27.90
-Q4_K     q8_0  avx2       1         7.01       2.10       3.74
-Q4_K     q8_0  avx2       6         2.60       5.68      10.09
-Q4_K     q8_0  avx2      12         2.47       5.97      10.62
-Q5_K     q8_k  avx2       1         5.45       3.31       4.81
-Q5_K     q8_k  avx2       6         2.93       6.16       8.96
-Q5_K     q8_k  avx2      12         2.84       6.34       9.22
-Q5_K     q8_0  avx2       1         5.10       3.53       5.14
-Q5_K     q8_0  avx2       6         2.80       6.43       9.35
-Q5_K     q8_0  avx2      12         2.82       6.40       9.31
-Q6_K     q8_k  avx2       1         5.34       4.03       4.91
-Q6_K     q8_k  avx2       6         2.74       7.86       9.58
-Q6_K     q8_k  avx2      12         3.01       7.13       8.70
-Q6_K     q8_0  avx2       1         7.65       2.81       3.43
-Q6_K     q8_0  avx2       6         3.13       6.87       8.37
-Q6_K     q8_0  avx2      12         2.99       7.20       8.78
-Q8_0     q8_0  avx2       1         9.78       2.85       2.68
-Q8_0     q8_0  avx2       6         3.78       7.37       6.94
-Q8_0     q8_0  avx2      12         3.51       7.93       7.47
-Q4_0     q8_0  avx2       1        10.42       1.41       2.52
-Q4_0     q8_0  avx2       6         3.85       3.83       6.81
-Q4_0     q8_0  avx2      12         3.92       3.76       6.68
+Q4_K     q8_0  avx2       1         2.36       6.24      11.09
+Q4_K     q8_0  avx2       6         0.68      21.67      38.52
+Q4_K     q8_0  avx2      12         0.71      20.74      36.86
+Q4_K     q8_k  avx2       1         2.13       6.91      12.29
+Q4_K     q8_k  avx2       6         0.74      19.91      35.40
+Q4_K     q8_k  avx2      12         0.75      19.53      34.73
+Q5_K     q8_0  avx2       1         3.08       5.85       8.51
+Q5_K     q8_0  avx2       6         0.93      19.48      28.33
+Q5_K     q8_0  avx2      12         0.93      19.35      28.15
+Q5_K     q8_k  avx2       1         2.43       7.40      10.77
+Q5_K     q8_k  avx2       6         0.84      21.45      31.20
+Q5_K     q8_k  avx2      12         0.95      19.06      27.72
+Q6_K     q8_0  avx2       1         3.03       7.10       8.65
+Q6_K     q8_0  avx2       6         0.89      24.23      29.53
+Q6_K     q8_0  avx2      12         1.07      20.04      24.43
+Q6_K     q8_k  avx2       1         2.50       8.61      10.50
+Q6_K     q8_k  avx2       6         0.87      24.78      30.21
+Q6_K     q8_k  avx2      12         0.99      21.76      26.53
+Q8_0     q8_0  avx2       1         6.05       4.61       4.33
+Q8_0     q8_0  avx2       6         1.60      17.40      16.38
+Q8_0     q8_0  avx2      12         1.63      17.05      16.05
+Q4_0     q8_0  avx2       1         6.22       2.37       4.22
+Q4_0     q8_0  avx2       6         1.68       8.77      15.60
+Q4_0     q8_0  avx2      12         1.55       9.50      16.89
 
 row kernel   path          us/row    GB/s in
-q8_quantize  avx2           16.73       1.22
-q8k_quantize avx2           11.65       1.76
-rmsnorm      avx2            4.17       4.91
-softmax      avx2           88.44       0.23
-# state [after kernels 5120] 02:05:55: thermal zone 96.9 C, clock 122 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 1033%, NordVPN 60%, Taskmgr 40%
-# > C:\Users\manee\AppData\Local\Temp\scratch\d--Aqueduct\63f06c60-32ce-44c6-8d06-2b144263dcdd\scratchpad\aqueduct_p3.exe bench kernels --rows 5120 --cols 5120 --no-scalar
-# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
-# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
-# act: q8_0 = Q8_0 activations (the production path for every type); q8_k = ggml's Q8_K activations (opt-in for K-quants)
-kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
-Q4_K     q8_0  avx2       1         2.58       5.72      10.17
-Q4_K     q8_0  avx2       6         0.76      19.45      34.57
-Q4_K     q8_0  avx2      12         0.79      18.75      33.33
-Q4_K     q8_k  avx2       1         3.15       4.67       8.31
-Q4_K     q8_k  avx2       6         1.92       7.69      13.67
-Q4_K     q8_k  avx2      12         2.16       6.83      12.15
-Q5_K     q8_0  avx2       1         4.85       3.72       5.41
-Q5_K     q8_0  avx2       6         2.42       7.43      10.81
-Q5_K     q8_0  avx2      12         2.66       6.78       9.86
-Q5_K     q8_k  avx2       1         4.60       3.92       5.70
-Q5_K     q8_k  avx2       6         2.29       7.87      11.45
-Q5_K     q8_k  avx2      12         2.56       7.05      10.26
-Q6_K     q8_0  avx2       1         6.02       3.57       4.35
-Q6_K     q8_0  avx2       6         2.76       7.78       9.49
-Q6_K     q8_0  avx2      12         3.06       7.03       8.57
-Q6_K     q8_k  avx2       1         4.49       4.79       5.84
-Q6_K     q8_k  avx2       6         3.01       7.14       8.71
-Q6_K     q8_k  avx2      12         2.97       7.25       8.84
-Q8_0     q8_0  avx2       1         9.64       2.89       2.72
-Q8_0     q8_0  avx2       6         3.77       7.38       6.95
-Q8_0     q8_0  avx2      12         3.59       7.75       7.30
-Q4_0     q8_0  avx2       1        10.56       1.40       2.48
-Q4_0     q8_0  avx2       6         3.91       3.77       6.70
-Q4_0     q8_0  avx2      12         3.48       4.23       7.52
-
-row kernel   path          us/row    GB/s in
-q8_quantize  avx2           16.28       1.26
-q8k_quantize avx2           11.80       1.74
-rmsnorm      avx2            4.07       5.03
-softmax      avx2           87.89       0.23
-# state [after baseline kernels 5120] 02:06:25: thermal zone 96.9 C, clock 122 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 1004%, chrome#15 66%, NordVPN 66%
+q8_quantize  avx2           10.29       1.99
+q8k_quantize avx2            7.02       2.92
+rmsnorm      avx2            2.08       9.85
+softmax      avx2           54.88       0.37
+# state [after kernels 5120] 12:53:06: other load 0.09 of 12 cores (0.7 % of the machine) over 2.0 s; busiest: powershell 2 %, Cursor 2 %, Taskmgr 2 %; ac power True
 # > target\release\aqueduct.exe bench kernels --rows 17408 --cols 5120 --no-scalar
-# aqueduct bench kernels: rows=17408 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
+# aqueduct bench kernels: rows=17408 cols=5120 reps>=3, threads [1, 6, 12] (6 physical cores, 12 logical; the engine defaults to 6); avx2+f16c detected: true
 # matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
 # act: q8_k = ggml's Q8_K activations (the production path for K-quant weights, Phase 3.5); q8_0 = Q8_0 activations (--q8-fine for K-quants; the only form for Q8_0 / Q4_0 weights)
 kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
-Q4_K     q8_k  avx2       1         7.85       6.38      11.35
-Q4_K     q8_k  avx2       6         2.51      19.95      35.47
-Q4_K     q8_k  avx2      12         2.71      18.49      32.87
-Q4_K     q8_0  avx2       1        15.09       3.32       5.91
-Q4_K     q8_0  avx2       6         4.88      10.27      18.26
-Q4_K     q8_0  avx2      12         4.80      10.44      18.56
-Q5_K     q8_k  avx2       1        16.17       3.79       5.51
-Q5_K     q8_k  avx2       6         5.33      11.50      16.73
-Q5_K     q8_k  avx2      12         4.99      12.27      17.85
-Q5_K     q8_0  avx2       1        17.84       3.43       4.99
-Q5_K     q8_0  avx2       6         5.92      10.36      15.06
-Q5_K     q8_0  avx2      12         5.05      12.13      17.64
-Q6_K     q8_k  avx2       1        16.97       4.31       5.25
-Q6_K     q8_k  avx2       6         6.52      11.21      13.66
-Q6_K     q8_k  avx2      12         5.63      12.99      15.83
-Q6_K     q8_0  avx2       1        25.45       2.87       3.50
-Q6_K     q8_0  avx2       6         6.95      10.52      12.83
-Q6_K     q8_0  avx2      12         5.76      12.68      15.46
-Q8_0     q8_0  avx2       1        34.62       2.74       2.57
-Q8_0     q8_0  avx2       6         9.43      10.04       9.45
-Q8_0     q8_0  avx2      12         7.70      12.31      11.58
-Q4_0     q8_0  avx2       1        35.99       1.39       2.48
-Q4_0     q8_0  avx2       6         9.40       5.33       9.48
-Q4_0     q8_0  avx2      12         8.20       6.11      10.86
+Q4_K     q8_0  avx2       1         8.04       6.24      11.09
+Q4_K     q8_0  avx2       6         2.15      23.34      41.49
+Q4_K     q8_0  avx2      12         2.19      22.85      40.63
+Q4_K     q8_k  avx2       1         6.84       7.33      13.04
+Q4_K     q8_k  avx2       6         2.07      24.21      43.04
+Q4_K     q8_k  avx2      12         2.33      21.54      38.29
+Q5_K     q8_0  avx2       1        10.14       6.04       8.79
+Q5_K     q8_0  avx2       6         2.79      21.97      31.95
+Q5_K     q8_0  avx2      12         2.79      21.99      31.98
+Q5_K     q8_k  avx2       1         8.29       7.39      10.75
+Q5_K     q8_k  avx2       6         2.46      24.87      36.17
+Q5_K     q8_k  avx2      12         2.68      22.86      33.24
+Q6_K     q8_0  avx2       1        10.02       7.30       8.89
+Q6_K     q8_0  avx2       6         3.11      23.54      28.69
+Q6_K     q8_0  avx2      12         3.26      22.40      27.30
+Q6_K     q8_k  avx2       1         8.81       8.30      10.12
+Q6_K     q8_k  avx2       6         2.83      25.83      31.49
+Q6_K     q8_k  avx2      12         3.01      24.27      29.58
+Q8_0     q8_0  avx2       1        20.75       4.56       4.30
+Q8_0     q8_0  avx2       6         5.19      18.26      17.19
+Q8_0     q8_0  avx2      12         4.68      20.25      19.06
+Q4_0     q8_0  avx2       1        21.57       2.32       4.13
+Q4_0     q8_0  avx2       6         5.59       8.97      15.94
+Q4_0     q8_0  avx2      12         4.30      11.67      20.75
 
 row kernel   path          us/row    GB/s in
-q8_quantize  avx2           18.46       1.11
-q8k_quantize avx2           12.04       1.70
-rmsnorm      avx2            3.89       5.27
-softmax      avx2           90.09       0.23
-# state [after kernels 17408] 02:06:58: thermal zone 96.9 C, clock 121 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 1043%, NordVPN 102%, Taskmgr 46%
+q8_quantize  avx2           10.41       1.97
+q8k_quantize avx2            7.20       2.84
+rmsnorm      avx2            2.35       8.70
+softmax      avx2           54.67       0.37
+# state [after kernels 17408] 12:53:36: other load 0.12 of 12 cores (1.0 % of the machine) over 2.0 s; busiest: powershell 2 %, Taskmgr 2 %, vctip 2 %; ac power True
 # ==== round 2 of 3 ====
 # > target\release\aqueduct.exe bench membw --runs 3
-# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; hardware threads 12
-# fill + first pass: 1.28 s
+# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; 6 physical cores, 12 logical
+# fill + first pass: 1.33 s
 threads   best GB/s worst GB/s   runs (GB/s)
-1             16.67      15.83   16.67 15.83 16.02
-6             31.60      28.93   30.28 31.60 28.93
-12            28.07      26.86   26.86 27.51 28.07
-# state [after membw] 02:07:04: thermal zone 96.9 C, clock 121 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 992%, NordVPN 93%, Taskmgr 46%
+1             17.17      16.73   16.73 17.17 16.74
+6             32.31      30.57   32.31 31.48 30.57
+12            32.28      29.10   32.28 29.10 29.70
+# state [after membw] 12:53:40: other load 0.16 of 12 cores (1.3 % of the machine) over 2.0 s; busiest: powershell 3 %, Taskmgr 3 %, Cursor 2 %; ac power True
 # > target\release\aqueduct.exe bench kernels --rows 5120 --cols 5120 --no-scalar
-# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
+# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (6 physical cores, 12 logical; the engine defaults to 6); avx2+f16c detected: true
 # matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
 # act: q8_k = ggml's Q8_K activations (the production path for K-quant weights, Phase 3.5); q8_0 = Q8_0 activations (--q8-fine for K-quants; the only form for Q8_0 / Q4_0 weights)
 kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
-Q4_K     q8_k  avx2       1         2.08       7.10      12.63
-Q4_K     q8_k  avx2       6         0.62      23.90      42.49
-Q4_K     q8_k  avx2      12         0.65      22.58      40.15
-Q4_K     q8_0  avx2       1         4.45       3.32       5.89
-Q4_K     q8_0  avx2       6         2.31       6.40      11.37
-Q4_K     q8_0  avx2      12         2.38       6.19      11.01
-Q5_K     q8_k  avx2       1         4.30       4.19       6.10
-Q5_K     q8_k  avx2       6         2.33       7.74      11.25
-Q5_K     q8_k  avx2      12         2.50       7.20      10.48
-Q5_K     q8_0  avx2       1         5.41       3.33       4.85
-Q5_K     q8_0  avx2       6         2.51       7.17      10.43
-Q5_K     q8_0  avx2      12         2.58       6.98      10.15
-Q6_K     q8_k  avx2       1         4.94       4.35       5.30
-Q6_K     q8_k  avx2       6         2.57       8.36      10.20
-Q6_K     q8_k  avx2      12         2.62       8.21      10.01
-Q6_K     q8_0  avx2       1         7.04       3.05       3.72
-Q6_K     q8_0  avx2       6         3.03       7.10       8.66
-Q6_K     q8_0  avx2      12         3.17       6.79       8.28
-Q8_0     q8_0  avx2       1        10.48       2.66       2.50
-Q8_0     q8_0  avx2       6         5.47       5.10       4.80
-Q8_0     q8_0  avx2      12         3.93       7.09       6.68
-Q4_0     q8_0  avx2       1        10.68       1.38       2.46
-Q4_0     q8_0  avx2       6         4.71       3.13       5.56
-Q4_0     q8_0  avx2      12         3.64       4.05       7.21
+Q4_K     q8_0  avx2       1         2.34       6.29      11.19
+Q4_K     q8_0  avx2       6         0.64      23.04      40.96
+Q4_K     q8_0  avx2      12         0.67      22.05      39.19
+Q4_K     q8_k  avx2       1         1.96       7.51      13.35
+Q4_K     q8_k  avx2       6         0.60      24.72      43.94
+Q4_K     q8_k  avx2      12         0.67      22.02      39.15
+Q5_K     q8_0  avx2       1         2.87       6.29       9.15
+Q5_K     q8_0  avx2       6         0.84      21.51      31.29
+Q5_K     q8_0  avx2      12         0.98      18.31      26.63
+Q5_K     q8_k  avx2       1         2.39       7.54      10.96
+Q5_K     q8_k  avx2       6         0.74      24.37      35.45
+Q5_K     q8_k  avx2      12         0.81      22.22      32.32
+Q6_K     q8_0  avx2       1         2.95       7.28       8.88
+Q6_K     q8_0  avx2       6         0.88      24.38      29.72
+Q6_K     q8_0  avx2      12         0.97      22.11      26.96
+Q6_K     q8_k  avx2       1         2.41       8.93      10.89
+Q6_K     q8_k  avx2       6         0.78      27.54      33.57
+Q6_K     q8_k  avx2      12         0.96      22.41      27.31
+Q8_0     q8_0  avx2       1         6.11       4.56       4.29
+Q8_0     q8_0  avx2       6         1.65      16.92      15.92
+Q8_0     q8_0  avx2      12         1.52      18.35      17.27
+Q4_0     q8_0  avx2       1         6.30       2.34       4.16
+Q4_0     q8_0  avx2       6         1.77       8.34      14.83
+Q4_0     q8_0  avx2      12         1.56       9.45      16.79
 
 row kernel   path          us/row    GB/s in
-q8_quantize  avx2           17.47       1.17
-q8k_quantize avx2           11.72       1.75
-rmsnorm      avx2            3.77       5.43
-softmax      avx2           97.38       0.21
-# state [after kernels 5120] 02:07:34: thermal zone 95.9 C, clock 126 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 949%, chrome#9 78%, dwm 31%
-# > C:\Users\manee\AppData\Local\Temp\scratch\d--Aqueduct\63f06c60-32ce-44c6-8d06-2b144263dcdd\scratchpad\aqueduct_p3.exe bench kernels --rows 5120 --cols 5120 --no-scalar
-# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
-# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
-# act: q8_0 = Q8_0 activations (the production path for every type); q8_k = ggml's Q8_K activations (opt-in for K-quants)
-kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
-Q4_K     q8_0  avx2       1         2.45       6.01      10.69
-Q4_K     q8_0  avx2       6         1.03      14.36      25.53
-Q4_K     q8_0  avx2      12         0.78      18.95      33.69
-Q4_K     q8_k  avx2       1         2.60       5.67      10.08
-Q4_K     q8_k  avx2       6         1.45      10.16      18.06
-Q4_K     q8_k  avx2      12         1.59       9.30      16.54
-Q5_K     q8_0  avx2       1         4.51       4.00       5.81
-Q5_K     q8_0  avx2       6         1.98       9.08      13.21
-Q5_K     q8_0  avx2      12         2.13       8.44      12.28
-Q5_K     q8_k  avx2       1         4.26       4.23       6.15
-Q5_K     q8_k  avx2       6         2.94       6.12       8.90
-Q5_K     q8_k  avx2      12         2.20       8.18      11.90
-Q6_K     q8_0  avx2       1        13.26       1.62       1.98
-Q6_K     q8_0  avx2       6         9.11       2.36       2.88
-Q6_K     q8_0  avx2      12         4.30       5.01       6.10
-Q6_K     q8_k  avx2       1         7.06       3.04       3.71
-Q6_K     q8_k  avx2       6         4.55       4.73       5.76
-Q6_K     q8_k  avx2      12         3.59       5.99       7.31
-Q8_0     q8_0  avx2       1        12.57       2.22       2.09
-Q8_0     q8_0  avx2       6         5.05       5.51       5.19
-Q8_0     q8_0  avx2      12         2.91       9.57       9.01
-Q4_0     q8_0  avx2       1         9.91       1.49       2.64
-Q4_0     q8_0  avx2       6         6.24       2.36       4.20
-Q4_0     q8_0  avx2      12         3.29       4.48       7.97
-
-row kernel   path          us/row    GB/s in
-q8_quantize  avx2           13.70       1.49
-q8k_quantize avx2            9.79       2.09
-rmsnorm      avx2            3.52       5.82
-softmax      avx2          100.09       0.20
-# state [after baseline kernels 5120] 02:08:05: thermal zone 95.9 C, clock 125 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 940%, chrome#15 115%, chrome 20%
+q8_quantize  avx2           10.36       1.98
+q8k_quantize avx2            7.16       2.86
+rmsnorm      avx2            2.26       9.05
+softmax      avx2           54.45       0.38
+# state [after kernels 5120] 12:54:09: other load 0.12 of 12 cores (1.0 % of the machine) over 2.0 s; busiest: powershell 3 %, Cursor 2 %, Taskmgr 2 %; ac power True
 # > target\release\aqueduct.exe bench kernels --rows 17408 --cols 5120 --no-scalar
-# aqueduct bench kernels: rows=17408 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
+# aqueduct bench kernels: rows=17408 cols=5120 reps>=3, threads [1, 6, 12] (6 physical cores, 12 logical; the engine defaults to 6); avx2+f16c detected: true
 # matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
 # act: q8_k = ggml's Q8_K activations (the production path for K-quant weights, Phase 3.5); q8_0 = Q8_0 activations (--q8-fine for K-quants; the only form for Q8_0 / Q4_0 weights)
 kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
-Q4_K     q8_k  avx2       1         9.42       5.32       9.47
-Q4_K     q8_k  avx2       6         2.69      18.65      33.16
-Q4_K     q8_k  avx2      12         3.20      15.65      27.82
-Q4_K     q8_0  avx2       1        19.26       2.60       4.63
-Q4_K     q8_0  avx2       6         6.52       7.69      13.66
-Q4_K     q8_0  avx2      12         5.35       9.37      16.66
-Q5_K     q8_k  avx2       1        12.85       4.77       6.93
-Q5_K     q8_k  avx2       6         4.58      13.39      19.48
-Q5_K     q8_k  avx2      12         5.76      10.64      15.48
-Q5_K     q8_0  avx2       1        18.43       3.32       4.84
-Q5_K     q8_0  avx2       6         6.54       9.38      13.64
-Q5_K     q8_0  avx2      12         4.38      14.00      20.37
-Q6_K     q8_k  avx2       1        15.41       4.74       5.78
-Q6_K     q8_k  avx2       6         7.42       9.85      12.01
-Q6_K     q8_k  avx2      12         4.85      15.08      18.38
-Q6_K     q8_0  avx2       1        19.37       3.77       4.60
-Q6_K     q8_0  avx2       6         6.43      11.38      13.87
-Q6_K     q8_0  avx2      12         5.23      13.99      17.05
-Q8_0     q8_0  avx2       1        31.55       3.00       2.82
-Q8_0     q8_0  avx2       6         8.37      11.31      10.65
-Q8_0     q8_0  avx2      12         6.14      15.43      14.52
-Q4_0     q8_0  avx2       1        27.55       1.82       3.23
-Q4_0     q8_0  avx2       6         9.30       5.39       9.58
-Q4_0     q8_0  avx2      12         8.43       5.95      10.58
+Q4_K     q8_0  avx2       1         8.09       6.20      11.02
+Q4_K     q8_0  avx2       6         2.15      23.35      41.52
+Q4_K     q8_0  avx2      12         2.26      22.15      39.39
+Q4_K     q8_k  avx2       1         6.74       7.44      13.22
+Q4_K     q8_k  avx2       6         2.07      24.22      43.05
+Q4_K     q8_k  avx2      12         2.24      22.43      39.88
+Q5_K     q8_0  avx2       1         9.89       6.20       9.01
+Q5_K     q8_0  avx2       6         2.78      22.05      32.07
+Q5_K     q8_0  avx2      12         2.87      21.37      31.09
+Q5_K     q8_k  avx2       1         8.28       7.40      10.76
+Q5_K     q8_k  avx2       6         2.51      24.44      35.55
+Q5_K     q8_k  avx2      12         2.75      22.29      32.42
+Q6_K     q8_0  avx2       1        10.63       6.88       8.38
+Q6_K     q8_0  avx2       6         3.09      23.64      28.82
+Q6_K     q8_0  avx2      12         3.23      22.63      27.59
+Q6_K     q8_k  avx2       1         8.48       8.62      10.51
+Q6_K     q8_k  avx2       6         2.79      26.17      31.91
+Q6_K     q8_k  avx2      12         3.07      23.83      29.05
+Q8_0     q8_0  avx2       1        20.78       4.56       4.29
+Q8_0     q8_0  avx2       6         5.17      18.31      17.23
+Q8_0     q8_0  avx2      12         4.78      19.82      18.65
+Q4_0     q8_0  avx2       1        21.74       2.31       4.10
+Q4_0     q8_0  avx2       6         5.38       9.33      16.58
+Q4_0     q8_0  avx2      12         4.43      11.33      20.14
 
 row kernel   path          us/row    GB/s in
-q8_quantize  avx2           15.79       1.30
-q8k_quantize avx2           10.73       1.91
-rmsnorm      avx2            3.37       6.07
-softmax      avx2           76.92       0.27
-# state [after kernels 17408] 02:08:37: thermal zone 95.9 C, clock 123 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 1117%, chrome#13 46%, WmiPrvSE#1 10%
+q8_quantize  avx2           10.32       1.99
+q8k_quantize avx2            7.08       2.89
+rmsnorm      avx2            2.32       8.83
+softmax      avx2           54.29       0.38
+# state [after kernels 17408] 12:54:39: other load 0.16 of 12 cores (1.4 % of the machine) over 2.0 s; busiest: NordVPN 5 %, Taskmgr 3 %, powershell 3 %; ac power True
 # ==== round 3 of 3 ====
 # > target\release\aqueduct.exe bench membw --runs 3
-# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; hardware threads 12
-# fill + first pass: 1.34 s
+# aqueduct bench membw: 2 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; 6 physical cores, 12 logical
+# fill + first pass: 1.40 s
 threads   best GB/s worst GB/s   runs (GB/s)
-1             16.90      15.46   15.91 15.46 16.90
-6             30.28      27.50   27.50 30.28 29.41
-12            31.98      22.17   31.98 22.17 26.15
-# state [after membw] 02:08:43: thermal zone 95.9 C, clock 125 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 1106%, chrome#12 15%, WmiPrvSE#1 15%
+1             16.83      16.35   16.35 16.83 16.77
+6             31.59      29.74   31.42 31.59 29.74
+12            30.59      28.79   30.59 29.86 28.79
+# state [after membw] 12:54:43: other load 0.19 of 12 cores (1.6 % of the machine) over 2.0 s; busiest: Taskmgr 2 %, powershell 2 %, NordVPN 2 %; ac power True
 # > target\release\aqueduct.exe bench kernels --rows 5120 --cols 5120 --no-scalar
-# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
+# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (6 physical cores, 12 logical; the engine defaults to 6); avx2+f16c detected: true
 # matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
 # act: q8_k = ggml's Q8_K activations (the production path for K-quant weights, Phase 3.5); q8_0 = Q8_0 activations (--q8-fine for K-quants; the only form for Q8_0 / Q4_0 weights)
 kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
-Q4_K     q8_k  avx2       1         2.09       7.06      12.56
-Q4_K     q8_k  avx2       6         0.64      23.17      41.20
-Q4_K     q8_k  avx2      12         0.67      22.02      39.15
-Q4_K     q8_0  avx2       1         3.62       4.07       7.24
-Q4_K     q8_0  avx2       6         1.84       8.02      14.26
-Q4_K     q8_0  avx2      12         2.08       7.08      12.58
-Q5_K     q8_k  avx2       1         3.55       5.08       7.39
-Q5_K     q8_k  avx2       6         2.19       8.24      11.98
-Q5_K     q8_k  avx2      12         2.49       7.23      10.51
-Q5_K     q8_0  avx2       1         4.05       4.45       6.47
-Q5_K     q8_0  avx2       6         1.81       9.94      14.46
-Q5_K     q8_0  avx2      12         2.04       8.83      12.84
-Q6_K     q8_k  avx2       1         4.26       5.04       6.15
-Q6_K     q8_k  avx2       6         1.92      11.18      13.63
-Q6_K     q8_k  avx2      12         2.14      10.03      12.23
-Q6_K     q8_0  avx2       1         6.15       3.50       4.26
-Q6_K     q8_0  avx2       6         2.29       9.38      11.44
-Q6_K     q8_0  avx2      12         2.53       8.49      10.34
-Q8_0     q8_0  avx2       1         8.89       3.13       2.95
-Q8_0     q8_0  avx2       6         3.14       8.88       8.36
-Q8_0     q8_0  avx2      12         3.08       9.05       8.52
-Q4_0     q8_0  avx2       1         8.33       1.77       3.15
-Q4_0     q8_0  avx2       6         3.12       4.73       8.41
-Q4_0     q8_0  avx2      12         2.96       4.99       8.87
+Q4_K     q8_0  avx2       1         2.36       6.25      11.11
+Q4_K     q8_0  avx2       6         0.65      22.82      40.57
+Q4_K     q8_0  avx2      12         0.68      21.58      38.37
+Q4_K     q8_k  avx2       1         1.97       7.50      13.33
+Q4_K     q8_k  avx2       6         0.66      22.27      39.59
+Q4_K     q8_k  avx2      12         0.73      20.26      36.02
+Q5_K     q8_0  avx2       1         2.90       6.21       9.03
+Q5_K     q8_0  avx2       6         0.83      21.60      31.41
+Q5_K     q8_0  avx2      12         0.89      20.16      29.32
+Q5_K     q8_k  avx2       1         2.40       7.50      10.90
+Q5_K     q8_k  avx2       6         0.72      25.02      36.40
+Q5_K     q8_k  avx2      12         0.83      21.71      31.58
+Q6_K     q8_0  avx2       1         3.13       6.87       8.38
+Q6_K     q8_0  avx2       6         0.87      24.59      29.98
+Q6_K     q8_0  avx2      12         1.03      20.87      25.44
+Q6_K     q8_k  avx2       1         2.51       8.58      10.46
+Q6_K     q8_k  avx2       6         0.81      26.62      32.45
+Q6_K     q8_k  avx2      12         0.96      22.48      27.40
+Q8_0     q8_0  avx2       1         6.02       4.63       4.36
+Q8_0     q8_0  avx2       6         1.63      17.13      16.12
+Q8_0     q8_0  avx2      12         1.59      17.54      16.51
+Q4_0     q8_0  avx2       1         6.33       2.33       4.14
+Q4_0     q8_0  avx2       6         1.68       8.77      15.60
+Q4_0     q8_0  avx2      12         1.61       9.13      16.24
 
 row kernel   path          us/row    GB/s in
-q8_quantize  avx2           13.78       1.49
-q8k_quantize avx2            9.08       2.26
-rmsnorm      avx2            3.00       6.82
-softmax      avx2           70.50       0.29
-# state [after kernels 5120] 02:09:14: thermal zone 95.9 C, clock 126 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 1118%, WmiPrvSE#1 15%, chrome#12 15%
-# > C:\Users\manee\AppData\Local\Temp\scratch\d--Aqueduct\63f06c60-32ce-44c6-8d06-2b144263dcdd\scratchpad\aqueduct_p3.exe bench kernels --rows 5120 --cols 5120 --no-scalar
-# aqueduct bench kernels: rows=5120 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
-# matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
-# act: q8_0 = Q8_0 activations (the production path for every type); q8_k = ggml's Q8_K activations (opt-in for K-quants)
-kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
-Q4_K     q8_0  avx2       1         2.46       6.01      10.68
-Q4_K     q8_0  avx2       6         0.67      21.85      38.84
-Q4_K     q8_0  avx2      12         0.77      19.09      33.94
-Q4_K     q8_k  avx2       1         2.72       5.41       9.62
-Q4_K     q8_k  avx2       6         1.62       9.10      16.17
-Q4_K     q8_k  avx2      12         1.76       8.38      14.90
-Q5_K     q8_0  avx2       1         3.95       4.56       6.63
-Q5_K     q8_0  avx2       6         1.95       9.23      13.42
-Q5_K     q8_0  avx2      12         1.81       9.97      14.50
-Q5_K     q8_k  avx2       1         3.42       5.27       7.67
-Q5_K     q8_k  avx2       6         1.68      10.74      15.63
-Q5_K     q8_k  avx2      12         1.76      10.22      14.86
-Q6_K     q8_0  avx2       1         4.26       5.05       6.15
-Q6_K     q8_0  avx2       6         2.04      10.53      12.83
-Q6_K     q8_0  avx2      12         2.09      10.29      12.54
-Q6_K     q8_k  avx2       1         3.05       7.05       8.59
-Q6_K     q8_k  avx2       6         1.66      12.93      15.76
-Q6_K     q8_k  avx2      12         1.88      11.42      13.92
-Q8_0     q8_0  avx2       1         7.80       3.57       3.36
-Q8_0     q8_0  avx2       6         2.83       9.83       9.25
-Q8_0     q8_0  avx2      12         2.70      10.33       9.72
-Q4_0     q8_0  avx2       1         8.01       1.84       3.27
-Q4_0     q8_0  avx2       6         3.00       4.92       8.75
-Q4_0     q8_0  avx2      12         2.63       5.60       9.95
-
-row kernel   path          us/row    GB/s in
-q8_quantize  avx2           12.60       1.63
-q8k_quantize avx2            8.97       2.28
-rmsnorm      avx2            3.15       6.50
-softmax      avx2           80.41       0.25
-# state [after baseline kernels 5120] 02:09:45: thermal zone 96.9 C, clock 124 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 1067%, chrome#12 36%, System 25%
+q8_quantize  avx2           10.19       2.01
+q8k_quantize avx2            7.25       2.82
+rmsnorm      avx2            2.56       8.01
+softmax      avx2           54.68       0.37
+# state [after kernels 5120] 12:55:12: other load 0.23 of 12 cores (1.9 % of the machine) over 2.0 s; busiest: NordVPN 5 %, powershell 3 %, Taskmgr 2 %; ac power True
 # > target\release\aqueduct.exe bench kernels --rows 17408 --cols 5120 --no-scalar
-# aqueduct bench kernels: rows=17408 cols=5120 reps>=3, threads [1, 6, 12] (available 12); avx2+f16c detected: true
+# aqueduct bench kernels: rows=17408 cols=5120 reps>=3, threads [1, 6, 12] (6 physical cores, 12 logical; the engine defaults to 6); avx2+f16c detected: true
 # matvec: weight GB/s = rows * row_bytes / seconds per matvec (the bytes a projection streams per token)
 # act: q8_k = ggml's Q8_K activations (the production path for K-quant weights, Phase 3.5); q8_0 = Q8_0 activations (--q8-fine for K-quants; the only form for Q8_0 / Q4_0 weights)
 kernel   act   path     thr    ms/matvec       GB/s    Gelem/s
-Q4_K     q8_k  avx2       1         7.29       6.88      12.22
-Q4_K     q8_k  avx2       6         2.16      23.25      41.33
-Q4_K     q8_k  avx2      12         2.33      21.55      38.31
-Q4_K     q8_0  avx2       1        12.18       4.11       7.31
-Q4_K     q8_0  avx2       6         4.03      12.45      22.13
-Q4_K     q8_0  avx2      12         3.81      13.14      23.37
-Q5_K     q8_k  avx2       1        11.41       5.37       7.81
-Q5_K     q8_k  avx2       6         4.39      13.95      20.29
-Q5_K     q8_k  avx2      12         3.87      15.85      23.05
-Q5_K     q8_0  avx2       1        14.64       4.18       6.09
-Q5_K     q8_0  avx2       6         5.66      10.82      15.74
-Q5_K     q8_0  avx2      12         4.19      14.64      21.30
-Q6_K     q8_k  avx2       1        14.29       5.12       6.24
-Q6_K     q8_k  avx2       6         4.63      15.78      19.24
-Q6_K     q8_k  avx2      12         4.30      17.00      20.73
-Q6_K     q8_0  avx2       1        18.49       3.96       4.82
-Q6_K     q8_0  avx2       6         5.51      13.27      16.17
-Q6_K     q8_0  avx2      12         4.69      15.60      19.02
-Q8_0     q8_0  avx2       1        27.04       3.50       3.30
-Q8_0     q8_0  avx2       6         7.26      13.04      12.28
-Q8_0     q8_0  avx2      12         7.26      13.04      12.28
-Q4_0     q8_0  avx2       1        30.10       1.67       2.96
-Q4_0     q8_0  avx2       6         7.38       6.79      12.07
-Q4_0     q8_0  avx2      12         5.86       8.55      15.21
+Q4_K     q8_0  avx2       1         8.25       6.08      10.81
+Q4_K     q8_0  avx2       6         2.09      23.96      42.60
+Q4_K     q8_0  avx2      12         2.19      22.88      40.68
+Q4_K     q8_k  avx2       1         6.77       7.40      13.16
+Q4_K     q8_k  avx2       6         2.03      24.66      43.84
+Q4_K     q8_k  avx2      12         2.24      22.43      39.88
+Q5_K     q8_0  avx2       1        10.60       5.78       8.41
+Q5_K     q8_0  avx2       6         2.69      22.76      33.10
+Q5_K     q8_0  avx2      12         2.90      21.10      30.69
+Q5_K     q8_k  avx2       1         8.25       7.43      10.80
+Q5_K     q8_k  avx2       6         2.52      24.35      35.42
+Q5_K     q8_k  avx2      12         2.68      22.85      33.23
+Q6_K     q8_0  avx2       1         9.91       7.38       9.00
+Q6_K     q8_0  avx2       6         3.07      23.80      29.02
+Q6_K     q8_0  avx2      12         3.14      23.29      28.39
+Q6_K     q8_k  avx2       1         8.37       8.73      10.64
+Q6_K     q8_k  avx2       6         2.84      25.74      31.38
+Q6_K     q8_k  avx2      12         3.02      24.19      29.49
+Q8_0     q8_0  avx2       1        20.62       4.59       4.32
+Q8_0     q8_0  avx2       6         5.16      18.37      17.29
+Q8_0     q8_0  avx2      12         4.65      20.35      19.15
+Q4_0     q8_0  avx2       1        21.36       2.35       4.17
+Q4_0     q8_0  avx2       6         5.37       9.34      16.60
+Q4_0     q8_0  avx2      12         4.60      10.90      19.38
 
 row kernel   path          us/row    GB/s in
-q8_quantize  avx2           13.59       1.51
-q8k_quantize avx2            9.86       2.08
-rmsnorm      avx2            3.25       6.29
-softmax      avx2           86.85       0.24
-# state [after kernels 17408] 02:10:16: thermal zone 95.9 C, clock 126 % of nominal, cpu busy 100 %, ac power True, other load: svchost#7 1122%, chrome#12 25%, WmiPrvSE#1 15%
+q8_quantize  avx2           10.34       1.98
+q8k_quantize avx2            7.12       2.88
+rmsnorm      avx2            2.31       8.86
+softmax      avx2           55.14       0.37
+# state [after kernels 17408] 12:55:42: other load 0.17 of 12 cores (1.4 % of the machine) over 2.0 s; busiest: powershell 3 %, chrome 3 %, NordVPN 2 %; ac power True
 # done

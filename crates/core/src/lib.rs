@@ -3,6 +3,7 @@
 
 pub mod arch;
 pub mod config;
+pub mod cpu;
 pub mod gguf;
 pub mod kernels;
 pub mod layers;
@@ -13,6 +14,7 @@ pub mod tok;
 
 pub use arch::{arch_consts, stop_ids, ArchConsts};
 pub use config::{ConfigError, ModelConfig, MAPPING};
+pub use cpu::{logical_cores, physical_cores};
 pub use gguf::{layer_of, GgmlType, Gguf, GgufError, LayerSpan, TensorInfo, Value, ValueType};
 pub use quant::{dequantize, QuantError};
 pub use tok::{SpecialIds, Tok, TokError};
