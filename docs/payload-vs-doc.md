@@ -566,3 +566,24 @@ the run-to-run noise of a Q8 path: the activation rounding is the same size, its
 says "per layer", so the test takes the factor times the largest of the three prompts' 2b values as the
 layer's ceiling (5.6e-3 at layer 8, the failing value at 0.32 of it); the per-prompt numbers stay in the
 fixture for reference, and the logits ceilings stay per prompt (last-position max|diff| vs ref_gguf, 2 x).
+## 45. Greedy ids are identical at 6 and 12 threads on the real model, and identical to the gate test's run
+
+`aqueduct run --ids <sentence> --max-tokens 16 --ids-only` at `--threads 6` and `--threads 12` (after the
+64-layer parity run, machine throttled) produced the same 16 ids as `tests/phase3_e2e.rs` did at 12 threads
+an hour earlier: `733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446`. The pool
+partitions rows in contiguous chunks and every row is computed by one participant with one kernel, so the
+determinism contract (same ids at every thread count) holds end to end, not only in the kernel tests.
+
+## 46. End-of-session numbers are the throttled floor, not the kernels' capability
+
+After about four hours of load the last consistent-state pair (`docs/data/kernels_bench.txt`) read membw 23 to
+25 GB/s (29 to 30 earlier), Q4_K 15.4 GB/s at 6 threads (62 to 65 % of the paired membw), Q5_K 5.2 (21 %),
+Q6_K 6.9 (28 %), single-thread 2.1 to 5.2 GB/s, and decode 2.85 s per token at both 6 and 12 threads
+(`docs/data/phase3_timing.txt`), twice the 1.40 to 1.56 s measured 90 minutes earlier on the same binary. The
+production (Q8_0-grain) kernels were rewritten after the machine had already heated, so they were never
+measured cool; their cool-machine numbers are expected between the Q8_K-activation kernels' cool numbers
+(Q4_K 26, Q5_K 22, Q6_K 26 GB/s at 6 threads, 75 to 92 % of membw) and the throttled pairs above, since they
+run about 10 to 20 % more instructions per super-block and are memory-bound at all threads when cool. Q5_K
+falls further than the others when hot (its DRAM number drops to a third of Q4_K's while its cache-resident
+number equals Q4_K's), which points at its prefetch spacing (176-byte blocks) and is the first thing to look at
+next session; it is 2.3 % of the file (`attn_k`, `attn_output`).

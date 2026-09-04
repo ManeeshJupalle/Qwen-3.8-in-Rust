@@ -33,3 +33,15 @@ load 30.6 s
 summary: capital: llama.cpp match 16/16; prefill batched 2.58 s (1.94 tok/s) vs sequential 7.46 s; decode 1.562 s/token = 10.76 GB/s
 summary: fib: llama.cpp match 16/16; prefill batched 2.13 s (1.88 tok/s) vs sequential 6.17 s; decode 1.453 s/token = 11.57 GB/s
 summary: sentence: llama.cpp match 5/16; prefill batched 16.26 s (2.40 tok/s) vs sequential 53.25 s; decode 1.403 s/token = 11.98 GB/s
+# threads 6
+loaded in 40.1 s: 64 layers, 17.523 GB of weights, peak RSS 17.567 GB
+prefill (batched): 39 tokens in 63.83 s (0.61 tok/s)
+decode: 16 tokens, 2.846 s/token (0.35 tok/s) = 5.91 GB/s of weights, 6 threads
+peak RSS 17.715 GB vs expected 17.687 GB (weights + state)
+733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446
+# threads 12
+loaded in 38.2 s: 64 layers, 17.523 GB of weights, peak RSS 17.567 GB
+prefill (batched): 39 tokens in 42.53 s (0.92 tok/s)
+decode: 16 tokens, 2.861 s/token (0.35 tok/s) = 5.87 GB/s of weights, 12 threads
+peak RSS 17.714 GB vs expected 17.687 GB (weights + state)
+733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446
