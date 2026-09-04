@@ -587,3 +587,10 @@ run about 10 to 20 % more instructions per super-block and are memory-bound at a
 falls further than the others when hot (its DRAM number drops to a third of Q4_K's while its cache-resident
 number equals Q4_K's), which points at its prefetch spacing (176-byte blocks) and is the first thing to look at
 next session; it is 2.3 % of the file (`attn_k`, `attn_output`).
+**Cool-down pair (added at the end of the session).** After 8 minutes idle: membw 29.7 / 30.7 GB/s at 6 threads
+before / after, Q4_K (production, Q8_0 activations) 5.8 GB/s single, 20.6 at 6 threads (69 %), Q5_K 3.9 / 7.3
+(24 %), Q6_K 4.1 / 7.6 (25 %), Q8_0 2.8 / 7.7; the Q8_K opt-in kernels came out slower than the production ones
+in this state (Q4_K 8.2 at 6 threads) although they were faster when the box was cool, so the throttling is not
+a uniform clock factor. Decode after the pair: 2.30 s per token (7.3 GB/s) at 12 threads, ids unchanged. The
+production Q5_K and Q6_K kernels therefore did not demonstrate the 50 % gate at the 5120 x 5120 shape in any
+state measured today (53 % and 62 % at 17408 x 5120, throttled); `docs/phase3-report.md` lists what to try.

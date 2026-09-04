@@ -45,3 +45,9 @@ prefill (batched): 39 tokens in 42.53 s (0.92 tok/s)
 decode: 16 tokens, 2.861 s/token (0.35 tok/s) = 5.87 GB/s of weights, 12 threads
 peak RSS 17.714 GB vs expected 17.687 GB (weights + state)
 733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446
+# threads 12, after the cool-down bench pair
+loaded in 29.8 s: 64 layers, 17.523 GB of weights, peak RSS 17.568 GB
+prefill (batched): 39 tokens in 32.62 s (1.20 tok/s)
+decode: 16 tokens, 2.296 s/token (0.44 tok/s) = 7.32 GB/s of weights, 12 threads
+peak RSS 17.714 GB vs expected 17.687 GB (weights + state)
+733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446
