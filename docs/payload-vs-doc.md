@@ -470,3 +470,89 @@ by up to 2x on the same kernel (an idle-machine run was the slowest), which on a
 load reads as thermal throttling; the ladder numbers in Phase 4 must be taken on a cooled machine with the
 clock frequency logged. Doubling the kernel throughput needs a batched reduction (four blocks per horizontal
 add) and is the first Phase 3 speed item.
+# Phase 3 findings (kernel throughput, resident model, batched prefill)
+
+## 37. ggml's Q8_K activations break the frozen Phase 2b ceilings; the engine keeps Q8_0-grain activations under ggml's kernel structure
+
+Phase 3.1 rebuilt the K-quant dot path the way ggml's AVX2 kernels do it (`docs/kquant-dot.md`): exact integer
+inner loops (`maddubs` / `madd`), 8-lane f32 accumulation across the whole row, one horizontal reduction per row,
+the sub-block mins folded through the activation block sums, software prefetch. With ggml's Q8_K activation
+format (256 values, one f32 scale, `bsums`) the q8 mode's relative error after layer 0 on the `capital` prompt is
+2.1e-3 against the ceiling of 1.7e-3 (2 x the Phase 2b value of 8.7e-4): one scale per 256 values is about 2.5 x
+noisier than one per 32, which is exactly the gap finding 31 measured between llama.cpp (0.31 to 0.38 from the
+f32 reference) and our Q8_0 path (0.11 to 0.16). Rule 5 is a hard rule, so the production path keeps Q8_0-grain
+activations (per-32 f16 scales, plus the derived `d32`, `dxs`, `off6` the kernels read) inside the same lane
+structure: per 32-element sub-block one f32 factor `d_x * (d * sc)` scales the exact lane sums, the mins go
+through `(m * -dmin) * (d_x * sum q_x)`, Q6_K's `-32` is subtracted in integer from two lanes. Layers 0..7 then
+sit at most at 0.63 of their ceilings (layer 3, `sentence`). Q8_K stays available as an opt-in
+(`aqueduct run --q8k`, `bench kernels` reports both) and its kernels and quantiser are tested bit-exactly
+against a Python port of `quantize_row_q8_K_ref` (gguf-py has no Q8_K).
+
+## 38. A single thread streaming weights from DRAM was latency-bound, not compute-bound, until software prefetch
+
+The rebuilt Q4_K kernel ran at 6.6 GB/s single-threaded from L2 but 3.3 GB/s from DRAM on a 14.7 MB matrix,
+while the sum-reduce ceiling for one thread is 14 to 16 GB/s (`docs/data/membw.txt`): the hardware prefetcher
+does not keep a single 2.9 KB-row stream ahead of the integer kernel. Prefetching 1 KB ahead (one `prefetcht0`
+per 64 bytes of row, 3 to 4 per super-block) lifted the DRAM number to the cache number (Q4_K 6.7 to 7.4 GB/s,
+Q6_K 8.7 GB/s single-threaded) and the all-threads numbers from 12 to 15 GB/s to 20 to 26 GB/s (70 to 90 % of
+the 28.9 GB/s ceiling) on the same matrix. ggml does not prefetch; it gets its outstanding misses from many
+threads. Single-thread Q4_K / Q5_K remain at 6.4 to 7.4 GB/s against the 8 GB/s gate target: the remaining gap
+is instruction count (about 115 uops per 144-byte super-block), not memory.
+
+## 39. The lane-structured kernels are bounded by the term magnitudes, not by the result: the Phase 2 budget model does not apply
+
+Each of the 8 f32 lanes (and the 8 min lanes) is a partial sum over elements of random sign and cancels against
+the others only in the final reduction, so its rounding error is relative to the lane, not to the result. On the
+dot fixtures the sum of term magnitudes is 40 to 90,000 times the result; a hostile Q5_K row lands 28 ulp of
+its result from the exact value while being at 1.4 % of `k * eps * sum_j (|d sc q_j| + |dmin m|) |x_j|`, the
+bound the tests now use for K-quant rows (`tests/common/mod.rs::kquant_terms_budget`). The Phase 2 budget
+`k * sqrt(n) * eps * max|term|` failed such rows by 5 x. ggml has the same property; the whole-layer effect is
+what the frozen ceilings gate, and layers 0..7 show no visible change (0.63 of ceiling worst).
+
+## 40. The laptop throttles compute by up to 2.5 x within an hour while DRAM bandwidth does not move
+
+The same AVX2 Q4_K matvec measured 26 GB/s (6 threads) early in the session and 9 to 18 GB/s after scalar
+benches and test suites had run for an hour; cache-resident (compute-only) speed swung from 9.1 to 3.6 GB/s for
+Q6_K; `membw` stayed at 29 to 30 GB/s throughout; `typeperf "% Processor Performance"` read 118 % of the 2.6 GHz
+nominal (about 3.07 GHz all-core) under a 6-thread AVX2 load. Consequences: every "% of membw" number in this
+phase is filed as a back-to-back pair (membw, kernels, membw) in one thermal state
+(`docs/data/kernels_bench.txt`, "consistent-state pair"), and the honest reading of the kernels is the
+best-of-session number with the pair as the floor. Phase 4 ladder numbers need a cooled machine and the clock
+counter logged next to them.
+## 41. The batched prefill is bit-identical to the token-by-token feed, by construction, on the real model
+
+`Model::prefill` (Phase 3.3) runs every projection of a layer as one `matmul` over the prompt (each weight row
+read once, applied to all `T` activations while it sits in L1), the conv window and the DeltaNet recurrence as
+`T` sequential steps per head, and causal attention of all `T` queries over the freshly filled cache in one
+pass. Because `matmul` computes row `r` of token `t` with the same `one_row` kernel `matvec` uses, and the
+per-token parts are the same code, `tests/phase3_e2e.rs` finds max|diff| = 0 on the residual stream of every
+position, on the last-position logits, on the carried DeltaNet state and conv window, and on the KV cache, for
+all three prompts (finding 33 predicted this for the trivial prefill; it now holds for a real batched one).
+Speed: 1.9 to 2.4 prompt tokens per second, 2.9 to 3.3 x the sequential feed. The sequential feed costs a
+decode step per token (1.4 to 1.5 s); the batched form is compute-bound (48 activations per weight row), so
+the next prefill win is a cache-blocked GEMM, not fewer weight reads.
+
+## 42. Greedy decode agrees with llama.cpp for 16/16, 16/16 and 5/16 tokens; the divergence sits at a 0.07 logit margin
+
+`tests/phase3_e2e.rs`, 32 greedy tokens per prompt from the batched prefill, first 16 against
+`tests/fixtures/ref_llamacpp`: `capital` and `fib` match 16/16 (" Paris.\nThe capital of Germany is Berlin.\nThe
+capital of Italy is Rome.\nThe capital of Spain is Madrid.\nThe capital of Portugal is"; the Fibonacci function
+with the `elif n == 1` branch). `sentence` matches 5/16: at step 5 our top-1 (`glaciers`, id 91420) beats
+llama.cpp's (`rivers`, 34343) by a top-1 / top-2 margin of 0.0708 raw logits, far inside the noise between two
+Q8 engines on this file (0.29 to 0.44 max|diff|, finding 31) and our own distance from the f32 reference (0.15).
+The continuation stays coherent (" In the highlands, glaciers once shaped the landscape, leaving behind U-shaped
+valleys and moraines as they retreated. The interplay of erosion and deposition continues to") and every later
+`sentence` step has margins of 0.05 to 7.8, so a text prompt of that length is a coin-toss chain between any two
+correct engines; `--ids` with the reference logits, not token equality, is the test channel (as planned).
+
+## 43. Fully resident on the 32 GB box: 30.6 s load from the SSD, 17.98 GB peak RSS, 1.4 to 1.6 s per token = 37 to 41 % of memory bandwidth
+
+`Model::load` reads 17.523 GB of tensors in 30.6 s (570 MB/s; only 9 GB of RAM were free, so the OS paged
+editors and the browser out while loading). Peak RSS 17.975 GB against 17.686 GB expected (weights + DeltaNet
+state + KV cache for 48 + 32 positions): ratio 1.016. Decode at 12 threads: 1.562, 1.453 and 1.403 s per token
+for the three prompts, i.e. 10.8 to 12.0 GB/s of weights (16.84 GB per token: all weights minus the embedding
+table plus one row) = 37 to 41 % of the 28.9 GB/s ceiling, on a machine in its throttled state (finding 40),
+where the matvec kernels themselves were measuring 8 to 18 GB/s. The per-token budget is therefore mostly the
+kernels' throttled throughput plus the non-matvec work (48 DeltaNet steps of 48 x 128 x 128 f32, conv, norms,
+the 248,320-row lm_head): with the kernels at their cool-machine 20 to 26 GB/s the same token would take about
+0.8 s. llama.cpp on this CPU took 4.2 to 4.7 s per token (finding 21, HDD-resident, throttled or not unknown).

@@ -145,6 +145,11 @@ impl<'a> ActVec<'a> {
     }
 }
 
+/// The forms `t` weights consume, for a batch of activations (`matmul`).
+pub fn acts_for<'a>(acts: &'a [ActVec<'_>], t: GgmlType) -> Vec<Act<'a>> {
+    acts.iter().map(|a| a.act_for(t)).collect()
+}
+
 /// f32 weight bytes times f32 activations without an intermediate copy when the row is 4-byte aligned.
 fn dot_f32_bytes(row: &[u8], x: &[f32]) -> f32 {
     // SAFETY: every bit pattern is a valid f32; `align_to` checks the alignment.

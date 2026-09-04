@@ -2,11 +2,13 @@
 //! T sequential tokens (mathematically the causal prefill). Per head: `[q | gate]` from `attn_q`, q/k RMSNorm
 //! (weights with the +1 folded in), partial RoPE on the first `rope_dim` dims, scores over the cache scaled by
 //! `head_dim^-0.5`, softmax, weighted V sum, `* sigmoid(gate)`, then `attn_output` projection.
-//! Parallel over query heads with `std::thread::scope`.
+//! Parallel over query heads. `forward_prefill` (Phase 3.3): projections as batched matmuls over the prompt,
+//! then causal attention of every prompt position in one pass, the same arithmetic as `t` sequential steps.
 
 use super::{Linear, Result, TensorSource};
 use crate::kernels::act::sigmoid;
-use crate::kernels::matvec::ActVec;
+use crate::kernels::matvec::{acts_for, matmul, row_range, ActVec};
+use crate::kernels::pool::{self, SharedMut};
 use crate::kernels::rmsnorm::rmsnorm;
 use crate::kernels::rope::{apply_rope, cos_sin, inv_freq};
 use crate::kernels::softmax::softmax;
@@ -148,13 +150,89 @@ impl GqaAttention {
         self.o.forward(&attn, y, threads);
     }
 
-    /// Prefill `t` tokens starting at `start_pos` as sequential steps.
+    /// Prefill `t` tokens starting at `start_pos`: q/k/v and the output projection as batched matmuls, the KV
+    /// cache filled for all `t` positions, then every query attends causally over the cache in one pass
+    /// (parallel over heads). Row `i` equals `forward_token` on row `i` bit for bit.
     pub fn forward_prefill(&self, x: &[f32], t: usize, start_pos: u32, cache: &mut KvCache, y: &mut [f32], threads: usize) {
+        let (nh, nkv, hd, rd) = (self.n_head, self.n_head_kv, self.head_dim, self.rope_dim);
         let h = self.hidden;
+        let group = nh / nkv;
         assert_eq!(x.len(), t * h);
         assert_eq!(y.len(), t * h);
+        let acts: Vec<ActVec<'_>> = x.chunks_exact(h).map(ActVec::new).collect();
+        let mut qg = vec![0f32; t * 2 * nh * hd];
+        matmul(&self.q.w, &acts_for(&acts, self.q.w.ggml_type), &mut qg, threads);
+        let mut k = vec![0f32; t * nkv * hd];
+        matmul(&self.k.w, &acts_for(&acts, self.k.w.ggml_type), &mut k, threads);
+        let mut v = vec![0f32; t * nkv * hd];
+        matmul(&self.v.w, &acts_for(&acts, self.v.w.ggml_type), &mut v, threads);
+
+        let base = cache.len;
+        let mut q_all = vec![0f32; t * nh * hd];
+        let mut gate_all = vec![0f32; t * nh * hd];
+        let mut cos = vec![0f32; rd];
+        let mut sin = vec![0f32; rd];
+        let mut tmp = vec![0f32; hd];
         for i in 0..t {
-            self.forward_token(&x[i * h..(i + 1) * h], start_pos + i as u32, cache, &mut y[i * h..(i + 1) * h], threads);
+            cos_sin(start_pos + i as u32, &self.inv_freq, &mut cos, &mut sin);
+            for hh in 0..nh {
+                let src = &qg[i * 2 * nh * hd + hh * 2 * hd..i * 2 * nh * hd + (hh + 1) * 2 * hd];
+                rmsnorm(&src[..hd], &self.q_norm, self.eps, &mut tmp);
+                apply_rope(&mut tmp, hd, rd, &cos, &sin);
+                q_all[i * nh * hd + hh * hd..i * nh * hd + (hh + 1) * hd].copy_from_slice(&tmp);
+                gate_all[i * nh * hd + hh * hd..i * nh * hd + (hh + 1) * hd].copy_from_slice(&src[hd..]);
+            }
+            let krow = &mut k[i * nkv * hd..(i + 1) * nkv * hd];
+            for hh in 0..nkv {
+                let kh = &mut krow[hh * hd..(hh + 1) * hd];
+                rmsnorm(kh, &self.k_norm, self.eps, &mut tmp);
+                apply_rope(&mut tmp, hd, rd, &cos, &sin);
+                kh.copy_from_slice(&tmp);
+            }
+            cache.k.extend_from_slice(krow);
+            cache.v.extend_from_slice(&v[i * nkv * hd..(i + 1) * nkv * hd]);
+            cache.len += 1;
         }
+        let scaling = (hd as f32).powf(-0.5);
+        let mut attn = vec![0f32; t * nh * hd];
+        let attn_p = SharedMut::new(&mut attn);
+        let cache_ref: &KvCache = cache;
+        pool::global().run(threads.max(1).min(nh), &|tid, n| {
+            let (h0, h1) = row_range(nh, tid, n);
+            for hh in h0..h1 {
+                let kvh = hh / group;
+                for i in 0..t {
+                    let len = base + i + 1;
+                    let qh = &q_all[i * nh * hd + hh * hd..i * nh * hd + (hh + 1) * hd];
+                    let mut scores = vec![0f32; len];
+                    for (tt, sc) in scores.iter_mut().enumerate() {
+                        let kt = &cache_ref.k[tt * cache_ref.stride + kvh * hd..tt * cache_ref.stride + (kvh + 1) * hd];
+                        let mut s = 0f32;
+                        for d in 0..hd {
+                            s += qh[d] * kt[d];
+                        }
+                        *sc = s * scaling;
+                    }
+                    let mut p = vec![0f32; len];
+                    softmax(&scores, &mut p);
+                    // SAFETY: head `hh` is handled by exactly one participant; its columns of every row are disjoint.
+                    let out = unsafe { attn_p.slice(i * nh * hd + hh * hd, hd) };
+                    for o in out.iter_mut() {
+                        *o = 0.0;
+                    }
+                    for (tt, &pt) in p.iter().enumerate() {
+                        let vt = &cache_ref.v[tt * cache_ref.stride + kvh * hd..tt * cache_ref.stride + (kvh + 1) * hd];
+                        for d in 0..hd {
+                            out[d] += pt * vt[d];
+                        }
+                    }
+                    for d in 0..hd {
+                        out[d] *= sigmoid(gate_all[i * nh * hd + hh * hd + d]);
+                    }
+                }
+            }
+        });
+        let aacts: Vec<ActVec<'_>> = attn.chunks_exact(nh * hd).map(ActVec::new).collect();
+        matmul(&self.o.w, &acts_for(&aacts, self.o.w.ggml_type), y, threads);
     }
 }

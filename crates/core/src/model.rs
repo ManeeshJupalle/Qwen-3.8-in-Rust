@@ -9,7 +9,7 @@ use std::time::Instant;
 use crate::arch::{arch_consts, stop_ids, ArchConsts};
 use crate::config::ModelConfig;
 use crate::gguf::Gguf;
-use crate::kernels::matvec::{matvec, ActVec, WeightMat};
+use crate::kernels::matvec::{acts_for, matmul, matvec, ActVec, WeightMat};
 use crate::kernels::rmsnorm::rmsnorm;
 use crate::layers::{DecoderLayer, LayerError, MixerState, TensorSource};
 use crate::quant::dequantize;
@@ -117,6 +117,43 @@ impl Model {
         rmsnorm(h, &self.output_norm, self.cfg.rms_norm_eps, &mut normed);
         let a = ActVec::new(&normed);
         matvec(&self.lm_head, a.act_for(self.lm_head.ggml_type), logits, self.threads);
+    }
+
+    /// Batched prefill (Phase 3.3): the residual stream after the last layer for every token of `ids`
+    /// (`t * hidden`), the state advanced by `t`. Row `i` is `forward_hidden` on token `i` bit for bit.
+    pub fn prefill(&self, ids: &[u32], state: &mut State) -> Vec<f32> {
+        let t = ids.len();
+        let hidden = self.hidden();
+        let mut h = Vec::with_capacity(t * hidden);
+        for &id in ids {
+            h.extend(self.embed_token(id));
+        }
+        let mut y = vec![0f32; t * hidden];
+        for (layer, st) in self.layers.iter().zip(state.layers.iter_mut()) {
+            layer.forward_prefill(&h, t, state.pos, st, &mut y, self.threads);
+            std::mem::swap(&mut h, &mut y);
+        }
+        state.pos += t as u32;
+        h
+    }
+
+    /// Final norm and lm_head for `t` residual-stream rows (`t * hidden` in, `t * vocab` out), the head read once.
+    pub fn logits_all(&self, hs: &[f32], t: usize) -> Vec<f32> {
+        let hidden = self.hidden();
+        assert_eq!(hs.len(), t * hidden);
+        let mut normed = vec![0f32; t * hidden];
+        for i in 0..t {
+            rmsnorm(&hs[i * hidden..(i + 1) * hidden], &self.output_norm, self.cfg.rms_norm_eps, &mut normed[i * hidden..(i + 1) * hidden]);
+        }
+        let acts: Vec<ActVec<'_>> = normed.chunks_exact(hidden).map(ActVec::new).collect();
+        let mut logits = vec![0f32; t * self.vocab()];
+        matmul(&self.lm_head, &acts_for(&acts, self.lm_head.ggml_type), &mut logits, self.threads);
+        logits
+    }
+
+    /// Weight bytes one decode token streams: every layer, the norms, the head, and one embedding row.
+    pub fn decode_bytes_per_token(&self) -> u64 {
+        self.weight_bytes - self.embed.bytes() as u64 + self.embed.row_bytes as u64
     }
 
     /// One token in, logits out (`vocab` long); the state advances by one position.

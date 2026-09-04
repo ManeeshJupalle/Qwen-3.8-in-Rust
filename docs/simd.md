@@ -43,3 +43,13 @@ either a small share of decode time or bounded by `exp`. The DeltaNet recurrence
 consult it. `simd::force_scalar(bool)` flips it for the AVX2-vs-scalar tests and for `aqueduct bench kernels`,
 which runs every dot kernel on a random `17408 x 5120` matrix (the `ffn_gate` shape, larger than L3) in both
 paths at one thread and at all threads and reports weight GB/s (`docs/data/kernels_bench.txt`).
+
+## Phase 3 changes (`docs/kquant-dot.md`)
+
+Bit-identity between the scalar and AVX2 paths is no longer a contract (Phase 3 rule 2); it is a property the
+tests still check, and every kernel still has it. The K-quant dot kernels were rebuilt with ggml's structure
+(exact integer inner loops, 8-lane f32 accumulation, one reduction per row, software prefetch) for Q8_0-grain
+activations (`dot.rs` scalar reference, `avx2.rs`), plus ggml's Q8_K activation row and kernels as an opt-in
+(`q8k.rs`, `kdot.rs`). `matvec` runs on the persistent pool (`pool.rs`), `matvec2` fuses the MLP's gate and up,
+`matmul` is the batched prefill form. `bench kernels` reports both activation forms and `bench membw` the
+ceiling. The scalar `inv_rms` / softmax orders and the Q8_0 / Q4_0 kernels are unchanged apart from prefetch.

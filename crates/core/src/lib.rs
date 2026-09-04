@@ -8,6 +8,7 @@ pub mod kernels;
 pub mod layers;
 pub mod model;
 pub mod quant;
+pub mod rss;
 pub mod tok;
 
 pub use arch::{arch_consts, stop_ids, ArchConsts};

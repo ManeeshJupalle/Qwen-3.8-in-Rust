@@ -1,0 +1,35 @@
+# Phase 3 timing (crates/core/tests/phase3_e2e.rs, `cargo test --release --test phase3_e2e -- --ignored --nocapture`), 2026-09-03
+# i7-9750H (6 cores / 12 threads), 32 GB DDR4-2667, GGUF on the C: NVMe SSD, Windows 11; membw 28.9 GB/s all threads (docs/data/membw.txt).
+# Prefill = batched matmuls over the prompt (weights read once per prompt); decode = one token at a time, every weight byte read once per token.
+# 'GB/s' on the decode line = decode_bytes_per_token / seconds per token, decode_bytes_per_token = all weights minus the embedding table plus one row.
+# Throttling caveat (docs/payload-vs-doc.md finding 40): this laptop's compute throughput swings up to 2.5x within an hour; memory bandwidth does not.
+# Only about 9 GB of the 32 GB were free before the load (editors and browser), so the OS paged other processes out while the 17.5 GB of weights came in.
+#
+# ---- run 1: 12 threads, machine busy for hours (throttled state), first load after other processes were paged out
+load: 30.6 s, 17.523 GB of weights, peak RSS 17.567 GB, threads 12
+== prompt capital (5 ids) ==
+prefill: sequential 7.46 s, batched 2.58 s (1.94 tok/s) + head 0.10 s; hidden max|diff| 0e0; last logits batched vs sequential max|diff| 0e0 (ceiling 0.3968); state max rel 0e0, cache max rel 0e0; argmax per position 5/5; vs ref_gguf max|diff| batched 0.1480 sequential 0.1480 (ceiling 0.3968)
+decode: 32 tokens, 1.562 s/token = 10.76 GB/s = 37% of membw 28.9
+ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+llama.cpp first 16 match: 16/16
+margins: 2.99 1.54 0.61 1.19 3.69 5.12 0.53 7.63 5.80 5.60 3.35 5.05 6.76 9.52 2.29 7.82 7.29 6.10 3.11 5.09 5.21 8.29 3.05 7.81 7.14 6.40 3.68 5.64 7.14 8.79 1.02 8.89
+text: " Paris.\nThe capital of Germany is Berlin.\nThe capital of Italy is Rome.\nThe capital of Spain is Madrid.\nThe capital of Portugal is"
+== prompt fib (4 ids) ==
+prefill: sequential 6.17 s, batched 2.13 s (1.88 tok/s) + head 0.09 s; hidden max|diff| 0e0; last logits batched vs sequential max|diff| 0e0 (ceiling 0.2374); state max rel 0e0, cache max rel 0e0; argmax per position 4/4; vs ref_gguf max|diff| batched 0.1192 sequential 0.1192 (ceiling 0.2374)
+decode: 32 tokens, 1.453 s/token = 11.57 GB/s = 40% of membw 28.9
+ids: 198,262,413,307,2564,220,15,25,198,285,460,220,15,198,262,4265,307,606,220,16,25,198,285,460,220,16,198,262,745,25,198,285
+llama.cpp first 16 match: 16/16
+margins: 4.08 3.67 0.98 4.23 0.27 4.04 0.06 4.69 4.62 5.85 2.37 1.24 7.35 5.23 9.12 2.60 7.77 2.97 6.17 8.07 4.52 7.71 7.66 7.91 7.21 6.55 5.01 9.88 3.05 6.57 6.91 6.23
+text: "\n    if n <= 0:\n        return 0\n    elif n == 1:\n        return 1\n    else:\n       "
+== prompt sentence (39 ids) ==
+prefill: sequential 53.25 s, batched 16.26 s (2.40 tok/s) + head 0.79 s; hidden max|diff| 0e0; last logits batched vs sequential max|diff| 0e0 (ceiling 0.3490); state max rel 0e0, cache max rel 0e0; argmax per position 39/39; vs ref_gguf max|diff| batched 0.1540 sequential 0.1540 (ceiling 0.3490)
+decode: 32 tokens, 1.403 s/token = 11.98 GB/s = 41% of membw 28.9
+ids: 733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446,321,4172,31717,430,781,87805,13,561,916,1315,314,55090,321,62104,9257,310
+llama.cpp first 16 match: 5/16; first divergence at step 5: ours 91420 vs llama.cpp 34343 with top1-top2 margin 0.0708 (llama.cpp text " In the highlands, rivers plunge over cliffs and through narrow gorges, their")
+margins: 0.33 0.66 0.28 1.88 0.34 0.07 1.16 0.34 1.60 1.33 0.98 0.48 4.09 1.02 7.82 2.53 1.33 0.07 3.24 0.38 2.65 1.10 0.90 1.09 0.45 5.97 0.20 0.05 1.34 5.03 0.82 1.48
+text: " In the highlands, glaciers once shaped the landscape, leaving behind U-shaped valleys and moraines as they retreated. The interplay of erosion and deposition continues to"
+peak RSS 17.975 GB vs expected 17.686 GB (weights 17.523 GB + state), ratio 1.016; 96 tokens generated
+load 30.6 s
+summary: capital: llama.cpp match 16/16; prefill batched 2.58 s (1.94 tok/s) vs sequential 7.46 s; decode 1.562 s/token = 10.76 GB/s
+summary: fib: llama.cpp match 16/16; prefill batched 2.13 s (1.88 tok/s) vs sequential 6.17 s; decode 1.453 s/token = 11.57 GB/s
+summary: sentence: llama.cpp match 5/16; prefill batched 16.26 s (2.40 tok/s) vs sequential 53.25 s; decode 1.403 s/token = 11.98 GB/s

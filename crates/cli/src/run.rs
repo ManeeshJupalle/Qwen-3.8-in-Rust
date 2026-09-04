@@ -8,7 +8,7 @@ use aqueduct_core::kernels::matvec::set_q8k_activations;
 use aqueduct_core::model::{argmax, Model};
 use aqueduct_core::Tok;
 
-use crate::rss::peak_rss_bytes;
+use aqueduct_core::rss::peak_rss_bytes;
 
 pub const DEFAULT_GGUF: &str = r"C:\models\Qwen3.8-27B-Q4_K_M.gguf";
 
@@ -20,11 +20,14 @@ pub struct RunArgs {
     pub ids: Option<Vec<u32>>,
     pub prompt: Option<String>,
     pub ids_only: bool,
+    /// Feed the prompt token by token instead of the batched prefill (the 3.2 path, for timing comparisons).
+    pub sequential_prefill: bool,
+    pub verbose: bool,
 }
 
 pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String> {
     let all = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
-    let mut a = RunArgs { model: DEFAULT_GGUF.into(), tokenizer: default_tokenizer.into(), threads: all, max_tokens: 32, ids: None, prompt: None, ids_only: false };
+    let mut a = RunArgs { model: DEFAULT_GGUF.into(), tokenizer: default_tokenizer.into(), threads: all, max_tokens: 32, ids: None, prompt: None, ids_only: false, sequential_prefill: false, verbose: false };
     let mut i = 0;
     while i < args.len() {
         let next = |i: usize| args.get(i + 1).ok_or_else(|| format!("{} needs a value", args[i]));
@@ -62,6 +65,14 @@ pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String
                 set_q8k_activations(true);
                 i += 1;
             }
+            "--sequential-prefill" => {
+                a.sequential_prefill = true;
+                i += 1;
+            }
+            "-v" | "--verbose" => {
+                a.verbose = true;
+                i += 1;
+            }
             other => return Err(format!("unknown argument {other}")),
         }
     }
@@ -95,15 +106,22 @@ pub fn run(a: RunArgs) -> Result<(), String> {
 
     let mut state = model.new_state();
     let mut logits = vec![0f32; model.vocab()];
-    // prefill: token by token (3.3 batches this), logits only for the last position
+    // prefill: batched (3.3) unless asked for the token-by-token path; logits only for the last position
     let t0 = Instant::now();
-    let mut h = Vec::new();
-    for &id in &prompt_ids {
-        h = model.forward_hidden(id, &mut state);
-    }
-    model.logits_of(&h, &mut logits);
+    let hidden = model.hidden();
+    let last: Vec<f32> = if a.sequential_prefill {
+        let mut h = Vec::new();
+        for &id in &prompt_ids {
+            h = model.forward_hidden(id, &mut state);
+        }
+        h
+    } else {
+        let hs = model.prefill(&prompt_ids, &mut state);
+        hs[(prompt_ids.len() - 1) * hidden..].to_vec()
+    };
+    model.logits_of(&last, &mut logits);
     let prefill_s = t0.elapsed().as_secs_f64();
-    eprintln!("prefill: {} tokens in {:.2} s ({:.2} tok/s)", prompt_ids.len(), prefill_s, prompt_ids.len() as f64 / prefill_s);
+    eprintln!("prefill ({}): {} tokens in {:.2} s ({:.2} tok/s)", if a.sequential_prefill { "sequential" } else { "batched" }, prompt_ids.len(), prefill_s, prompt_ids.len() as f64 / prefill_s);
 
     let mut out: Vec<u32> = Vec::new();
     let mut next = argmax(&logits);
@@ -118,16 +136,22 @@ pub fn run(a: RunArgs) -> Result<(), String> {
         if out.len() == a.max_tokens {
             break;
         }
+        let ts = Instant::now();
         model.forward_token(next, &mut state, &mut logits);
         next = argmax(&logits);
+        if a.verbose {
+            eprintln!("  token {} -> {} ({:.3} s)", out.len(), next, ts.elapsed().as_secs_f64());
+        }
     }
     let decode_s = t1.elapsed().as_secs_f64();
     let steps = out.len().saturating_sub(1).max(1);
+    let s_per_tok = decode_s / steps as f64;
     eprintln!(
-        "decode: {} tokens, {:.3} s/token ({:.2} tok/s), {} threads{}",
+        "decode: {} tokens, {:.3} s/token ({:.2} tok/s) = {:.2} GB/s of weights, {} threads{}",
         out.len(),
-        decode_s / steps as f64,
-        steps as f64 / decode_s,
+        s_per_tok,
+        1.0 / s_per_tok,
+        model.decode_bytes_per_token() as f64 / s_per_tok / 1e9,
         model.threads,
         stopped.map(|s| format!(", stopped at id {s}")).unwrap_or_default()
     );

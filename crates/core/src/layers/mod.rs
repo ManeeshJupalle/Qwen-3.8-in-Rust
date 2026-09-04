@@ -162,4 +162,33 @@ impl DecoderLayer {
             y[i] = h[i] + mixed[i];
         }
     }
+
+    /// `t` tokens at positions `start_pos..start_pos + t` (`x`, `y` are `t * hidden`): norms per row, the mixer's
+    /// batched prefill, the MLP's batched forward. Row `i` is `forward_token` on row `i` (bit for bit).
+    pub fn forward_prefill(&self, x: &[f32], t: usize, start_pos: u32, state: &mut MixerState, y: &mut [f32], threads: usize) {
+        let hidden = self.attn_norm.len();
+        assert_eq!(x.len(), t * hidden);
+        assert_eq!(y.len(), t * hidden);
+        let mut normed = vec![0f32; t * hidden];
+        for i in 0..t {
+            rmsnorm(&x[i * hidden..(i + 1) * hidden], &self.attn_norm, self.eps, &mut normed[i * hidden..(i + 1) * hidden]);
+        }
+        let mut mixed = vec![0f32; t * hidden];
+        match (&self.mixer, state) {
+            (Mixer::DeltaNet(d), MixerState::DeltaNet(s)) => d.forward_prefill(&normed, t, s, &mut mixed, threads),
+            (Mixer::Attention(a), MixerState::Attention(c)) => a.forward_prefill(&normed, t, start_pos, c, &mut mixed, threads),
+            _ => panic!("DecoderLayer: state kind does not match mixer kind"),
+        }
+        let mut h = vec![0f32; t * hidden];
+        for i in 0..t * hidden {
+            h[i] = x[i] + mixed[i];
+        }
+        for i in 0..t {
+            rmsnorm(&h[i * hidden..(i + 1) * hidden], &self.post_attention_norm, self.eps, &mut normed[i * hidden..(i + 1) * hidden]);
+        }
+        self.mlp.forward_batch(&normed, t, &mut mixed, threads);
+        for i in 0..t * hidden {
+            y[i] = h[i] + mixed[i];
+        }
+    }
 }

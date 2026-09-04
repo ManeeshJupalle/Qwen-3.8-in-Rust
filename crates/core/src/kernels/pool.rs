@@ -151,3 +151,23 @@ impl Pool {
         }
     }
 }
+
+/// A `*mut f32` shared with a job: participants write disjoint ranges of one buffer (a head's columns of
+/// every row, a head's recurrent state). The caller guarantees disjointness.
+#[derive(Clone, Copy)]
+pub struct SharedMut(*mut f32);
+unsafe impl Send for SharedMut {}
+unsafe impl Sync for SharedMut {}
+
+impl SharedMut {
+    pub fn new(v: &mut [f32]) -> SharedMut {
+        SharedMut(v.as_mut_ptr())
+    }
+    /// A mutable view of `len` elements from `start`.
+    /// SAFETY: the range must lie inside the original slice and must not overlap the range of any other
+    /// participant that is running at the same time.
+    #[allow(clippy::mut_from_ref)]
+    pub unsafe fn slice(&self, start: usize, len: usize) -> &mut [f32] {
+        std::slice::from_raw_parts_mut(self.0.add(start), len)
+    }
+}
