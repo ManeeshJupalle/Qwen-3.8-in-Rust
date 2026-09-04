@@ -65,6 +65,7 @@ pub fn dot_q4_0_q8(w: &[u8], x: &Q8Row) -> f32 {
 
 /// Shared Q4_K / Q5_K body: `qw(block, s, j)` yields the unsigned code of element `j` of sub-block `s`.
 #[inline(always)]
+#[allow(clippy::needless_range_loop)] // `s` indexes the min lane, the scale pair and the activation block
 fn dot_q45_k_q8(w: &[u8], x: &Q8Row, block_bytes: usize, qw: impl Fn(&[u8], usize, usize) -> i32) -> f32 {
     let nb = x.n_blocks();
     assert!(nb.is_multiple_of(8), "dot_q4/5_k_q8: activation length must be a multiple of 256");

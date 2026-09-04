@@ -164,8 +164,10 @@ impl SharedMut {
         SharedMut(v.as_mut_ptr())
     }
     /// A mutable view of `len` elements from `start`.
-    /// SAFETY: the range must lie inside the original slice and must not overlap the range of any other
-    /// participant that is running at the same time.
+    ///
+    /// # Safety
+    /// The range must lie inside the original slice and must not overlap the range of any other participant
+    /// that is running at the same time; the original slice must outlive every use.
     #[allow(clippy::mut_from_ref)]
     pub unsafe fn slice(&self, start: usize, len: usize) -> &mut [f32] {
         std::slice::from_raw_parts_mut(self.0.add(start), len)

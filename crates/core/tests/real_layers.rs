@@ -163,6 +163,7 @@ struct Report {
     incremental_ok: bool,
 }
 
+#[allow(clippy::needless_range_loop)] // `l` names the layer in messages, the reference files and the ceilings
 fn run_parity(n_layers: usize, with_logits: bool) -> Report {
     let g = Gguf::open(common::gguf_path()).expect("open gguf");
     let cfg = ModelConfig::from_gguf(&g).expect("config");
