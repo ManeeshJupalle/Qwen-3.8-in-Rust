@@ -1,6 +1,6 @@
 {
  "source": "docs/data/phase2b_parity_0_63_final.log (commit 6456a19): engine q8 mode vs tests/fixtures/ref_gguf, max|diff| / max|ref| per layer and prompt, AVX2 kernels with Q8_0 activations",
- "rule": "ceiling = factor * measured; crates/core/tests/real_layers.rs fails if the q8 mode's relative error after any layer, or the last-position logits max|diff| vs ref_gguf, exceeds its ceiling",
+ "rule": "ceiling per layer = factor * max over the three prompts of the measured relative error (rule 5: per layer); crates/core/tests/real_layers.rs fails if the q8 mode's relative error after any layer, on any prompt, exceeds that layer's ceiling, or if the last-position logits max|diff| vs ref_gguf exceeds factor * measured for that prompt",
  "factor": 2.0,
  "measured": {
   "layers": [

@@ -1,10 +1,19 @@
-# K-quant dot products with Q8_K activations (Phase 3.1)
+# K-quant dot products, ggml-structured, with Q8_0 (production) and Q8_K (opt-in) activations (Phase 3.1)
 
 Source read: ggml `ggml-quants.c` (`quantize_row_q8_K_ref`, `nearest_int`) and
 `ggml-cpu/arch/x86/quants.c` (`ggml_vec_dot_q4_K_q8_K`, `q5_K`, `q6_K`, AVX2 branches) in the
-`models/llama.cpp` checkout. Engine files: `crates/core/src/kernels/q8k.rs` (activation row),
-`kdot.rs` (scalar reference), `avx2.rs` (vector kernels), `matvec.rs` (row partition, `ActVec`, fused and
-batched forms), `pool.rs` (persistent workers). Numbers: `docs/data/membw.txt`, `docs/data/kernels_bench.txt`.
+`models/llama.cpp` checkout. Engine files: `crates/core/src/kernels/dot.rs` + `avx2.rs` (the production
+K-quant kernels, Q8_0-grain activations), `q8.rs` (activation row with the derived per-block data), `q8k.rs` +
+`kdot.rs` (ggml's Q8_K row and kernels, opt-in), `matvec.rs` (row partition, `ActVec`, fused and batched
+forms), `pool.rs` (persistent workers). Numbers: `docs/data/membw.txt`, `docs/data/kernels_bench.txt`.
+
+**Outcome in one paragraph.** ggml's structure (exact integer inner loops, 8 f32 lanes accumulated across the
+row, one reduction per row, mins folded through activation sums) is what makes the kernels memory-bound; ggml's
+Q8_K activation format (one scale per 256 values) is not required for that and turned out 2.5 x noisier than
+the Q8_0 rows Phase 2 used, beyond the frozen rule-5 ceilings at layer 0 (`docs/payload-vs-doc.md` finding 37).
+The production path therefore keeps Q8_0 activations (per-32 f16 scales) under the same lane structure, with
+one f32 factor per sub-block instead of one per super-block; the Q8_K row and kernels stay in the tree as an
+opt-in (`aqueduct run --q8k`, `matvec::set_q8k_activations`) and both are benchmarked side by side.
 
 ## Why the Phase 2 kernels were compute-bound
 
@@ -80,6 +89,29 @@ while sitting at 1.4 % of that budget. ggml has the same property. The whole-lay
 frozen Q8 ceilings (`tests/fixtures/q8_ceilings.json`, 2x the Phase 2b per-layer relative errors) in
 `tests/real_layers.rs`.
 
+## The production variant: Q8_0-grain activations in the same lane structure (`dot.rs`, `avx2.rs`)
+
+With a scale `d_x[s]` per 32-element sub-block the integer sums cannot be accumulated across sub-blocks, so the
+kernel scales each sub-block's exact 8-lane sum `p32` (`madd(maddubs(q, q8), ones)`: lane `i` = positions
+`4i..4i+4`) by one f32 factor before adding it to the row accumulator:
+
+```
+Q4_K, Q5_K:  acc[i]  += f32(p32[i]) * (d_x[s] * (d * sc[s]))          8 lanes, per sub-block s
+             accm[s] += ((m[s] as f32) * -dmin) * (d_x[s] * sum q_x)  8 lanes, lane = sub-block index
+Q6_K:        p32[0] -= 32 * sum(q_x[0..16]),  p32[4] -= 32 * sum(q_x[16..32])   (exact, `off6`)
+             acc[i]  += f32(p32[i]) * (d_x[s] * (d * sc[g]))          g = the 16-group of lane i
+```
+
+`Q8Row` carries what this needs, derived once per quantisation: `d32` (the f16 scales as f32), `dxs = d32 *
+sum(q)` (exact: 11 x 12 significant bits) and `off6`. Per super-block the vector code builds the 8 factors
+`dsc8 = dx8 * (d * sc8)` once (the scales unpacked with the same vector routine) and broadcasts lane `s` with
+`permutevar8x32`; the Q6_K factors come from a lane pair `[sc[2s] x4, sc[2s+1] x4]`. Cost against the Q8_K
+form: one `cvt`, one `mul`, one `add` and one broadcast per sub-block instead of a shuffle and an integer
+`madd` with the scale, about 10 to 20 % more instructions per super-block; the all-threads throughput is
+unchanged because the kernels are memory-bound there. The scalar reference (`dot.rs`) computes the same lanes
+in the same order, so `tests/avx2.rs` still asserts bit-identity, and `tests/kernels.rs` checks the fixture
+rows against the f64 reference with the term-magnitude budget above.
+
 ## Other choices
 
 - **Scales unpack** (Q4_K/Q5_K): the 12 packed bytes become the 16 i16 lanes `sc[0..8], m[0..8]` with 10
@@ -89,8 +121,7 @@ frozen Q8 ceilings (`tests/fixtures/q8_ceilings.json`, 2x the Phase 2b per-layer
 - **Software prefetch** ~1 KB ahead, one prefetch per 64 bytes of weight row: a single thread streaming from
   DRAM was latency-bound at 3.3 GB/s (Q4_K) against 6.6 GB/s from cache; with it the single thread runs at
   its compute speed and six threads reach 70 to 90 % of the measured memory bandwidth.
-- **Q8_0 and Q4_0** keep the Phase 2b kernels with Q8_0 activations (4.5 % and 1.3 % of the file), plus the
-  same prefetch.
+- **Q8_0 and Q4_0 weights** keep the Phase 2b kernels (4.5 % and 1.3 % of the file), plus the same prefetch.
 - **Thread pool**: one job at a time, contiguous row ranges per participant, spin for 60 us then block; the
   caller is participant 0. Row `r` is always computed by one participant with the same kernel, so any thread
   count gives the same bits (`tests/q8k.rs`, `tests/layers.rs`).

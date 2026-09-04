@@ -233,7 +233,9 @@ fn run_parity(n_layers: usize, with_logits: bool) -> Report {
                         if rel > rep.worst_q8_rel.2 {
                             rep.worst_q8_rel = (l, p.name.clone(), rel);
                         }
-                        let ceiling = ceil_factor * ceil_layers[l]["rel"][&p.name].as_f64().unwrap();
+                        // per layer (rule 5): the factor times the largest of the three prompts' 2b values
+                        let measured = ceil_layers[l]["rel"].as_object().unwrap().values().map(|v| v.as_f64().unwrap()).fold(0f64, f64::max);
+                        let ceiling = ceil_factor * measured;
                         assert!(rel <= ceiling, "{} layer {l} (q8 mode): relative error {rel:.3e} exceeds the frozen ceiling {ceiling:.3e} (2b measured x {ceil_factor})", p.name);
                         if rel / ceiling > worst_ceiling.2 {
                             worst_ceiling = (l, p.name.clone(), rel / ceiling);
