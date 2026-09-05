@@ -1134,3 +1134,31 @@ behind the per-row loop (its four-accumulator group does not overlap the chains 
 while Q6_K still gains 1.3 to 1.7 x; the verify pass's speed-up at resident therefore comes mostly from the thread
 policy (finding 71) and from the Q6_K third of the file, and the ladder measures the mix. The six-thread sweep in
 the same file shows every ratio a little smaller, as finding 71 predicts.
+
+## 73. Prefill with the blocked GEMM: 1.5 to 1.8 x the Phase 3 path, 3.0 tokens per second at 512 tokens; the sibling thread is a third of it
+
+`scripts/prefill.ps1` (`docs/data/prefill.txt`): 32 / 128 / 512-token prompts (prefixes of one text,
+`tests/fixtures/prefill_prompts.json`), `--max-tokens 1`, the three configurations run back to back per prompt so
+each pair shares its thermal state; tok/s:
+
+| budget | prompt | Phase 3 path (per-row loop, 6 threads) | blocked, 6 threads | blocked, 12 threads | speed-up |
+|---|---|---|---|---|---|
+| resident | 32 | 1.55 | 1.84 | 2.41 | 1.56 x |
+| resident | 128 | 1.68 | 2.19 | 2.97 | 1.77 x |
+| resident | 512 | 1.67 | 2.20 | 3.04 | 1.82 x |
+| 11 GiB (36 / 35 pinned) | 32 | 1.81 | 2.11 | 2.74 | 1.52 x |
+| 11 GiB | 128 | 1.83 | 2.19 | 3.03 | 1.66 x |
+| 11 GiB | 512 | 1.74 | 2.23 | 3.07 | 1.77 x |
+
+The Phase 5.5 gate asked for 3 x Phase 3's prefill; the kernel gives 1.5 to 1.8 x, of which the blocked unpack is
+1.2 to 1.3 x and the second hardware thread the rest, exactly the split findings 70 to 72 predict from the
+per-super-block anatomy. The gain grows with the prompt because the one pass over the weights (0.9 s resident,
+about 3 s at 11 GiB with 28 layers from disk) is amortised over more rows: at 512 tokens a token costs 0.33 s
+against 0.60 s on the Phase 3 path, and the DeltaNet conv and recurrence (about 33 ms per token, sequential per
+head, finding 53) plus the causal attention over the growing prompt are now a fifth of it. The first generated
+token is identical across the three configurations at every length and budget, as the bit-identity of the kernels
+requires. The 11 GiB rows sit above the resident ones in absolute terms because the machine cooled during the step
+(membw 26.7 GB/s before, 29.2 after); only the ratios within a row are comparable. For the phase's own baseline:
+the Phase 3.6 report's 1.95 / 1.98 / 2.13 tok/s on the 5 / 4 / 39-token fixture prompts were taken cool; the same
+test this session (`docs/data/phase55_e2e.txt`) gives 1.98 / 1.89 / 2.75 with the blocked kernel while its decode
+token is 1.29 x slower than then (0.926 vs 0.717 s), which is why the same-session A/B above is the number filed.

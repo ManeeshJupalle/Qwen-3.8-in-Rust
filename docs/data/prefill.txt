@@ -1,0 +1,33 @@
+# aqueduct prefill: maneesh-msi, 2026-09-05 18:22, exe target\release\aqueduct.exe, model C:\models\Qwen3.8-27B-Q4_K_M.gguf
+# prompts from tests\fixtures\prefill_prompts.json (raw ids, prefixes of one text); --max-tokens 1, so prefill_s is the prompt through the layers, the final norm and the head
+# phase3 = AQUEDUCT_MATMUL_T=0 (the Phase 3.3 per-row matmul) on 6 threads; blocked6 = the blocked GEMM on 6 threads; blocked = the blocked GEMM on every hardware thread (the default)
+# membw before: 26.65 GB/s
+budget    prompt     n config    prefill s    tok/s  x phase3   load s  pinned
+resident  p32      32 phase3       20.658     1.55      1.00      9.3      64
+resident  p32      32 blocked6     17.389     1.84      1.19      8.9      64
+resident  p32      32 blocked      13.255     2.41      1.56      9.0      64
+resident  p128    128 phase3       76.324     1.68      1.00      8.9      64
+resident  p128    128 blocked6     58.429     2.19      1.31      8.0      64
+resident  p128    128 blocked      43.069     2.97      1.77      8.0      64
+resident  p512    512 phase3      306.712     1.67      1.00      7.9      64
+resident  p512    512 blocked6    232.522     2.20      1.32      8.0      64
+resident  p512    512 blocked     168.529     3.04      1.82      7.8      64
+11G       p32      32 phase3       17.718     1.81      1.00      4.7      36
+11G       p32      32 blocked6     15.179     2.11      1.17      4.8      36
+11G       p32      32 blocked      11.692     2.74      1.52      4.8      36
+11G       p128    128 phase3       70.001     1.83      1.00      4.9      35
+11G       p128    128 blocked6     58.466     2.19      1.20      4.7      35
+11G       p128    128 blocked      42.197     3.03      1.66      4.7      35
+11G       p512    512 phase3      294.522     1.74      1.00      4.7      35
+11G       p512    512 blocked6    229.825     2.23      1.28      4.7      35
+11G       p512    512 blocked     166.734     3.07      1.77      4.6      35
+# membw after: 29.17 GB/s
+
+# first generated id per (budget, prompt) and config: the three configs must agree (the blocked kernels are bit-identical to the per-row path)
+  resident  p32   first id 279 : identical
+  resident  p128  first id 264 : identical
+  resident  p512  first id 314 : identical
+  11G       p32   first id 279 : identical
+  11G       p128  first id 264 : identical
+  11G       p512  first id 314 : identical
+identity of the first token across configs: yes
