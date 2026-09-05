@@ -1,0 +1,70 @@
+# Phase 5.5 kernel probe (tools/probe), maneesh-msi, 2026-09-05, release build, one thread, machine otherwise idle
+# (no cargo job running; the laptop in its warm state: the frequency counter '% Processor Performance' read 120 % of
+# 2.59 GHz = 3.1 GHz under a 6-thread kernel load while these ran; the probe's own 'avx2 integer chain' clock is a
+# 2-cycle dependent vpsrld+vpaddd loop and reads 2.7 to 2.9 GHz, so the cycle counts below are 5 to 15 % low if the
+# counter is right; the ratios do not depend on it).
+#
+# WHY. The first blocked kernel (each Q4_K super-block unpacked once, then T Q8_K rows dotted against it) came out
+# only 1.1 to 1.3 x faster per activation row than the single-row kernel repeated T times, on a real shape with the
+# tile in L2 and with it in L1 alike. The per-super-block cost of the single-row kernel is 50 cycles for ~90 fused
+# uops, 2.5 x the port-model floor (Skylake: madd-class 0.5 c, shuffles 1.0 c on p5, 2 loads per cycle, 4 uops per
+# cycle renamed). These probes ask what the machine actually does with these instruction classes and where the 50
+# cycles go.
+
+# ---- 1. reciprocal throughput of the instruction classes (8 independent chains, register operands; cycles per instruction)
+clock: avx2 integer chain 2.88 GHz
+  vpmaddubsw ymm : 0.65  (table 0.50)
+  vpmaddwd ymm   : 0.66  (table 0.50)
+  maddubs+madd   : 1.40  per dependent pair (latency-bound probe: 8 chains x 10 cycles / 8)
+  vpaddd ymm     : 0.27  (table 0.33)
+  vpsrlw ymm     : 0.26  (table 0.50)
+  vpshufb ymm    : 1.00  (table 1.00)
+  vmulps ymm     : 0.64  (table 0.50)
+  vaddps ymm     : 0.61  (table 0.50)
+# reading: the ports are Skylake's (two madd-class per cycle, one shuffle per cycle); nothing is half speed.
+
+# ---- 2. one maddubs -> madd -> add triple per 32 weights, 8 independent accumulators (cycles per triple)
+  register operands (no load)                        : 1.44
+  activation operand loaded from L1, indexed address : 2.23
+  the same at line offsets 0 / 16 / 32 / 48 bytes    : 2.33 / 2.46 / 2.29 / 2.51
+# reading: a triple costs 1.4 cycles from registers (floor 1.0: two p01 uops) and 2.3 with its load; the load's
+# alignment (whether a 32-byte load splits a cache line) does not matter. 8 triples = 18 cycles per super-block is
+# the core's cost on this machine, against a port floor of 8.
+
+# ---- 3. the single-row Q4_K x Q8_K kernel on an L1-resident row (2.9 KB) and activation (5.9 KB): cycles per super-block,
+#         with its pieces switched off one at a time (semantics change; timing only)
+  production dot_q4_k_q8k                 : 49.9
+  copy, everything on                     : 47.9
+  no prefetch                             : 46.3
+  no header (constants for d, dmin, scales): 29.9    header = 18 cycles (2 f16 converts, the 12-byte scale unpack, an insert and an extract)
+  no mins term                            : 39.9    mins = 8
+  no scale shuffles                       : 41.6    shuffles = 6 (8 x vpshufb on p5)
+  no nibble unpack                        : 45.6    unpack = 2
+  no f32 tail (i32 accumulator)           : 35.5    tail = 12 (cvt, mul, add, the scalar d, a broadcast)
+  no header, no mins, no shuffles         : 28.4
+  core only: unpack + madd, i32 acc       : 24.1
+  bare madd, i32 acc (no unpack)          : 21.4
+# reading: what a T-way blocked kernel can share between rows is the header, the shuffles and the unpack, 26 of the
+# 50 cycles; what it cannot share is the madd core (21) and the per-activation f32 tail and min term (20). At T = 8
+# the shared part costs 3 cycles per activation, so the blocked kernel's floor on this core is 41 + 3 = 44 cycles
+# against 50: the 1.1 to 1.3 x measured. Finding 68's premise (the unpack is what makes an extra verify row cost a
+# token) was wrong by half: the unpack is 36 % of the row; the int8 multiply-accumulate is the rest.
+
+# ---- 4. restructured single-row kernels (same arithmetic; result bit-identical to production: -22781.86 on the probe row)
+  restructured, plain                     : 49.9
+  B: header of sb+1 computed during sb    : 50.8
+  C: two integer accumulators (even/odd)  : 55.2
+  E: ggml's scalar utmp scale unpack      : 52.5
+  B+C / B+E / B+C+E                       : 50.9 / 53.5 / 52.7
+  rebuilt with -x86-branches-within-32B-boundaries (the Coffee Lake JCC erratum padding): 48.7 (no change)
+# reading: neither software pipelining, shorter add chains, moving the unpack to scalar ports, nor the JCC-erratum
+# alignment moves the kernel. The core runs this instruction mix at ~2 uops per cycle whatever the order.
+
+# ---- 5. what does help: the sibling hardware thread (aqueduct bench matmul, 17408 x 5120, 32 activations, ms per activation row)
+#         6 threads -> 12 threads, same binary, back to back
+  Q4_K tile 16 : 1.395 -> 1.090 ms   1.28 x     (per-row loop, tile 0: 1.560 -> 1.252, 1.25 x)
+  Q5_K tile 16 : 1.523 -> 1.117 ms   1.36 x
+  Q6_K tile 16 : 1.335 -> 0.876 ms   1.52 x
+# reading: with the ports 60 % idle behind dependency chains, the second thread of each core fills them; decode
+# (memory-bound, one activation) still prefers the six physical cores (finding 51), so the batched path takes every
+# hardware thread and the single-row path keeps the physical count.

@@ -1,0 +1,16 @@
+# The Phase 5.5 kernel probe (docs/data/kernel_probe.txt, docs/kquant-dot.md "Phase 5.5"): a separate binary crate
+# next to the workspace, built with `cargo build --release --manifest-path tools/probe/Cargo.toml` and run as
+# `tools/probe/target/release/probe.exe [--ports]`. It is not a workspace member so `cargo test` and clippy of the
+# engine do not build it.
+[package]
+name = "probe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aqueduct-core = { path = "../../crates/core" }
+
+[profile.release]
+opt-level = 3
+
+[workspace]

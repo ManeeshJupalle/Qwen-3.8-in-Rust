@@ -163,6 +163,51 @@ at 68 to 77 % (Q4_K), 74 to 79 % (Q5_K) and 84 to 85 % (Q6_K) of that round's me
 finding 49). Six threads beat twelve on every one of those lines (finding 51), which is why the engine
 defaults to the physical core count.
 
+## Phase 5.5: the blocked GEMM (`matmul_t`), and what a Coffee Lake core does with it
+
+Phase 5 left the batched matmul as `one_row` per (row, activation): every activation re-unpacked the weight row,
+and at resident each extra verify row cost 0.56 to 0.85 s of compute (finding 68), which is what made `--spec`
+lose where the model fits in RAM. Phase 5.5 writes the blocked form: `kdot::dot_q8k_t` (scalar reference) and
+`avx2::dot_q{4,5,6}_k_q8k_t` take one weight row and a tile of up to `T_MAX = 16` Q8_K rows, unpack each
+super-block once (Q4_K / Q5_K: the 8 code vectors and the 8 pre-shuffled scale broadcasts, the mins as 8 i16;
+Q6_K: the 8 code vectors from `q6_codes` and the 8 scale pairs) and then run the tile through it, sub-blocks
+outer and activations inner in register groups of 8 / 4 / 2 / 1, each activation with its own integer
+accumulator. Per activation the arithmetic is the single-row kernel's exactly (the same exact i32 lanes, the
+same `d * f32(sumi)` and `dmin * f32(mins . q8s)` per super-block into the row's own accumulators, the same
+final reduction), so `out[i]` is `dot_q8k(w, xs[i])` bit for bit; `tests/matmul_t.rs` asserts it on the fixture
+rows and on 5000 random / hostile rows for every tile size, and `matmul` / `matmul_fn` / `matmul_t` against
+`matvec` for every tile, batch and thread count. The identity is a property the tests check, not a contract:
+the contract stays the frozen Q8_K ceilings.
+
+`matvec::matmul_t` drives it: each pool participant takes its contiguous row range in blocks of `ROW_BLOCK = 32`
+rows and, per block, runs every activation tile through the block's rows before moving on, so a weight byte
+leaves DRAM once per batch whatever the batch size (the block's rows come from L2 / L3 on the second and later
+tiles; the tile's rows are re-read from L2 once per row). The tile is `matmul_tile()` (default 16;
+`AQUEDUCT_MATMUL_T` for measurement, `0` = the Phase 3.3 per-row loop) capped so that its activation rows fit
+192 KB of the 256 KB L2: 16 rows at the hidden width (6.2 KB each), 8 at the intermediate width (21 KB), where
+tile 16 measured slower than 8. `matmul` and `matmul_fn` (the verification batch, allocation-free: the tile is
+gathered into a stack array) route K-quant weights with Q8_K rows here and everything else (F32, Q8_0, Q4_0
+weights, `--q8-fine` rows) through the per-row loop as before.
+
+**What the machine does with it (`tools/probe`, `docs/data/kernel_probe.txt`).** The blocked kernel came out 1.1
+to 1.7 x faster per activation row than the per-row loop, not the 3 x the phase gate wanted, and the probe says
+why. On this i7-9750H the single-row Q4_K kernel costs 50 cycles per super-block with everything in L1, 2.5 x the
+port-model floor, and the parts that a blocked kernel can share between rows (the header with its two f16 converts
+and the 12-byte scale unpack, 18 cycles; the eight scale shuffles, 6; the nibble unpack, 2) are 26 of those 50.
+The rest is per activation: the eight `maddubs -> madd -> add` triples (21 cycles: a triple costs 1.4 cycles from
+registers and 2.3 with its load on this core, against 1.0 by the port tables, and the load's line alignment does
+not matter) and the f32 tail and min term (20). At tile 8 the shared part is 3 cycles per activation, so the
+blocked kernel's floor here is 44 cycles against 50, which is the 1.1 to 1.3 x measured for Q4_K; Q6_K, whose
+unpack is heavier, gains 1.5 to 1.7 x. Software-pipelining the header, splitting the accumulator chain, ggml's
+scalar `utmp` unpack and the Coffee Lake JCC-erratum branch padding change nothing (48 to 55 cycles); the core
+retires about two uops per cycle on this instruction mix whatever the order. What does help is the sibling
+hardware thread: with the ports 60 % idle behind the dependency chains, twelve threads run the blocked GEMM 1.3
+to 1.5 x faster than six, so `matmul_threads` gives every batched matmul (two rows or more) every hardware
+thread while the single-row matvec keeps the physical-core count (finding 51: six beat twelve when the bus is
+the limit). Finding 68's premise was half right: the unpack is 36 % of an extra row, and the int8
+multiply-accumulate that no AVX2 kernel can avoid (VNNI's `vpdpbusd` would fold each triple into one
+instruction) is the rest.
+
 ## Other choices
 
 - **Scales unpack** (Q4_K/Q5_K): the 12 packed bytes become the 16 i16 lanes `sc[0..8], m[0..8]` with 10

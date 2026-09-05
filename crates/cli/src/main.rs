@@ -21,6 +21,7 @@ fn usage() -> ExitCode {
     eprintln!(
         "usage:\n  aqueduct info <model.gguf>\n  aqueduct tok [--tokenizer <tokenizer.json>] encode <text>\n  aqueduct tok [--tokenizer <tokenizer.json>] decode <id,id,...>\n  aqueduct bench kernels [--threads N] [--rows R] [--cols C] [--reps N] [--no-scalar]
   aqueduct bench membw [--gib 2] [--runs 5] [--threads N]
+  aqueduct bench matmul [--n 4,32] [--tiles 0,1,2,4,8,16] [--reps 7] [--threads N] [--shapes gate,down]
   aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] [--sequential-prefill] [--q8-fine] [--profile] [-v]
                [--budget 8G] [--job-limit 8G] [--slots 2] [--max-pos N] [--qd 2] [--no-large-pages] [--stats <file>] [--membw GB/s --diskbw GB/s]
                [--spec [K]] [--sample] [--temperature T] [--top-k K] [--top-p P] [--min-p P] [--seed S] [--gen-config <json>]
@@ -30,7 +31,8 @@ fn usage() -> ExitCode {
                [--no-preserve-thinking] [--system <text>] [--greedy] [--temperature T] [--top-k K] [--top-p P] [--min-p P] [--seed S] [--show-config] [-v]
   aqueduct plan --budget <8G|bytes> [--model <gguf>] [--max-pos 4096] [--slots 2] [--spec K]
   aqueduct doctor [--model <gguf>] [--budget X] [--max-pos 4096] [--slots 2] [--runs 5] [--out <file>]
-  (--threads defaults to the physical core count, not the hardware thread count;
+  (--threads defaults to the physical core count, not the hardware thread count; batched matmuls (prefill, the
+   --spec verify pass) run on every hardware thread, AQUEDUCT_MATMUL_THREADS=N pins them and AQUEDUCT_MATMUL_T=0 selects the Phase 3.3 per-row loop;
    --profile needs a build with --features profile; --budget sizes the memory plan, --job-limit caps the
    process with a job object; sizes are binary: 8G = 8 GiB; --spec [K] drafts K tokens per round with the MTP head (K defaults to the measured default);
    run decodes greedily unless --sample or a sampling flag is given, chat samples with generation_config.json's defaults)"
@@ -56,6 +58,13 @@ fn main() -> ExitCode {
             }
         },
         Some("bench") if args.get(1).map(String::as_str) == Some("kernels") => match bench::kernels(&args[2..]) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("bench") if args.get(1).map(String::as_str) == Some("matmul") => match bench::matmul_tiles(&args[2..]) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");

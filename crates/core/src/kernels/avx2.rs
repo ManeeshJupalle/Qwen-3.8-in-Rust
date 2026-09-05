@@ -763,6 +763,301 @@ pub unsafe fn quantize_row_q8k(x: &[f32], d: &mut Vec<f32>, qs: &mut Vec<i8>, bs
     }
 }
 
+// ------------------------------------------------------------------------- blocked Q8_K kernels (Phase 5.5)
+//
+// One weight super-block against `t <= T_MAX` activation rows (`kdot.rs`, blocked form): the codes are
+// unpacked and the eight scale broadcasts (`shuffle_epi8` rows, Q4_K / Q5_K; scale pairs, Q6_K) built once,
+// then every activation row is multiplied through them. Per row the operations are those of the single-row
+// kernel above, in the same order (exact i32 lanes, one `mul` + `add` per super-block into the row's own
+// 8-lane accumulator, the same final reduction), so `out[i]` is `dot_q*_k_q8k(w, xs[i])` bit for bit; what is
+// shared between the rows is exactly the unpack. The per-row accumulators live in stack arrays (there are up
+// to 16 of them, more than the register file), the unpacked codes and scales in another; both are L1 traffic.
+
+use super::kdot::T_MAX;
+
+/// Per-activation base pointers of a tile, so the inner loop indexes arrays rather than `Vec`s.
+struct Tile {
+    qs: [*const u8; T_MAX],
+    d: [*const f32; T_MAX],
+    q8s: [*const i16; T_MAX],
+    bsums: [*const i16; T_MAX],
+}
+
+impl Tile {
+    fn new(xs: &[&Q8KRow]) -> Tile {
+        let mut t = Tile { qs: [std::ptr::null(); T_MAX], d: [std::ptr::null(); T_MAX], q8s: [std::ptr::null(); T_MAX], bsums: [std::ptr::null(); T_MAX] };
+        for (i, x) in xs.iter().enumerate() {
+            t.qs[i] = x.qs.as_ptr() as *const u8;
+            t.d[i] = x.d.as_ptr();
+            t.q8s[i] = x.q8s.as_ptr();
+            t.bsums[i] = x.bsums.as_ptr();
+        }
+        t
+    }
+}
+
+/// Shape checks of the blocked kernels: `1..=T_MAX` rows of the same length, `out` one per row.
+fn tile_shape(w_len: usize, block_bytes: usize, xs: &[&Q8KRow], out: &[f32]) -> usize {
+    let t = xs.len();
+    assert!((1..=T_MAX).contains(&t), "dot_q8k_t: {t} activation rows (1..={T_MAX})");
+    assert_eq!(out.len(), t, "dot_q8k_t: output length");
+    let nb = xs[0].n_blocks();
+    for x in xs {
+        assert_eq!(x.n_blocks(), nb, "dot_q8k_t: activation rows of different lengths");
+    }
+    assert_eq!(w_len, nb * block_bytes, "dot_q8k_t: weight row bytes");
+    nb
+}
+
+/// Prefetch the four lines of activation `a`'s next super-block (the tile lives in L2; the L1 streamer does
+/// not keep up with 8 interleaved streams, and a maddubs waiting on an L2 load stalls the scheduler).
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn prefetch_next_block(q8: *const u8) {
+    let p = q8.add(256);
+    prefetch(p);
+    prefetch(p.add(64));
+    prefetch(p.add(128));
+    prefetch(p.add(192));
+}
+
+/// One super-block of a Q4_K / Q5_K row against activations `i0..i0 + A` of the tile: sub-blocks outer,
+/// activations inner, so every sub-block issues `A` independent `maddubs -> madd -> add` triples into `A`
+/// register accumulators (the single-chain form retired one uop per cycle; this is what gives the scheduler
+/// ready work). Integer sums are exact in any order, so the lanes are the single-row kernel's; the f32 tail
+/// per activation (the min term into `accm`, `d * sumi` into `acc`) is that kernel's, in its order.
+/// (Index loops over `a`: `q8`, `sumi` and the tile arrays are parallel, indexed by the same activation.)
+#[inline]
+#[target_feature(enable = "avx2")]
+#[allow(clippy::too_many_arguments, clippy::needless_range_loop)]
+unsafe fn k45_group<const A: usize>(tile: &Tile, i0: usize, sb: usize, dw: f32, dminw: f32, mins: __m128i, codes: &[__m256i; 8], scb: &[__m256i; 8], acc: &mut [__m256; T_MAX], accm: &mut [__m128; T_MAX]) {
+    let mut q8 = [std::ptr::null::<u8>(); A];
+    for a in 0..A {
+        q8[a] = tile.qs.get_unchecked(i0 + a).add(sb * 256);
+        prefetch_next_block(q8[a]);
+    }
+    let mut sumi = [_mm256_setzero_si256(); A];
+    for s in 0..8 {
+        let c = codes[s];
+        let sc = scb[s];
+        for a in 0..A {
+            sumi[a] = _mm256_add_epi32(sumi[a], _mm256_madd_epi16(sc, _mm256_maddubs_epi16(c, load(q8[a].add(32 * s)))));
+        }
+    }
+    for a in 0..A {
+        let i = i0 + a;
+        let dx = *tile.d.get_unchecked(i).add(sb);
+        let d = dx * dw;
+        let dmin = -dx * dminw;
+        let prod = _mm_madd_epi16(mins, _mm_loadu_si128(tile.q8s.get_unchecked(i).add(sb * 8) as *const __m128i));
+        *accm.get_unchecked_mut(i) = _mm_add_ps(*accm.get_unchecked(i), _mm_mul_ps(_mm_set1_ps(dmin), _mm_cvtepi32_ps(prod)));
+        *acc.get_unchecked_mut(i) = _mm256_add_ps(*acc.get_unchecked(i), _mm256_mul_ps(_mm256_set1_ps(d), _mm256_cvtepi32_ps(sumi[a])));
+    }
+}
+
+/// The tile's activations in groups of 8, 4, 2, 1 through `k45_group`.
+#[inline]
+#[target_feature(enable = "avx2")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn k45_tile(t: usize, tile: &Tile, sb: usize, dw: f32, dminw: f32, mins: __m128i, codes: &[__m256i; 8], scb: &[__m256i; 8], acc: &mut [__m256; T_MAX], accm: &mut [__m128; T_MAX]) {
+    let mut i = 0;
+    while i + 8 <= t {
+        k45_group::<8>(tile, i, sb, dw, dminw, mins, codes, scb, acc, accm);
+        i += 8;
+    }
+    if i + 4 <= t {
+        k45_group::<4>(tile, i, sb, dw, dminw, mins, codes, scb, acc, accm);
+        i += 4;
+    }
+    if i + 2 <= t {
+        k45_group::<2>(tile, i, sb, dw, dminw, mins, codes, scb, acc, accm);
+        i += 2;
+    }
+    if i < t {
+        k45_group::<1>(tile, i, sb, dw, dminw, mins, codes, scb, acc, accm);
+    }
+}
+
+/// As `k45_group` for a Q6_K super-block: the eight scale pairs in `scp`, the `-32` fold through `bsums`
+/// per activation (`sumi - (bsums . scales) << 5`, exact), then `d * sumi` into `acc`.
+#[inline]
+#[target_feature(enable = "avx2")]
+#[allow(clippy::too_many_arguments, clippy::needless_range_loop)]
+unsafe fn q6_group<const A: usize>(tile: &Tile, i0: usize, sb: usize, dw: f32, scales16: __m256i, codes: &[__m256i; 8], scp: &[__m256i; 8], acc: &mut [__m256; T_MAX]) {
+    let mut q8 = [std::ptr::null::<u8>(); A];
+    for a in 0..A {
+        q8[a] = tile.qs.get_unchecked(i0 + a).add(sb * 256);
+        prefetch_next_block(q8[a]);
+    }
+    let mut sumi = [_mm256_setzero_si256(); A];
+    for s in 0..8 {
+        let c = codes[s];
+        let sc = scp[s];
+        for a in 0..A {
+            sumi[a] = _mm256_add_epi32(sumi[a], _mm256_madd_epi16(sc, _mm256_maddubs_epi16(c, load(q8[a].add(32 * s)))));
+        }
+    }
+    for a in 0..A {
+        let i = i0 + a;
+        let d = *tile.d.get_unchecked(i).add(sb) * dw;
+        let q8sums = _mm256_loadu_si256(tile.bsums.get_unchecked(i).add(sb * 16) as *const __m256i);
+        let q8sclsub = _mm256_slli_epi32(_mm256_madd_epi16(q8sums, scales16), 5);
+        let s = _mm256_sub_epi32(sumi[a], q8sclsub);
+        *acc.get_unchecked_mut(i) = _mm256_add_ps(*acc.get_unchecked(i), _mm256_mul_ps(_mm256_set1_ps(d), _mm256_cvtepi32_ps(s)));
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn q6_tile(t: usize, tile: &Tile, sb: usize, dw: f32, scales16: __m256i, codes: &[__m256i; 8], scp: &[__m256i; 8], acc: &mut [__m256; T_MAX]) {
+    let mut i = 0;
+    while i + 8 <= t {
+        q6_group::<8>(tile, i, sb, dw, scales16, codes, scp, acc);
+        i += 8;
+    }
+    if i + 4 <= t {
+        q6_group::<4>(tile, i, sb, dw, scales16, codes, scp, acc);
+        i += 4;
+    }
+    if i + 2 <= t {
+        q6_group::<2>(tile, i, sb, dw, scales16, codes, scp, acc);
+        i += 2;
+    }
+    if i < t {
+        q6_group::<1>(tile, i, sb, dw, scales16, codes, scp, acc);
+    }
+}
+
+/// Q4_K x `t` Q8_K rows: `out[i] == dot_q4_k_q8k(w, xs[i])` bit for bit, the super-block unpacked once.
+#[target_feature(enable = "avx2,f16c")]
+pub unsafe fn dot_q4_k_q8k_t(w: &[u8], xs: &[&Q8KRow], out: &mut [f32]) {
+    let t = xs.len();
+    let nb = tile_shape(w.len(), Q4_K_BLOCK_BYTES, xs, out);
+    let tile = Tile::new(xs);
+    let m4 = _mm256_set1_epi8(0xF);
+    let mut acc = [_mm256_setzero_ps(); T_MAX];
+    let mut accm = [_mm_setzero_ps(); T_MAX];
+    let mut codes = [_mm256_setzero_si256(); 8];
+    let mut scb = [_mm256_setzero_si256(); 8];
+    for sb in 0..nb {
+        let wb = w.as_ptr().add(sb * Q4_K_BLOCK_BYTES);
+        prefetch(wb.add(PF_DIST));
+        prefetch(wb.add(PF_DIST + 48));
+        prefetch(wb.add(PF_DIST + 96));
+        let dw = f16_at(wb);
+        let dminw = f16_at(wb.add(2));
+        let sm = scales_mins_k4(wb.add(4));
+        let sc128 = _mm256_castsi256_si128(sm);
+        let scales = _mm256_set_m128i(sc128, sc128);
+        let mins = _mm256_extracti128_si256(sm, 1);
+        let q4 = wb.add(16);
+        for j in 0..4 {
+            let q4bits = load(q4.add(32 * j));
+            codes[2 * j] = _mm256_and_si256(q4bits, m4);
+            codes[2 * j + 1] = _mm256_and_si256(_mm256_srli_epi16(q4bits, 4), m4);
+        }
+        for (s, v) in scb.iter_mut().enumerate() {
+            *v = _mm256_shuffle_epi8(scales, scale_shuf(s));
+        }
+        k45_tile(t, &tile, sb, dw, dminw, mins, &codes, &scb, &mut acc, &mut accm);
+    }
+    for i in 0..t {
+        out[i] = hsum_ps8(acc[i]) + hsum_ps4(accm[i]);
+    }
+}
+
+/// Q5_K x `t` Q8_K rows: `out[i] == dot_q5_k_q8k(w, xs[i])` bit for bit.
+#[target_feature(enable = "avx2,f16c")]
+pub unsafe fn dot_q5_k_q8k_t(w: &[u8], xs: &[&Q8KRow], out: &mut [f32]) {
+    let t = xs.len();
+    let nb = tile_shape(w.len(), Q5_K_BLOCK_BYTES, xs, out);
+    let tile = Tile::new(xs);
+    let m4 = _mm256_set1_epi8(0xF);
+    let mone = _mm256_set1_epi8(1);
+    let mut acc = [_mm256_setzero_ps(); T_MAX];
+    let mut accm = [_mm_setzero_ps(); T_MAX];
+    let mut codes = [_mm256_setzero_si256(); 8];
+    let mut scb = [_mm256_setzero_si256(); 8];
+    for sb in 0..nb {
+        let wb = w.as_ptr().add(sb * Q5_K_BLOCK_BYTES);
+        prefetch(wb.add(PF_DIST));
+        prefetch(wb.add(PF_DIST + 60));
+        prefetch(wb.add(PF_DIST + 120));
+        let dw = f16_at(wb);
+        let dminw = f16_at(wb.add(2));
+        let sm = scales_mins_k4(wb.add(4));
+        let sc128 = _mm256_castsi256_si128(sm);
+        let scales = _mm256_set_m128i(sc128, sc128);
+        let mins = _mm256_extracti128_si256(sm, 1);
+        let mut hb = load(wb.add(16));
+        let q5 = wb.add(48);
+        for j in 0..4 {
+            let q5bits = load(q5.add(32 * j));
+            let h0 = _mm256_slli_epi16(_mm256_and_si256(hb, mone), 4);
+            hb = _mm256_srli_epi16(hb, 1);
+            let h1 = _mm256_slli_epi16(_mm256_and_si256(hb, mone), 4);
+            hb = _mm256_srli_epi16(hb, 1);
+            codes[2 * j] = _mm256_add_epi8(_mm256_and_si256(q5bits, m4), h0);
+            codes[2 * j + 1] = _mm256_add_epi8(_mm256_and_si256(_mm256_srli_epi16(q5bits, 4), m4), h1);
+        }
+        for (s, v) in scb.iter_mut().enumerate() {
+            *v = _mm256_shuffle_epi8(scales, scale_shuf(s));
+        }
+        k45_tile(t, &tile, sb, dw, dminw, mins, &codes, &scb, &mut acc, &mut accm);
+    }
+    for i in 0..t {
+        out[i] = hsum_ps8(acc[i]) + hsum_ps4(accm[i]);
+    }
+}
+
+/// Q6_K x `t` Q8_K rows: `out[i] == dot_q6_k_q8k(w, xs[i])` bit for bit; the codes and the eight scale pairs
+/// unpacked once per super-block, the `-32` fold through `bsums` per row.
+#[target_feature(enable = "avx2,f16c")]
+pub unsafe fn dot_q6_k_q8k_t(w: &[u8], xs: &[&Q8KRow], out: &mut [f32]) {
+    let t = xs.len();
+    let nb = tile_shape(w.len(), Q6_K_BLOCK_BYTES, xs, out);
+    let tile = Tile::new(xs);
+    let m48 = _mm256_set1_epi8(0x30);
+    let m15 = _mm256_set1_epi8(15);
+    let mut acc = [_mm256_setzero_ps(); T_MAX];
+    let mut codes = [_mm256_setzero_si256(); 8];
+    let mut scp = [_mm256_setzero_si256(); 8];
+    for sb in 0..nb {
+        let wb = w.as_ptr().add(sb * Q6_K_BLOCK_BYTES);
+        prefetch(wb.add(PF_DIST));
+        prefetch(wb.add(PF_DIST + 56));
+        prefetch(wb.add(PF_DIST + 112));
+        prefetch(wb.add(PF_DIST + 168));
+        let dw = f16_at(wb.add(208));
+        let scales = _mm_loadu_si128(wb.add(192) as *const __m128i);
+        let scales16 = _mm256_cvtepi8_epi16(scales);
+        for j in 0..2 {
+            let q6 = q6_codes(wb, j, m15, m48);
+            codes[4 * j..4 * j + 4].copy_from_slice(&q6);
+        }
+        for (s, v) in scp.iter_mut().enumerate() {
+            *v = q6_scale_pair(scales, s);
+        }
+        q6_tile(t, &tile, sb, dw, scales16, &codes, &scp, &mut acc);
+    }
+    for i in 0..t {
+        out[i] = hsum_ps8(acc[i]);
+    }
+}
+
+/// Blocked dispatch (K-quant weight types only): `true` if handled.
+#[target_feature(enable = "avx2,f16c")]
+pub unsafe fn dot_q8k_t(t: GgmlType, w: &[u8], xs: &[&Q8KRow], out: &mut [f32]) -> bool {
+    match t {
+        GgmlType::Q4_K => dot_q4_k_q8k_t(w, xs, out),
+        GgmlType::Q5_K => dot_q5_k_q8k_t(w, xs, out),
+        GgmlType::Q6_K => dot_q6_k_q8k_t(w, xs, out),
+        _ => return false,
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

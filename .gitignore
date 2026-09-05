@@ -9,3 +9,6 @@ tests/fixtures/ref_bf16/*hidden*
 
 # Python bytecode caches
 __pycache__/
+
+# Phase 5.5: the kernel probe is a separate crate (tools/probe/Cargo.toml); its build directory is not tracked
+tools/probe/target/

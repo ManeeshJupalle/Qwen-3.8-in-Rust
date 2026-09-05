@@ -6,7 +6,7 @@
 
 use std::time::Instant;
 
-use aqueduct_core::kernels::matvec::{matvec, Act, ActVec, WeightMat};
+use aqueduct_core::kernels::matvec::{matmul, matvec, set_matmul_threads, set_matmul_tile, Act, ActVec, WeightMat, DEFAULT_MATMUL_T};
 use aqueduct_core::kernels::q8::Q8Row;
 use aqueduct_core::kernels::q8k::Q8KRow;
 use aqueduct_core::kernels::rmsnorm::rmsnorm;
@@ -147,6 +147,138 @@ pub fn kernels(args: &[String]) -> Result<(), String> {
         println!("{:<12} {:<7} {:>12.2} {:>10.2}", "softmax", name, s * 1e6, (cols * 4) as f64 / s / 1e9);
     }
     force_scalar(false);
+    Ok(())
+}
+
+// ------------------------------------------------------------------------------------------------ matmul tiles
+
+/// Median of a non-empty slice (sorted copy).
+fn median(v: &[f64]) -> f64 {
+    let mut s = v.to_vec();
+    s.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    s[s.len() / 2]
+}
+
+/// `aqueduct bench matmul [--n 4,32] [--tiles 0,1,2,4,8,16] [--reps 7] [--threads N] [--shapes gate,down]`:
+/// the blocked GEMM (Phase 5.5) against the Phase 3.3 per-row loop, per activation tile. For each K-quant
+/// type and shape (`gate` = 17408 x 5120, the ffn_gate shape with 5120-wide activations; `down` = 5120 x 17408,
+/// the ffn_down shape with 17408-wide activations) and each batch size `n`, every tile in `--tiles` runs a
+/// `matmul` of `n` random Q8_K rows; the tiles are alternated within each repetition (an interleaved A/B, so
+/// every variant sees the same machine state) and the median per tile is reported: ms per call, ms per
+/// activation row, ns per (super-block, activation) and the speedup over tile 0. The single-activation
+/// `matvec` of the same matrix is the memory-bound floor each line is judged against.
+pub fn matmul_tiles(args: &[String]) -> Result<(), String> {
+    let (physical, logical) = (physical_cores(), logical_cores());
+    let threads = arg(args, "--threads", physical)?;
+    let reps = arg(args, "--reps", 7)?;
+    let list = |name: &str, default: &str| -> Result<Vec<usize>, String> {
+        let s = match args.iter().position(|a| a == name) {
+            Some(i) => args.get(i + 1).ok_or_else(|| format!("{name} needs a value"))?.clone(),
+            None => default.to_string(),
+        };
+        s.split(',').map(|x| x.trim().parse::<usize>().map_err(|e| format!("{name}: {e}"))).collect()
+    };
+    let ns = list("--n", "4,32")?;
+    let tiles = list("--tiles", "0,1,2,4,8,16")?;
+    // --same-act: every activation of the batch is the same row, so the tile is one Q8_K row (L1-resident):
+    // separates the cost of the arithmetic from the cost of fetching the tile
+    let same_act = args.iter().any(|a| a == "--same-act");
+    let shapes_arg = match args.iter().position(|a| a == "--shapes") {
+        Some(i) => args.get(i + 1).ok_or_else(|| "--shapes needs a value".to_string())?.clone(),
+        None => "gate,down".to_string(),
+    };
+    let mut shapes: Vec<(&str, usize, usize)> = Vec::new();
+    for s in shapes_arg.split(',') {
+        match s.trim() {
+            "gate" => shapes.push(("gate", 17408, 5120)),
+            "down" => shapes.push(("down", 5120, 17408)),
+            "small" => shapes.push(("small", 512, 5120)),
+            "tiny" => shapes.push(("tiny", 4, 5120)),
+            other => return Err(format!("--shapes: unknown shape {other} (gate, down, small, tiny)")),
+        }
+    }
+    println!("# aqueduct bench matmul: threads {threads} ({physical} physical, {logical} logical), reps {reps}, n {ns:?}, tiles {tiles:?} (0 = the Phase 3.3 per-row loop){}; avx2+f16c: {}", if same_act { "; --same-act: one activation row repeated (L1-resident tile)" } else { "" }, avx2_detected());
+    // the clock the ns numbers below are to be read against: a dependent chain of 1-cycle adds, on one
+    // thread and on `threads` threads at once (the all-core AVX clock is what the kernels run at)
+    let clock = |n: usize| -> f64 {
+        std::thread::scope(|s| {
+            let hs: Vec<_> = (0..n)
+                .map(|_| {
+                    s.spawn(|| {
+                        // `x -> (x ^ i) + (x >> 7)`: a 2-cycle dependent chain (shift and xor in parallel, then
+                        // the add) that has no closed form and cannot be vectorised; nothing else in the loop
+                        let iters = 300_000_000u64;
+                        let mut x = std::hint::black_box(1u64);
+                        let t0 = Instant::now();
+                        for i in 0..iters {
+                            x = (x ^ i).wrapping_add(x >> 7);
+                        }
+                        std::hint::black_box(x);
+                        2.0 * iters as f64 / t0.elapsed().as_secs_f64() / 1e9
+                    })
+                })
+                .collect();
+            hs.into_iter().map(|h| h.join().unwrap()).fold(0f64, f64::max)
+        })
+    };
+    println!("# clock (dependent 1-cycle adds): {:.2} GHz on one thread, {:.2} GHz with {threads} threads busy", clock(1), clock(threads));
+    println!("# blocked GEMM (matmul_t): each weight super-block unpacked once per tile of T activation rows; tiles alternated per repetition, medians reported");
+    println!("# ms/row = ms per call / n (the marginal cost of one activation row when the weights are shared); ns/(sb,act) = ms per call * 1e6 / (rows * super-blocks * n)");
+    println!("# matvec = one activation, the memory-bound floor of the same matrix (ms, and weight GB/s)");
+    set_matmul_threads(threads); // the batch policy would otherwise take every hardware thread
+    let mut rng = Rng(0x7A11_E5B7_0000_0001);
+    for &(sname, rows, cols) in &shapes {
+        let nb = cols / 256;
+        for t in [GgmlType::Q4_K, GgmlType::Q5_K, GgmlType::Q6_K] {
+            let (bs, ts) = t.block_layout();
+            let row_bytes = (cols as u64 / bs * ts) as usize;
+            let mut data: Vec<u8> = (0..rows * row_bytes).map(|_| (rng.next() >> 24) as u8).collect();
+            // finite f16 scales so no NaN reaches the accumulators (the timing does not care, the sums do)
+            let offs: &[usize] = if t == GgmlType::Q6_K { &[208] } else { &[0, 2] };
+            for blk in data.chunks_mut(ts as usize) {
+                for &off in offs {
+                    let bits = u16::from_le_bytes([blk[off], blk[off + 1]]);
+                    let fixed = (bits & 0x83FF) | ((12 + (bits >> 10) % 7) << 10);
+                    blk[off..off + 2].copy_from_slice(&fixed.to_le_bytes());
+                }
+            }
+            let w = WeightMat::new(t, rows, cols, data);
+            let bytes = (rows * row_bytes) as f64;
+            let n_max = *ns.iter().max().unwrap_or(&1);
+            let xs: Vec<Vec<f32>> = (0..n_max).map(|_| (0..cols).map(|_| rng.f32()).collect()).collect();
+            let acts: Vec<ActVec<'_>> = xs.iter().map(|x| ActVec::new(x)).collect();
+            let batch: Vec<Act<'_>> = acts.iter().map(|a| Act::Q8K(if same_act { acts[0].q8k() } else { a.q8k() })).collect();
+            let mut y1 = vec![0f32; rows];
+            let s1 = time_it(|| matvec(&w, batch[0], &mut y1, threads), 3, 0.5);
+            println!();
+            println!("{:<5} {:<5} {:>5}x{:<5} matvec {:>8.3} ms  {:>7.2} GB/s of weights", sname, t.name(), rows, cols, s1 * 1e3, bytes / s1 / 1e9);
+            println!("{:<5} {:<5} {:>4} {:>5} {:>10} {:>9} {:>12} {:>9} {:>11}", "shape", "type", "n", "tile", "ms/call", "ms/row", "ns/(sb,act)", "x tile0", "eff GB/s");
+            for &n in &ns {
+                let mut y = vec![0f32; n * rows];
+                let mut times: Vec<Vec<f64>> = vec![Vec::new(); tiles.len()];
+                for rep in 0..reps {
+                    for k in 0..tiles.len() {
+                        let idx = (k + rep) % tiles.len(); // rotate the order so no tile always runs first
+                        set_matmul_tile(tiles[idx]);
+                        matmul(&w, &batch[..n], &mut y, threads); // warm
+                        let t0 = Instant::now();
+                        matmul(&w, &batch[..n], &mut y, threads);
+                        times[idx].push(t0.elapsed().as_secs_f64());
+                    }
+                }
+                let base = times.iter().zip(&tiles).find(|(_, &tl)| tl == 0).map(|(v, _)| median(v));
+                for (k, &tile) in tiles.iter().enumerate() {
+                    let m = median(&times[k]);
+                    let per_row = m / n as f64;
+                    let ns_sb = m * 1e9 / (rows * nb * n) as f64;
+                    let x0 = base.map_or(String::from("-"), |b| format!("{:.2}", b / m));
+                    println!("{:<5} {:<5} {:>4} {:>5} {:>10.3} {:>9.3} {:>12.2} {:>9} {:>11.2}", sname, t.name(), n, tile, m * 1e3, per_row * 1e3, ns_sb, x0, bytes * n as f64 / m / 1e9);
+                }
+            }
+            set_matmul_tile(DEFAULT_MATMUL_T);
+        }
+    }
+    set_matmul_threads(0);
     Ok(())
 }
 
