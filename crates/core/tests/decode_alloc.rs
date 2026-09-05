@@ -181,4 +181,46 @@ fn decode_is_allocation_free_and_matches_the_allocating_path() {
             );
         }
     }
+
+    // ---- (d) Phase 5: speculative rounds (`--spec 2`) on the same streamed split: zero allocations across
+    // 32 rounds (the MTP's re-feed and chained drafts, the verification batch, the snapshot and replay, the
+    // I/O thread), and exactly one disk pass per round.
+    {
+        use aqueduct_core::sample::{Sampler, SamplerConfig};
+        let g = Gguf::open(&path).expect("open");
+        let cfg = ModelConfig::from_gguf(&g).expect("config");
+        let input = PlanInput::new(&g, &cfg);
+        let sector = DirectFile::open(&path, DEFAULT_CHUNK, 1).expect("direct open").sector as u64;
+        let (pinned, n_slots, k) = (2u32, 2usize, 2usize);
+        let max_pos = 3 * STEPS + 8;
+        let mut params = PlanParams::new(Some(0), max_pos as u64, n_slots, sector);
+        params.spec_k = k as u64;
+        let base = MemoryPlan::compute(&input, &params).resident_bytes;
+        let largest = (pinned..cfg.n_layer).map(|i| input.layer_bytes(i as usize)).max().unwrap();
+        let prefix: u64 = (0..pinned).map(|i| arena_bytes(input.layer_bytes(i as usize), sector)).sum();
+        let budget = base + n_slots as u64 * arena_bytes(largest, sector) + prefix;
+        drop(g);
+        let opts = LoadOpts { budget: Some(budget), max_pos, n_slots, large_pages: false, spec_k: k, ..LoadOpts::default() };
+        let model = Model::load_with(&path, 2, &opts).expect("streamed load");
+        assert_eq!((model.plan.pinned, model.plan.n_slots), (pinned, n_slots));
+        let mut state = model.new_state_spec(k).expect("spec state");
+        state.reserve(max_pos);
+        let mut sampler = Sampler::new(SamplerConfig::greedy(), model.vocab());
+        let mut x = model.spec_prefill(&[1, 2, 3], &mut state, &mut sampler);
+        // warm-up round
+        model.spec_round(&mut state, x, &mut sampler);
+        x = *state.spec.as_ref().unwrap().emitted.last().unwrap();
+        let before = model.stream_stats().unwrap();
+        let allocs = count_allocs(|| {
+            for _ in 0..STEPS {
+                model.spec_round(&mut state, x, &mut sampler);
+                x = *state.spec.as_ref().unwrap().emitted.last().unwrap();
+            }
+        });
+        let after = model.stream_stats().unwrap();
+        assert_eq!(allocs, 0, "spec k={k}, streaming: {allocs} allocations across {STEPS} rounds (want 0)");
+        assert_eq!(after.consumed_bytes - before.consumed_bytes, STEPS as u64 * model.streamed_bytes_per_pass(), "disk bytes over {STEPS} rounds");
+        let s = &state.spec.as_ref().unwrap().stats;
+        println!("spec k={k}, {pinned} pinned + {} streamed: 0 allocations across {STEPS} rounds, one disk pass per round ({} bytes), {} tokens emitted, {} drafts accepted", cfg.n_layer - pinned, model.streamed_bytes_per_pass(), s.emitted, s.accepted);
+    }
 }

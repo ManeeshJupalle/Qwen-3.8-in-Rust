@@ -6,6 +6,7 @@
 pub mod gated_deltanet;
 pub mod gqa_attention;
 pub mod mlp;
+pub mod mtp;
 
 use crate::config::ModelConfig;
 use crate::gguf::{GgmlType, Gguf};
@@ -174,6 +175,60 @@ impl Scratch {
     }
 }
 
+/// Every buffer the batched forward of `max_t` rows needs (Phase 5: the verification batch of `k + 1` tokens
+/// and the MTP re-feed), preallocated once and reused by every layer in turn, like `Scratch` for one token.
+/// The per-head attention score rows are taken from the `Scratch` passed alongside.
+pub struct BatchScratch {
+    pub max_t: usize,
+    pub normed: Vec<f32>,
+    pub mixed: Vec<f32>,
+    pub resid: Vec<f32>,
+    pub acts: Vec<ActBuf>,
+    pub mlp: mlp::MlpBatch,
+    pub dn: Option<gated_deltanet::DeltaBatch>,
+    pub at: Option<gqa_attention::AttnBatch>,
+}
+
+impl BatchScratch {
+    /// Sized for the largest layer in `layers` and `max_t` rows.
+    pub fn for_layers(layers: &[DecoderLayer], hidden: usize, max_t: usize) -> BatchScratch {
+        let mut inter = 0usize;
+        let (mut dn_dims, mut at_dims) = ((0usize, 0usize, 0usize, 0usize), (0usize, 0usize, 0usize, 0usize));
+        for l in layers {
+            inter = inter.max(l.mlp.gate.out_features());
+            match &l.mixer {
+                Mixer::DeltaNet(d) => {
+                    let c = &mut dn_dims;
+                    *c = (c.0.max(d.conv_dim()), c.1.max(d.n_v), c.2.max(d.dk), c.3.max(d.dv));
+                }
+                Mixer::Attention(a) => {
+                    let c = &mut at_dims;
+                    *c = (c.0.max(a.n_head), c.1.max(a.n_head_kv), c.2.max(a.head_dim), c.3.max(a.rope_dim));
+                }
+            }
+        }
+        BatchScratch {
+            max_t,
+            normed: vec![0f32; max_t * hidden],
+            mixed: vec![0f32; max_t * hidden],
+            resid: vec![0f32; max_t * hidden],
+            acts: (0..max_t).map(|_| ActBuf::with_capacity(hidden)).collect(),
+            mlp: mlp::MlpBatch::new(inter, max_t),
+            dn: (dn_dims.1 > 0).then(|| gated_deltanet::DeltaBatch::new(dn_dims.0, dn_dims.1, dn_dims.2, dn_dims.3, max_t)),
+            at: (at_dims.0 > 0).then(|| gqa_attention::AttnBatch::new(at_dims.0, at_dims.1, at_dims.2, at_dims.3, max_t)),
+        }
+    }
+
+    /// Bytes held (capacities), for the memory plan.
+    pub fn bytes(&self) -> usize {
+        (self.normed.capacity() + self.mixed.capacity() + self.resid.capacity()) * 4
+            + self.acts.iter().map(|a| a.bytes()).sum::<usize>()
+            + self.mlp.bytes()
+            + self.dn.as_ref().map_or(0, |d| d.bytes())
+            + self.at.as_ref().map_or(0, |a| a.bytes())
+    }
+}
+
 /// `h = x + mixer(attn_norm(x)); y = h + mlp(post_attention_norm(h))` (Qwen3_5DecoderLayer lines 757-797).
 pub struct DecoderLayer {
     pub index: u32,
@@ -187,9 +242,15 @@ pub struct DecoderLayer {
 impl DecoderLayer {
     /// Load layer `index` (`blk.{index}.*`) with the sizes and layer schedule from the GGUF config.
     pub fn load(src: &dyn TensorSource, cfg: &ModelConfig, index: u32) -> Result<DecoderLayer> {
+        Self::load_kind(src, cfg, index, cfg.full_attention_layers.contains(&index))
+    }
+
+    /// Load `blk.{index}.*` as an attention block or a DeltaNet block regardless of the layer schedule (the MTP
+    /// block, `blk.64`, is an attention block that is not in `full_attention_layers`).
+    pub fn load_kind(src: &dyn TensorSource, cfg: &ModelConfig, index: u32, attention: bool) -> Result<DecoderLayer> {
         let p = format!("blk.{index}.");
         let hidden = cfg.hidden_size as usize;
-        let mixer = if cfg.full_attention_layers.contains(&index) {
+        let mixer = if attention {
             Mixer::Attention(gqa_attention::GqaAttention::load(
                 src, &p, hidden, cfg.n_head as usize, cfg.n_head_kv as usize, cfg.head_dim_k as usize, cfg.rope_dim as usize, cfg.rope_freq_base, cfg.rms_norm_eps,
             )?)
@@ -265,6 +326,53 @@ impl DecoderLayer {
         crate::prof_scope!(crate::prof::Stage::Residual);
         for ((yi, r), mi) in y[..hidden].iter_mut().zip(&sc.resid[..hidden]).zip(&sc.mixed[..hidden]) {
             *yi = *r + *mi;
+        }
+    }
+
+    /// `forward_prefill` with caller-owned buffers (Phase 5): no allocation once `bsc` is sized for `t` rows and
+    /// `sc` / the state are reserved for the positions. Row `i` is `forward_token_in` on row `i`, bit for bit.
+    #[allow(clippy::too_many_arguments)]
+    pub fn forward_batch_in(&self, x: &[f32], t: usize, start_pos: u32, state: &mut MixerState, bsc: &mut BatchScratch, sc: &mut Scratch, y: &mut [f32], threads: usize) {
+        let hidden = self.attn_norm.len();
+        assert_eq!(x.len(), t * hidden);
+        assert_eq!(y.len(), t * hidden);
+        assert!(t <= bsc.max_t, "BatchScratch: {t} rows > max_t {}", bsc.max_t);
+        for i in 0..t {
+            rmsnorm(&x[i * hidden..(i + 1) * hidden], &self.attn_norm, self.eps, &mut bsc.normed[i * hidden..(i + 1) * hidden]);
+        }
+        match (&self.mixer, state) {
+            (Mixer::DeltaNet(d), MixerState::DeltaNet(s)) => {
+                let BatchScratch { normed, mixed, acts, dn, .. } = &mut *bsc;
+                let dnb = dn.as_mut().expect("BatchScratch: no DeltaNet buffers");
+                for i in 0..t {
+                    acts[i].fill(&normed[i * hidden..(i + 1) * hidden], &d.input_types());
+                }
+                d.forward_batch_in(&normed[..t * hidden], t, acts, s, dnb, &mut mixed[..t * hidden], threads);
+            }
+            (Mixer::Attention(a), MixerState::Attention(c)) => {
+                let BatchScratch { normed, mixed, acts, at, .. } = &mut *bsc;
+                let atb = at.as_mut().expect("BatchScratch: no attention buffers");
+                let ssc = sc.at.as_mut().expect("Scratch: no attention buffers");
+                for i in 0..t {
+                    acts[i].fill(&normed[i * hidden..(i + 1) * hidden], &a.input_types());
+                }
+                a.forward_batch_in(&normed[..t * hidden], t, acts, start_pos, c, atb, ssc, &mut mixed[..t * hidden], threads);
+            }
+            _ => panic!("DecoderLayer: state kind does not match mixer kind"),
+        }
+        for i in 0..t * hidden {
+            bsc.resid[i] = x[i] + bsc.mixed[i];
+        }
+        for i in 0..t {
+            rmsnorm(&bsc.resid[i * hidden..(i + 1) * hidden], &self.post_attention_norm, self.eps, &mut bsc.normed[i * hidden..(i + 1) * hidden]);
+        }
+        let BatchScratch { normed, mixed, acts, mlp, .. } = &mut *bsc;
+        for i in 0..t {
+            acts[i].fill(&normed[i * hidden..(i + 1) * hidden], &self.mlp.input_types());
+        }
+        self.mlp.forward_batch_in(&normed[..t * hidden], t, acts, mlp, &mut mixed[..t * hidden], threads);
+        for i in 0..t * hidden {
+            y[i] = bsc.resid[i] + bsc.mixed[i];
         }
     }
 

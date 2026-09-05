@@ -11,6 +11,7 @@ use aqueduct_core::tier::{group, parse_bytes, MemoryPlan, PlanInput, PlanParams}
 use aqueduct_core::{layer_of, Gguf, ModelConfig, Tok};
 
 mod bench;
+mod chat;
 mod doctor;
 mod run;
 
@@ -22,12 +23,17 @@ fn usage() -> ExitCode {
   aqueduct bench membw [--gib 2] [--runs 5] [--threads N]
   aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] [--sequential-prefill] [--q8-fine] [--profile] [-v]
                [--budget 8G] [--job-limit 8G] [--slots 2] [--max-pos N] [--qd 2] [--no-large-pages] [--stats <file>] [--membw GB/s --diskbw GB/s]
+               [--spec K] [--sample] [--temperature T] [--top-k K] [--top-p P] [--min-p P] [--seed S] [--gen-config <json>]
                (--ids <csv> | --prompt <text>)
-  aqueduct plan --budget <8G|bytes> [--model <gguf>] [--max-pos 4096] [--slots 2]
+  aqueduct chat [--model <gguf>] [--tokenizer <json>] [--template <jinja>] [--gen-config <json>] [--threads N] [--budget 16G] [--job-limit 16G]
+               [--slots 2] [--qd 2] [--spec K] [--max-tokens 1024] [--max-pos 4096] [--no-think] [--reasoning-effort xhigh|medium|low]
+               [--no-preserve-thinking] [--system <text>] [--greedy] [--temperature T] [--top-k K] [--top-p P] [--min-p P] [--seed S] [--show-config] [-v]
+  aqueduct plan --budget <8G|bytes> [--model <gguf>] [--max-pos 4096] [--slots 2] [--spec K]
   aqueduct doctor [--model <gguf>] [--budget X] [--max-pos 4096] [--slots 2] [--runs 5] [--out <file>]
   (--threads defaults to the physical core count, not the hardware thread count;
    --profile needs a build with --features profile; --budget sizes the memory plan, --job-limit caps the
-   process with a job object; sizes are binary: 8G = 8 GiB)"
+   process with a job object; sizes are binary: 8G = 8 GiB; --spec K drafts K tokens per round with the MTP head;
+   run decodes greedily unless --sample or a sampling flag is given, chat samples with generation_config.json's defaults)"
     );
     ExitCode::from(2)
 }
@@ -57,6 +63,13 @@ fn main() -> ExitCode {
             }
         },
         Some("run") => match run::parse(&args[1..], DEFAULT_TOKENIZER).and_then(run::run) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("chat") => match chat::chat(&args[1..], DEFAULT_TOKENIZER) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");
@@ -197,12 +210,14 @@ fn plan(args: &[String]) -> Result<bool, Box<dyn std::error::Error>> {
     };
     let max_pos: u64 = get("--max-pos").map(|s| s.parse()).transpose()?.unwrap_or(4096);
     let slots: usize = get("--slots").map(|s| s.parse()).transpose()?.unwrap_or(2);
+    let spec_k: u64 = get("--spec").map(|s| s.parse()).transpose()?.unwrap_or(0);
     let t0 = Instant::now();
     let g = Gguf::open(&model)?;
     let cfg = ModelConfig::from_gguf(&g)?;
     let input = PlanInput::new(&g, &cfg);
     let sector = DirectFile::open(std::path::Path::new(&model), DEFAULT_CHUNK, 1)?.sector as u64;
-    let params = PlanParams::new(budget, max_pos, slots, sector);
+    let mut params = PlanParams::new(budget, max_pos, slots, sector);
+    params.spec_k = spec_k;
     let plan = MemoryPlan::compute(&input, &params);
     print!("{}", plan.table());
     println!("  (header parsed and plan computed in {:.0} ms; tensor bytes read: {}; process peak RSS now {} bytes = {:.1} MiB, against the plan's baseline reserve of {} bytes)", t0.elapsed().as_secs_f64() * 1e3, g.tensor_bytes_read(), peak_rss_bytes().map_or("n/a".to_string(), group), peak_rss_bytes().unwrap_or(0) as f64 / 1048576.0, group(params.baseline));

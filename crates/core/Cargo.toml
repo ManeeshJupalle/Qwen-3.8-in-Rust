@@ -7,6 +7,7 @@ edition = "2021"
 thiserror = "2"
 half = "2"
 tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+minijinja = "2"
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }

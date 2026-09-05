@@ -3,6 +3,7 @@
 //! arenas and the streaming ring (Phase 4, `tier.rs` / `os.rs`).
 
 pub mod arch;
+pub mod chat;
 pub mod config;
 pub mod cpu;
 pub mod gguf;
@@ -13,6 +14,8 @@ pub mod os;
 pub mod prof;
 pub mod quant;
 pub mod rss;
+pub mod sample;
+pub mod spec;
 pub mod tier;
 pub mod tok;
 

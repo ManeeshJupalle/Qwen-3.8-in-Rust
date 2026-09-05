@@ -372,6 +372,27 @@ pub fn matmul(w: &WeightMat, xs: &[Act<'_>], y: &mut [f32], threads: usize) {
     });
 }
 
+/// `matmul` over activations produced by a closure (`act(t)` for `t` in `0..n`), so a caller holding `n`
+/// preallocated `ActBuf`s can run the batched form without building a `Vec<Act>` (Phase 5: the verification
+/// batch and the MTP re-feed are allocation-free). Same arithmetic as `matmul`, row for row.
+pub fn matmul_fn<'a>(w: &WeightMat, n: usize, act: &(dyn Fn(usize) -> Act<'a> + Sync + 'a), y: &mut [f32], threads: usize) {
+    crate::prof_scope!(crate::prof::Stage::Matvec);
+    assert_eq!(y.len(), n * w.rows, "matmul_fn: output length");
+    for t in 0..n {
+        check_act(w, act(t));
+    }
+    let yp = SendPtr(y.as_mut_ptr());
+    pool::global().run(threads.min(w.rows.max(1)), &|tid, nthr| {
+        let (a, b) = row_range(w.rows, tid, nthr);
+        for r in a..b {
+            for t in 0..n {
+                // SAFETY: as in `matvec`; row ranges are disjoint for every `t`.
+                unsafe { yp.set(t * w.rows + r, one_row(w, act(t), r)) };
+            }
+        }
+    });
+}
+
 /// Convenience: quantise `x` once (in the form `w` consumes) and run the matvec.
 pub fn matvec_f32_in(w: &WeightMat, x: &[f32], y: &mut [f32], threads: usize) {
     let a = ActVec::new(x);

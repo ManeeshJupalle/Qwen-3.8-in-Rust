@@ -39,7 +39,20 @@ use crate::os::{align_down, align_up, arena_bytes, AlignedBuf, DirectFile};
 /// norms, the DeltaNet per-head constants, the conv kernel, the gated-norm weight, the q/k norms. Everything
 /// else in a layer is a projection matrix and is a view into the layer's arena or ring slot. The plan sums
 /// these per layer and `SlotSource` asserts the split, so the plan and the loader cannot disagree.
-pub const RESIDENT_SMALL: &[&str] = &["attn_norm.weight", "post_attention_norm.weight", "ssm_a", "ssm_dt.bias", "ssm_conv1d.weight", "ssm_norm.weight", "attn_q_norm.weight", "attn_k_norm.weight"];
+pub const RESIDENT_SMALL: &[&str] = &[
+    "attn_norm.weight",
+    "post_attention_norm.weight",
+    "ssm_a",
+    "ssm_dt.bias",
+    "ssm_conv1d.weight",
+    "ssm_norm.weight",
+    "attn_q_norm.weight",
+    "attn_k_norm.weight",
+    // the MTP block's three norms (Phase 5; only in blk.{n_layer}, which is its own arena)
+    "nextn.enorm.weight",
+    "nextn.hnorm.weight",
+    "nextn.shared_head_norm.weight",
+];
 
 pub fn is_resident_small(name: &str) -> bool {
     layer_of(name).is_some() && RESIDENT_SMALL.iter().any(|s| name.ends_with(s))
@@ -186,6 +199,66 @@ impl PlanInput {
         b += self.vocab * 4;
         b
     }
+
+    /// The DeltaNet state snapshot the rollback restores (`docs/spec.md`): one copy of every DeltaNet state and
+    /// conv window.
+    pub fn spec_snapshot_bytes(&self) -> u64 {
+        self.deltanet_state_bytes()
+    }
+
+    /// The MTP block's KV cache (one attention layer) at `max_pos` rows.
+    pub fn spec_mtp_kv_bytes(&self, max_pos: u64) -> u64 {
+        2 * self.n_head_kv * self.head_dim * 4 * max_pos
+    }
+
+    /// Everything else `spec::SpecState` holds for `k` drafts (mirrors its constructor and the scratch
+    /// constructors, as `scratch_bytes` mirrors `State`): the verification batch's buffers for `k + 1` rows,
+    /// the saved recurrence inputs, the batch logits, the MTP scratch (token and batch forms), the draft
+    /// distributions and the counters. `tests/tier_plan.rs` asserts it equals the live `SpecState::bytes()`
+    /// less the snapshot and the MTP cache.
+    pub fn spec_scratch_bytes(&self, k: u64, max_pos: u64) -> u64 {
+        let t = k + 1;
+        let (h, inter, vocab) = (self.hidden, self.inter, self.vocab);
+        let (cd, nv, dk, dv) = (self.dn_conv_dim, self.dn_n_v, self.dn_dk, self.dn_dv);
+        let vd = nv * dv;
+        let (nh, nkv, hd, rd) = (self.n_head, self.n_head_kv, self.head_dim, self.rope_dim);
+        // BatchScratch::for_layers(.., t): rows x3 + acts; MlpBatch; DeltaBatch when the layers have DeltaNet;
+        // AttnBatch when they have attention
+        let batch = |with_dn: bool| -> u64 {
+            let mut b = 3 * t * h * 4 + t * act_buf_bytes(h);
+            b += 3 * t * inter * 4 + t * act_buf_bytes(inter);
+            if with_dn && self.n_deltanet > 0 {
+                b += (2 * t * cd + 2 * t * vd + 2 * t * nv + 2 * nv * dk + vd) * 4 + t * act_buf_bytes(vd);
+            }
+            if self.n_attention > 0 {
+                b += (t * 2 * nh * hd + 2 * t * nkv * hd + 3 * t * nh * hd + 2 * rd + hd) * 4 + t * act_buf_bytes(nh * hd);
+            }
+            b
+        };
+        let mut b = batch(true);
+        b += 3 * t * h * 4; // h0, h1, normed
+        b += t * act_buf_bytes(h); // lm_acts
+        b += t * vocab * 4; // logits
+        b += self.n_deltanet as u64 * t * (cd + 2 * nv) * 4; // saved_mixed, saved_a, saved_b
+        // MtpScratch: e, hprev, cat, acts, u, y, hout, token Scratch of one attention block (with its score
+        // rows at max_pos), batch scratch of that block, head_act, logits
+        b += (2 * h + t * 2 * h + 3 * t * h + vocab) * 4 + t * act_buf_bytes(2 * h) + act_buf_bytes(h);
+        b += 3 * h * 4 + act_buf_bytes(h) + 3 * inter * 4 + act_buf_bytes(inter);
+        b += (2 * nh * hd + nkv * hd + nkv * hd + rd + rd + nh * hd + nh * hd + hd + nh * hd) * 4 + act_buf_bytes(nh * hd) + 2 * nh * max_pos * 4;
+        b += batch(false);
+        // drafts, q_dense, batch_ids, emitted, the two stat vectors
+        b += k * 4 + k * vocab * 4 + 2 * t * 4 + (k + t) * 8;
+        b
+    }
+
+    /// All the speculative lines together.
+    pub fn spec_bytes(&self, k: u64, max_pos: u64) -> u64 {
+        if k == 0 {
+            0
+        } else {
+            self.spec_snapshot_bytes() + self.spec_mtp_kv_bytes(max_pos) + self.spec_scratch_bytes(k, max_pos)
+        }
+    }
 }
 
 /// What the plan is computed for.
@@ -202,12 +275,14 @@ pub struct PlanParams {
     /// vocabulary arrays), thread stacks, allocator slack. `aqueduct plan` prints the measured baseline
     /// next to it.
     pub baseline: u64,
+    /// Drafts per speculative round (`--spec k`, Phase 5): 0 = no speculative buffers in the plan.
+    pub spec_k: u64,
 }
 
 impl PlanParams {
     pub const DEFAULT_BASELINE: u64 = 256 << 20;
     pub fn new(budget: Option<u64>, max_pos: u64, n_slots: usize, sector: u64) -> PlanParams {
-        PlanParams { budget, max_pos, n_slots: n_slots.max(1), sector, baseline: Self::DEFAULT_BASELINE }
+        PlanParams { budget, max_pos, n_slots: n_slots.max(1), sector, baseline: Self::DEFAULT_BASELINE, spec_k: 0 }
     }
 }
 
@@ -265,12 +340,18 @@ impl MemoryPlan {
         let non_layer_names: Vec<String> = input.non_layer.iter().map(|(n, b)| format!("{n} {b}")).collect();
         lines.push(PlanLine { name: format!("non-layer arena [{}]", non_layer_names.join(", ")), bytes: input.non_layer_arena_bytes(sector) });
         for (m, span, _) in &input.mtp {
-            lines.push(PlanLine { name: format!("MTP block blk.{m} arena (loaded, unused)"), bytes: arena_bytes(*span, sector) });
+            lines.push(PlanLine { name: format!("MTP block blk.{m} arena (the draft head; used with --spec)"), bytes: arena_bytes(*span, sector) });
         }
         lines.push(PlanLine { name: format!("per-layer small tensors, {n_layer} layers (norms, conv, dt/a; resident copies)"), bytes: input.layer_small.iter().sum() });
         lines.push(PlanLine { name: format!("DeltaNet carried state ({} layers)", input.n_deltanet), bytes: input.deltanet_state_bytes() });
         lines.push(PlanLine { name: format!("KV cache ({} layers x {} positions)", input.n_attention, params.max_pos), bytes: input.kv_bytes_per_pos() * params.max_pos });
         lines.push(PlanLine { name: "scratch buffers, activation rows, logits".into(), bytes: input.scratch_bytes(params.max_pos) });
+        if params.spec_k > 0 {
+            let k = params.spec_k;
+            lines.push(PlanLine { name: format!("spec k={k}: DeltaNet state snapshot for the rollback ({} layers)", input.n_deltanet), bytes: input.spec_snapshot_bytes() });
+            lines.push(PlanLine { name: format!("spec k={k}: MTP KV cache (1 layer x {} positions)", params.max_pos), bytes: input.spec_mtp_kv_bytes(params.max_pos) });
+            lines.push(PlanLine { name: format!("spec k={k}: verify batch ({} rows) and MTP scratch, saved recurrence inputs, batch logits, draft distributions", k + 1), bytes: input.spec_scratch_bytes(k, params.max_pos) });
+        }
         lines.push(PlanLine { name: "process baseline reserve (binary, GGUF header index, thread stacks, allocator)".into(), bytes: params.baseline });
         let resident_bytes: u64 = lines.iter().map(|l| l.bytes).sum();
 

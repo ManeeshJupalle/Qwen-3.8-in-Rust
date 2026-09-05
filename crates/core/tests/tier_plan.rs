@@ -158,6 +158,23 @@ fn plan_matches_hand_computation_at_five_budgets_and_refuses_three_gib() {
     assert_eq!(plan3.ring_bytes, 3 * 269_688_832);
     assert_eq!(plan3.pinned, hand_plan(6 * GIB, 4096, 3).unwrap().0);
     assert_eq!(plan3.pinned, 10);
+
+    // Phase 5: the speculative lines. The snapshot is one copy of the DeltaNet state, the MTP cache one
+    // attention layer's KV per position; the scratch line is measured against the live SpecState below.
+    assert_eq!(input.spec_snapshot_bytes(), 156_893_184);
+    assert_eq!(input.spec_mtp_kv_bytes(4096), 8192 * 4096);
+    let saved_k4 = 48 * 5 * (10240 + 96) * 4;
+    assert_eq!(saved_k4, 9_922_560);
+    assert!(input.spec_scratch_bytes(4, 4096) > saved_k4);
+    for k in [1u64, 4] {
+        let mut ps = PlanParams::new(Some(6 * GIB), 4096, 2, SECTOR);
+        ps.spec_k = k;
+        let plan = MemoryPlan::compute(&input, &ps);
+        let base = MemoryPlan::compute(&input, &PlanParams::new(Some(6 * GIB), 4096, 2, SECTOR));
+        assert_eq!(plan.resident_bytes, base.resident_bytes + input.spec_bytes(k, 4096), "spec k={k}: resident set grows by the spec lines");
+        assert!(plan.table().contains(&format!("spec k={k}: DeltaNet state snapshot")), "{}", plan.table());
+        println!("6 GiB with --spec {k}: +{} bytes resident ({:.1} MiB), pinned {} (vs {} without)", input.spec_bytes(k, 4096), input.spec_bytes(k, 4096) as f64 / 1048576.0, plan.pinned, base.pinned);
+    }
 }
 
 #[test]
@@ -174,6 +191,14 @@ fn state_bytes_match_the_plan_formula_on_the_tiny_model() {
         let planned = input.scratch_bytes(max_pos) - input.vocab * 4 + input.deltanet_state_bytes() + input.kv_bytes_per_pos() * max_pos;
         assert_eq!(state.bytes() as u64, planned, "max_pos {max_pos}: live State bytes vs the plan formula");
         println!("max_pos {max_pos}: State holds {} bytes, plan {planned}", state.bytes());
+        // Phase 5: with the speculative buffers for k drafts
+        for k in [1u64, 2, 4] {
+            let mut s = model.new_state_spec(k as usize).expect("spec state");
+            s.reserve(max_pos as usize);
+            let planned_spec = planned + input.spec_bytes(k, max_pos);
+            assert_eq!(s.bytes() as u64, planned_spec, "max_pos {max_pos}, spec k={k}: live State bytes vs the plan formula");
+            println!("max_pos {max_pos}, spec k={k}: State holds {} bytes, plan {planned_spec} (spec part {})", s.bytes(), input.spec_bytes(k, max_pos));
+        }
     }
     // the model's own plan (no budget) says everything is resident and no ring exists
     assert_eq!((model.plan.pinned, model.plan.n_slots), (cfg.n_layer, 0));

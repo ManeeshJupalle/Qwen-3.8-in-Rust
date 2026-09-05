@@ -2,7 +2,7 @@
 
 use super::{Linear, Result, TensorSource};
 use crate::kernels::act::swiglu;
-use crate::kernels::matvec::{acts_for, matmul, matvec, matvec2, ActBuf, ActVec};
+use crate::kernels::matvec::{acts_for, matmul, matmul_fn, matvec, matvec2, ActBuf, ActVec};
 
 /// Preallocated per-token buffers for `Mlp::forward_in` (Phase 3.6): the gate and up outputs, the SwiGLU
 /// result, and the quantised form of that result for the down projection.
@@ -68,6 +68,26 @@ impl Mlp {
     }
 }
 
+/// Preallocated buffers for `Mlp::forward_batch_in` (Phase 5): `max_t` rows of the gate / up / SwiGLU outputs
+/// and one activation buffer per row for the down projection.
+pub struct MlpBatch {
+    pub g: Vec<f32>,
+    pub u: Vec<f32>,
+    pub h: Vec<f32>,
+    pub acts: Vec<ActBuf>,
+}
+
+impl MlpBatch {
+    pub fn new(inter: usize, max_t: usize) -> MlpBatch {
+        MlpBatch { g: vec![0f32; max_t * inter], u: vec![0f32; max_t * inter], h: vec![0f32; max_t * inter], acts: (0..max_t).map(|_| ActBuf::with_capacity(inter)).collect() }
+    }
+
+    /// Bytes held (capacities), for the memory plan.
+    pub fn bytes(&self) -> usize {
+        (self.g.capacity() + self.u.capacity() + self.h.capacity()) * 4 + self.acts.iter().map(|a| a.bytes()).sum::<usize>()
+    }
+}
+
 impl Mlp {
     /// `t` rows in (`x` is `t * hidden`), `t` rows out: gate, up and down as batched matmuls (each weight read
     /// once for the whole batch), SwiGLU per row. Row `i` is the arithmetic of `forward` on row `i`.
@@ -87,5 +107,27 @@ impl Mlp {
         }
         let hacts: Vec<ActVec<'_>> = h.chunks_exact(inter).map(ActVec::new).collect();
         matmul(&self.down.w, &acts_for(&hacts, self.down.w.ggml_type), y, threads);
+    }
+
+    /// `forward_batch` with caller-owned buffers: no allocation. `acts[i]` must be filled for row `i` of `x`
+    /// with `input_types()`. Row `i` is `forward_in` on row `i`, bit for bit.
+    pub fn forward_batch_in(&self, x: &[f32], t: usize, acts: &[ActBuf], sc: &mut MlpBatch, y: &mut [f32], threads: usize) {
+        let hidden = self.gate.in_features();
+        let inter = self.gate.out_features();
+        assert_eq!(x.len(), t * hidden);
+        assert_eq!(y.len(), t * hidden);
+        assert!(acts.len() >= t && sc.acts.len() >= t, "MlpBatch: sized for fewer rows than {t}");
+        let (gt, ut, dt) = (self.gate.w.ggml_type, self.up.w.ggml_type, self.down.w.ggml_type);
+        matmul_fn(&self.gate.w, t, &|i| acts[i].act_for(gt, &x[i * hidden..(i + 1) * hidden]), &mut sc.g[..t * inter], threads);
+        matmul_fn(&self.up.w, t, &|i| acts[i].act_for(ut, &x[i * hidden..(i + 1) * hidden]), &mut sc.u[..t * inter], threads);
+        for i in 0..t {
+            swiglu(&sc.g[i * inter..(i + 1) * inter], &sc.u[i * inter..(i + 1) * inter], &mut sc.h[i * inter..(i + 1) * inter]);
+        }
+        let MlpBatch { h, acts: hacts, .. } = sc;
+        for i in 0..t {
+            hacts[i].fill(&h[i * inter..(i + 1) * inter], &[dt]);
+        }
+        let h: &[f32] = h;
+        matmul_fn(&self.down.w, t, &|i| hacts[i].act_for(dt, &h[i * inter..(i + 1) * inter]), y, threads);
     }
 }

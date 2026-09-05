@@ -25,6 +25,15 @@ Always resident (in this order in the table):
 | scratch | every buffer `model::State` holds, by the same formulas the constructors use, plus the logits | 2,589,680 at 4096 positions |
 | baseline reserve | binary, the parsed GGUF header (the vocabulary arrays), thread stacks, allocator slack: 256 MiB reserved, 41.5 MiB measured after parsing the header | 268,435,456 |
 
+With `--spec k` (Phase 5, `docs/spec.md`) three more always-resident lines follow, sized by `PlanInput::spec_*`:
+the DeltaNet state snapshot for the rollback (156,893,184, one copy of the state line above), the MTP block's
+KV cache (`2 x 4 x 256 x 4 = 8,192` bytes per position, times `max_pos`), and the speculative scratch (the
+`k + 1`-row verification batch buffers and batch logits, the saved recurrence inputs, the MTP's token and batch
+scratch, the draft distributions: 218.6 MB at `k = 4`, `max_pos` 4096 including the two other lines; formula
+mirrored against the live `SpecState::bytes()` on the tiny model at `k = 1, 2, 4`). The MTP arena line, "loaded,
+unused" in Phase 4, is the draft head. At 6 GiB the additions cost one pinned layer (10 instead of 11 at 4096
+positions).
+
 Then the ring, `n_slots` arenas each `arena_bytes(largest streamed layer)`, and tier 1: whole layers from 0
 upward. The search runs over the pin count `k` from the top down and takes the largest `k` for which
 resident + ring(largest layer of `k..64`) + arenas of `0..k` fits: pinning one more layer can shrink the

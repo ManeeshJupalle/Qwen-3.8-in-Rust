@@ -15,9 +15,11 @@ use crate::config::ModelConfig;
 use crate::gguf::Gguf;
 use crate::kernels::matvec::{acts_for, matmul, matvec, ActBuf, ActVec, WeightMat};
 use crate::kernels::rmsnorm::rmsnorm;
+use crate::layers::mtp::MtpHead;
 use crate::layers::{DecoderLayer, LayerError, MixerState, Scratch, TensorSource};
 use crate::os::{arena_bytes, AlignedBuf, DirectFile, DEFAULT_CHUNK};
 use crate::quant::dequantize_into;
+use crate::spec::SpecState;
 use crate::tier::{ArenaSource, LayerRead, MemoryPlan, PlanError, PlanInput, PlanParams, Ring, StreamCounters, StreamStats};
 
 #[derive(Debug, thiserror::Error)]
@@ -34,6 +36,8 @@ pub enum ModelError {
     Plan(#[from] PlanError),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+    #[error("the GGUF has no MTP block (no nextn tensors): speculative decoding needs one")]
+    NoMtp,
 }
 
 /// How to load: the budget (None = everything resident), what the plan sizes the KV cache for, the ring
@@ -51,11 +55,13 @@ pub struct LoadOpts {
     pub baseline: u64,
     /// Print the plan and load progress to stderr.
     pub verbose: bool,
+    /// Drafts per round the plan sizes the speculative buffers for (0: none; Phase 5).
+    pub spec_k: usize,
 }
 
 impl Default for LoadOpts {
     fn default() -> Self {
-        LoadOpts { budget: None, max_pos: 4096, n_slots: 2, large_pages: true, chunk: DEFAULT_CHUNK, qd: 2, baseline: PlanParams::DEFAULT_BASELINE, verbose: false }
+        LoadOpts { budget: None, max_pos: 4096, n_slots: 2, large_pages: true, chunk: DEFAULT_CHUNK, qd: 2, baseline: PlanParams::DEFAULT_BASELINE, verbose: false, spec_k: 0 }
     }
 }
 
@@ -68,6 +74,8 @@ pub struct Model {
     pub output_norm: Vec<f32>,
     /// `output.weight`, `vocab x hidden`.
     pub lm_head: WeightMat,
+    /// The MTP draft head (`blk.{n_layer}`, Phase 5), when the file has one.
+    pub mtp: Option<MtpHead>,
     /// GGUF EOS ids plus the architecture's extra stop ids.
     pub stop: Vec<u32>,
     pub threads: usize,
@@ -105,6 +113,8 @@ pub struct State {
     /// Final-norm output and its quantised form, for the lm_head.
     lm_normed: Vec<f32>,
     lm_act: ActBuf,
+    /// The speculative-decoding buffers (`Model::new_state_spec`, Phase 5), or none.
+    pub spec: Option<Box<SpecState>>,
 }
 
 impl State {
@@ -117,11 +127,19 @@ impl State {
                 c.reserve(max_pos);
             }
         }
+        if let Some(s) = &mut self.spec {
+            s.reserve(max_pos);
+        }
     }
 
     /// The residual stream after the last layer of the most recent `forward_token` / `forward_hidden`.
     pub fn hidden(&self) -> &[f32] {
         &self.h0
+    }
+
+    /// The post-final-norm vector of the most recent `forward_token` (what the lm_head read; the MTP's input).
+    pub fn final_normed(&self) -> &[f32] {
+        &self.lm_normed
     }
 
     /// Bytes this state holds (capacities): the carried per-layer state and every scratch buffer. The plan's
@@ -136,7 +154,7 @@ impl State {
                 MixerState::Attention(c) => c.bytes(),
             })
             .sum();
-        per_layer + self.scratch.bytes() + (self.h0.capacity() + self.h1.capacity() + self.lm_normed.capacity()) * 4 + self.lm_act.bytes()
+        per_layer + self.scratch.bytes() + (self.h0.capacity() + self.h1.capacity() + self.lm_normed.capacity()) * 4 + self.lm_act.bytes() + self.spec.as_ref().map_or(0, |s| s.bytes())
     }
 }
 
@@ -178,6 +196,7 @@ impl Model {
         let input = PlanInput::new(&g, &cfg);
         let mut params = PlanParams::new(opts.budget, opts.max_pos as u64, opts.n_slots, sector);
         params.baseline = opts.baseline;
+        params.spec_k = opts.spec_k as u64;
         let plan = MemoryPlan::compute(&input, &params);
         if opts.verbose {
             eprint!("{}", plan.table());
@@ -203,10 +222,16 @@ impl Model {
             }
         };
         let mut mtp_arena_bytes = 0u64;
-        for &(_, span, start) in &input.mtp {
-            let (buf, _) = load_arena(&mut file, (start, start + span), large, &mut stats)?;
+        let mut mtp = None;
+        for &(m, span, start) in &input.mtp {
+            let (buf, file_start) = load_arena(&mut file, (start, start + span), large, &mut stats)?;
             any_large |= buf.large_pages;
             mtp_arena_bytes += arena_bytes(span, sector);
+            if mtp.is_none() {
+                // the draft head (Phase 5): views into its arena like every other layer
+                let src = ArenaSource { g: &g, file_start, buf: Arc::clone(&buf) };
+                mtp = Some(MtpHead::load(&src, &cfg, m)?);
+            }
             arenas.push(buf);
         }
 
@@ -265,6 +290,7 @@ impl Model {
             layers,
             output_norm,
             lm_head,
+            mtp,
             stop,
             threads,
             load_secs: t0.elapsed().as_secs_f64(),
@@ -315,6 +341,7 @@ impl Model {
             h1: vec![0f32; hidden],
             lm_normed: vec![0f32; hidden],
             lm_act: ActBuf::with_capacity(hidden),
+            spec: None,
         }
     }
 
@@ -342,7 +369,7 @@ impl Model {
 
     /// Wait for layer `i` if it is streamed (no-op for tier 1).
     #[inline]
-    fn acquire(&self, i: usize) {
+    pub(crate) fn acquire(&self, i: usize) {
         if let Some(r) = &self.ring {
             if i as u32 >= r.first {
                 r.acquire(i as u32);
@@ -351,7 +378,7 @@ impl Model {
     }
 
     #[inline]
-    fn release(&self, i: usize) {
+    pub(crate) fn release(&self, i: usize) {
         if let Some(r) = &self.ring {
             if i as u32 >= r.first {
                 r.release(i as u32);
@@ -359,12 +386,12 @@ impl Model {
         }
     }
 
-    fn consumed(&self) -> u64 {
+    pub(crate) fn consumed(&self) -> u64 {
         self.ring.as_ref().map_or(0, |r| r.counters.consumed_bytes.load(std::sync::atomic::Ordering::Acquire))
     }
 
     /// Rule 4, per pass: the bytes taken from the ring equal the streamed layers' spans exactly.
-    fn check_pass(&self, before: u64) {
+    pub(crate) fn check_pass(&self, before: u64) {
         let got = self.consumed() - before;
         assert_eq!(got, self.plan.streamed_bytes_per_pass, "disk bytes this pass {got} != streamed layer bytes {}", self.plan.streamed_bytes_per_pass);
     }
