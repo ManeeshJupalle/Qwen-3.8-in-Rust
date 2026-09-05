@@ -150,10 +150,16 @@ pub fn parse(args: &[String], default_tokenizer: &str) -> Result<ChatArgs, Strin
                 a.qd = next(i)?.parse().map_err(|e| format!("--qd: {e}"))?;
                 i += 2;
             }
-            "--spec" => {
-                a.spec = next(i)?.parse().map_err(|e| format!("--spec: {e}"))?;
-                i += 2;
-            }
+            "--spec" => match args.get(i + 1).and_then(|s| s.parse::<usize>().ok()) {
+                Some(k) => {
+                    a.spec = k;
+                    i += 2;
+                }
+                None => {
+                    a.spec = crate::run::DEFAULT_SPEC_K;
+                    i += 1;
+                }
+            },
             "--max-tokens" => {
                 a.max_tokens = next(i)?.parse().map_err(|e| format!("--max-tokens: {e}"))?;
                 i += 2;
@@ -511,7 +517,7 @@ fn print_new(tok: &Tok, generated: &[u32], printed: &mut String, out: &mut io::S
     } else if !text[..end].starts_with(printed.as_str()) {
         // the decoded prefix changed (a merge across tokens): reprint from the divergence
         let common = text[..end].bytes().zip(printed.bytes()).take_while(|(a, b)| a == b).count();
-        let common = text[..common].char_indices().map(|(i, _)| i).last().unwrap_or(0);
+        let common = text[..common].char_indices().map(|(i, _)| i).next_back().unwrap_or(0);
         print!("\n[...] {}", &text[common..end]);
         out.flush().ok();
         *printed = text[..end].to_string();

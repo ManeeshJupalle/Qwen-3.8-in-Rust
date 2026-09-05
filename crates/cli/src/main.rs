@@ -23,16 +23,16 @@ fn usage() -> ExitCode {
   aqueduct bench membw [--gib 2] [--runs 5] [--threads N]
   aqueduct run [--model <gguf>] [--tokenizer <json>] [--threads N] [--max-tokens N] [--ids-only] [--sequential-prefill] [--q8-fine] [--profile] [-v]
                [--budget 8G] [--job-limit 8G] [--slots 2] [--max-pos N] [--qd 2] [--no-large-pages] [--stats <file>] [--membw GB/s --diskbw GB/s]
-               [--spec K] [--sample] [--temperature T] [--top-k K] [--top-p P] [--min-p P] [--seed S] [--gen-config <json>]
+               [--spec [K]] [--sample] [--temperature T] [--top-k K] [--top-p P] [--min-p P] [--seed S] [--gen-config <json>]
                (--ids <csv> | --prompt <text>)
   aqueduct chat [--model <gguf>] [--tokenizer <json>] [--template <jinja>] [--gen-config <json>] [--threads N] [--budget 16G] [--job-limit 16G]
-               [--slots 2] [--qd 2] [--spec K] [--max-tokens 1024] [--max-pos 4096] [--no-think] [--reasoning-effort xhigh|medium|low]
+               [--slots 2] [--qd 2] [--spec [K]] [--max-tokens 1024] [--max-pos 4096] [--no-think] [--reasoning-effort xhigh|medium|low]
                [--no-preserve-thinking] [--system <text>] [--greedy] [--temperature T] [--top-k K] [--top-p P] [--min-p P] [--seed S] [--show-config] [-v]
   aqueduct plan --budget <8G|bytes> [--model <gguf>] [--max-pos 4096] [--slots 2] [--spec K]
   aqueduct doctor [--model <gguf>] [--budget X] [--max-pos 4096] [--slots 2] [--runs 5] [--out <file>]
   (--threads defaults to the physical core count, not the hardware thread count;
    --profile needs a build with --features profile; --budget sizes the memory plan, --job-limit caps the
-   process with a job object; sizes are binary: 8G = 8 GiB; --spec K drafts K tokens per round with the MTP head;
+   process with a job object; sizes are binary: 8G = 8 GiB; --spec [K] drafts K tokens per round with the MTP head (K defaults to the measured default);
    run decodes greedily unless --sample or a sampling flag is given, chat samples with generation_config.json's defaults)"
     );
     ExitCode::from(2)

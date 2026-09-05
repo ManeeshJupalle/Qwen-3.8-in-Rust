@@ -1,0 +1,83 @@
+# aqueduct ladder: maneesh-msi, rendered 2026-09-04 18:05 from the stats files of the run of 2026-09-04 17:40, exe target\release\aqueduct.exe, model C:\models\Qwen3.8-27B-Q4_K_M.gguf
+# cap: --budget sizes the plan, --job-limit puts the engine into a job object (JOB_OBJECT_LIMIT_JOB_MEMORY + PROCESS_MEMORY = budget) before it allocates; peak = max(job PeakJobMemoryUsed, engine PeakWorkingSetSize, WorkingSet64 sampled every 250 ms from this script)
+# cost model: t = bytes_ram / 30.06 GB/s + bytes_disk / 3.3 GB/s + 0.053 (membw and disk qd2 from docs\data\doctor_maneesh-msi.txt); ring 2 slots, qd 2, 32 tokens per prompt
+budget    prompt    pinned streamed  GB/tok disk   s/token     GB/s   %membw pred s/tok        ratio   peakRSS   under  read hid   load s
+6G        capital       13       51       12.461     3.889     4.32      14%      3.974         0.98     6.032     yes      21%      2.2
+6G        fib           13       51       12.461     3.895     4.32      14%      3.974         0.98     6.031     yes      21%      2.2
+6G        sentence      13       51       12.461     3.897     4.31      14%      3.974         0.98     6.049     yes      21%      2.2
+8G        capital       22       42       10.298     3.328     5.05      17%      3.390         0.98     8.198     yes      22%      3.1
+8G        fib           22       42       10.298     3.311     5.08      17%      3.390         0.98     8.198     yes      22%      3.0
+8G        sentence      22       42       10.298     3.314     5.07      17%      3.390         0.98     8.216     yes      22%      3.0
+12G       capital       40       24        5.991     2.242     7.50      25%      2.228         1.01    12.514     yes      24%      4.8
+12G       fib           40       24        5.991     2.234     7.52      25%      2.228         1.00    12.513     yes      24%      4.9
+12G       sentence      40       24        5.991     2.240     7.50      25%      2.228         1.01    12.532     yes      24%      4.9
+16G       capital       58        6        1.588     1.116    15.06      50%      1.041         1.07    16.926     yes      46%      7.1
+16G       fib           58        6        1.588     1.093    15.38      51%      1.041         1.05    16.926     yes      46%      6.6
+16G       sentence      58        6        1.588     1.086    15.48      52%      1.041         1.04    16.943     yes      46%      6.6
+32G       capital       64        0        0.000     0.741    22.69      75%      0.612         1.21    17.977     yes     100%      7.5
+32G       fib           64        0        0.000     0.742    22.66      75%      0.612         1.21    17.976     yes     100%      7.3
+32G       sentence      64        0        0.000     0.758    22.17      74%      0.612         1.24    17.993     yes     100%      7.3
+resident  capital       64        0        0.000     0.741    22.67      75%      0.612         1.21    17.943     n/a     100%      7.3
+resident  fib           64        0        0.000     0.742    22.64      75%      0.612         1.21    17.945     n/a     100%      7.4
+resident  sentence      64        0        0.000     0.740    22.72      76%      0.612         1.21    17.959     n/a     100%      7.3
+
+# note: the sampled WorkingSet64 peaks (last column) were not kept by the run being re-rendered and show as 0.00; the sampled working set is bounded by the engine's own PeakWorkingSetSize (middle value) by definition, so the peak RSS column is unaffected
+# per rung (mean over the 3 prompts; peak RSS = max over prompts, GB; job/engine/sampled peaks GB)
+budget    pinned streamed  GB/tok disk   s/token     GB/s   %membw pred s/tok    ratio   peakRSS   under  read hid  comp hid read GB/s   job/engine/sampled
+6G            13       51       12.461     3.893     4.32      14%      3.974     0.98     6.049 yes/yes/yes       21%       88%     3.29       6.05/6.04/0.00
+8G            22       42       10.298     3.318     5.07      17%      3.390     0.98     8.216 yes/yes/yes       22%       76%     3.31       8.22/8.20/0.00
+12G           40       24        5.991     2.239     7.51      25%      2.228     1.00    12.532 yes/yes/yes       24%       53%     3.25     12.53/12.51/0.00
+16G           58        6        1.588     1.098    15.31      51%      1.041     1.06    16.943 yes/yes/yes       46%       28%     3.16     16.94/16.91/0.00
+32G           64        0        0.000     0.747    22.51      75%      0.612     1.22    17.993 yes/yes/yes      100%      100%     0.00     17.99/17.96/0.00
+resident      64        0        0.000     0.741    22.68      75%      0.612     1.21    17.959 n/a/n/a/n/a      100%      100%     0.00      0.00/17.96/0.00
+
+# identity gate: the 32 ids per prompt at every rung, against tests/fixtures/ladder_expected_ids.json (Phase 3 resident output)
+  capital   identical across rungs: yes; equal to Phase 3: yes
+  capital ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+  fib       identical across rungs: yes; equal to Phase 3: yes
+  fib ids: 198,262,413,307,2564,220,16,25,198,285,460,307,198,262,745,25,198,285,460,73111,1393,12,16,8,478,73111,1393,12,17,8,271,2
+  sentence  identical across rungs: yes; equal to Phase 3: yes
+  sentence ids: 733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446,321,4172,31717,430,781,87805,13,561,916,1315,314,1439,8177,2218,6067,289
+identity: ids identical across rungs yes; vs Phase 3 resident match
+cost model: worst ratio 1.22 at 32G; all rungs within 2x: yes
+peak RSS under budget at every rung: yes
+
+# overlap over the decode phase, per prompt and rung: reading / computing / waiting / wall seconds, overlap seconds
+  6G capital: read 117.38 compute 27.94 wait 92.61 wall 120.55 overlap 24.77
+  6G fib: read 117.47 compute 27.77 wait 92.98 wall 120.74 overlap 24.49
+  6G sentence: read 117.48 compute 27.90 wait 92.89 wall 120.79 overlap 24.59
+  8G capital: read 96.67 compute 27.51 wait 75.66 wall 103.17 overlap 21.00
+  8G fib: read 96.03 compute 27.44 wait 75.21 wall 102.64 overlap 20.82
+  8G sentence: read 96.16 compute 27.51 wait 75.22 wall 102.73 overlap 20.94
+  12G capital: read 57.04 compute 26.22 wait 43.28 wall 69.50 overlap 13.76
+  12G fib: read 56.99 compute 26.20 wait 43.06 wall 69.26 overlap 13.93
+  12G sentence: read 57.19 compute 26.17 wait 43.28 wall 69.45 overlap 13.91
+  16G capital: read 15.39 compute 26.36 wait 8.24 wall 34.60 overlap 7.15
+  16G fib: read 15.55 compute 25.52 wait 8.35 wall 33.88 overlap 7.20
+  16G sentence: read 15.44 compute 25.26 wait 8.39 wall 33.65 overlap 7.04
+  32G capital: read 0.00 compute 22.96 wait 0.00 wall 22.96 overlap 0.00
+  32G fib: read 0.00 compute 23.00 wait 0.00 wall 23.00 overlap 0.00
+  32G sentence: read 0.00 compute 23.50 wait 0.00 wall 23.50 overlap 0.00
+  resident capital: read 0.00 compute 22.98 wait 0.00 wall 22.98 overlap 0.00
+  resident fib: read 0.00 compute 23.01 wait 0.00 wall 23.01 overlap 0.00
+  resident sentence: read 0.00 compute 22.93 wait 0.00 wall 22.93 overlap 0.00
+
+# per-step seconds (each prompt, each rung)
+  6G capital: 3.89 3.96 3.87 3.88 3.89 3.88 3.89 3.91 3.87 3.87 3.89 3.90 3.89 3.90 3.88 3.87 3.91 3.87 3.90 3.89 3.88 3.91 3.87 3.90 3.89 3.91 3.87 3.88 3.86 3.88 3.89
+  6G fib: 3.89 3.89 3.90 3.88 3.90 3.90 3.89 3.93 3.89 3.87 3.89 3.90 3.89 3.89 3.90 3.89 3.91 3.88 3.88 3.90 3.90 3.89 3.91 3.89 3.90 3.89 3.90 3.90 3.91 3.89 3.90
+  6G sentence: 3.88 3.90 3.92 3.88 3.89 3.89 3.90 3.89 3.91 3.95 3.89 3.90 3.89 3.90 3.88 3.87 3.90 3.88 3.87 3.90 4.04 3.87 3.90 3.89 3.88 3.91 3.89 3.87 3.89 3.88 3.88
+  8G capital: 3.32 3.30 3.32 3.36 3.35 3.31 3.35 3.32 3.31 3.34 3.34 3.32 3.32 3.30 3.33 3.33 3.33 3.34 3.36 3.32 3.32 3.34 3.32 3.32 3.33 3.34 3.33 3.33 3.33 3.33 3.32
+  8G fib: 3.29 3.29 3.30 3.32 3.32 3.30 3.32 3.32 3.31 3.33 3.33 3.35 3.30 3.31 3.29 3.30 3.31 3.30 3.29 3.31 3.34 3.29 3.31 3.31 3.30 3.31 3.33 3.31 3.31 3.32 3.32
+  8G sentence: 3.28 3.35 3.30 3.33 3.32 3.30 3.31 3.30 3.31 3.30 3.32 3.33 3.34 3.34 3.31 3.32 3.32 3.30 3.31 3.31 3.32 3.31 3.31 3.31 3.32 3.30 3.32 3.30 3.31 3.31 3.31
+  12G capital: 2.19 2.28 2.25 2.22 2.24 2.28 2.22 2.29 2.22 2.24 2.24 2.23 2.25 2.25 2.23 2.24 2.24 2.27 2.24 2.23 2.23 2.25 2.25 2.26 2.22 2.26 2.25 2.23 2.24 2.24 2.23
+  12G fib: 2.21 2.25 2.25 2.22 2.26 2.24 2.21 2.22 2.24 2.24 2.23 2.27 2.22 2.26 2.22 2.22 2.22 2.24 2.23 2.21 2.23 2.24 2.23 2.22 2.26 2.25 2.24 2.22 2.22 2.24 2.24
+  12G sentence: 2.19 2.21 2.25 2.24 2.23 2.23 2.25 2.24 2.21 2.22 2.29 2.26 2.22 2.24 2.24 2.26 2.25 2.25 2.24 2.25 2.24 2.24 2.22 2.28 2.24 2.23 2.24 2.24 2.25 2.23 2.24
+  16G capital: 1.71 1.13 1.09 1.12 1.09 1.10 1.10 1.12 1.12 1.08 1.07 1.13 1.10 1.10 1.09 1.09 1.09 1.09 1.16 1.09 1.06 1.07 1.07 1.09 1.08 1.09 1.09 1.10 1.10 1.07 1.09
+  16G fib: 1.05 1.11 1.14 1.07 1.08 1.05 1.08 1.08 1.09 1.08 1.09 1.09 1.11 1.08 1.11 1.09 1.15 1.13 1.09 1.11 1.11 1.08 1.09 1.09 1.07 1.08 1.08 1.08 1.11 1.08 1.10
+  16G sentence: 1.05 1.07 1.07 1.07 1.07 1.08 1.06 1.06 1.06 1.08 1.08 1.13 1.11 1.10 1.09 1.09 1.09 1.10 1.08 1.07 1.08 1.10 1.08 1.09 1.10 1.08 1.09 1.10 1.07 1.14 1.10
+  32G capital: 0.72 0.73 0.74 0.77 0.76 0.77 0.76 0.72 0.74 0.73 0.74 0.71 0.74 0.73 0.74 0.74 0.75 0.76 0.73 0.72 0.74 0.76 0.76 0.75 0.74 0.73 0.75 0.73 0.72 0.73 0.73
+  32G fib: 0.74 0.74 0.73 0.73 0.74 0.75 0.73 0.74 0.79 0.74 0.75 0.74 0.77 0.75 0.74 0.75 0.74 0.75 0.74 0.74 0.74 0.73 0.74 0.73 0.73 0.74 0.73 0.74 0.73 0.74 0.73
+  32G sentence: 0.76 0.81 0.90 0.72 0.74 0.73 0.75 0.72 0.78 0.77 0.75 0.73 0.74 0.74 0.76 0.74 0.76 0.74 0.74 0.82 0.76 0.75 0.76 0.74 0.80 0.75 0.75 0.74 0.74 0.74 0.74
+  resident capital: 0.75 0.76 0.75 0.74 0.74 0.72 0.75 0.76 0.77 0.74 0.73 0.73 0.73 0.73 0.74 0.78 0.73 0.72 0.72 0.74 0.74 0.76 0.76 0.73 0.71 0.73 0.75 0.74 0.71 0.74 0.77
+  resident fib: 0.74 0.76 0.77 0.78 0.73 0.73 0.74 0.73 0.73 0.79 0.75 0.76 0.73 0.74 0.76 0.73 0.73 0.73 0.75 0.76 0.72 0.74 0.74 0.73 0.74 0.73 0.74 0.72 0.73 0.72 0.74
+  resident sentence: 0.76 0.71 0.72 0.73 0.72 0.76 0.87 0.79 0.73 0.73 0.73 0.73 0.72 0.72 0.73 0.75 0.74 0.74 0.72 0.73 0.73 0.76 0.73 0.75 0.72 0.74 0.73 0.74 0.73 0.73 0.74

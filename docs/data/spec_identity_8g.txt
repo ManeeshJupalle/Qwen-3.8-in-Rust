@@ -1,0 +1,50 @@
+# aqueduct spec acceptance: maneesh-msi, 2026-09-05 00:12, exe target\release\aqueduct.exe, model C:\models\Qwen3.8-27B-Q4_K_M.gguf
+# 200 greedy tokens per prompt; prompts from tests\fixtures\spec_prompts.json (3: capital, fib, sentence); k = 0 is the plain loop
+# membw before: 27.56 GB/s (bench membw, 1 GiB, best of 3)
+8G        capital  k=0     200 tokens    3.645 s/token    0.27 tok/s  (pinned 22, streamed 42, 10.298 GB/token disk)
+8G        capital  k=1     200 tokens    2.038 s/token    0.49 tok/s  rounds  100  accepted/round 0.990  rate 99%  at position [0.99]  hist [1 99]  verify 3.904 s/round  refeed 0.131 s  chain 0.000 s/step  replay 0.001 s/round
+8G        capital  k=2     200 tokens    1.646 s/token    0.61 tok/s  rounds   73  accepted/round 1.740  rate 87%  at position [0.99 0.75]  hist [1 17 55]  verify 4.207 s/round  refeed 0.145 s  chain 0.086 s/step  replay 0.029 s/round
+8G        capital  k=3     200 tokens    1.526 s/token    0.66 tok/s  rounds   61  accepted/round 2.312  rate 77%  at position [1.00 0.69 0.62]  hist [0 19 4 38]  verify 4.574 s/round  refeed 0.163 s  chain 0.086 s/step  replay 0.047 s/round
+8G        capital  k=4     200 tokens    1.449 s/token    0.69 tok/s  rounds   51  accepted/round 2.902  rate 73%  at position [0.96 0.80 0.63 0.51]  hist [2 8 9 6 26]  verify 5.118 s/round  refeed 0.186 s  chain 0.086 s/step  replay 0.072 s/round
+8G        fib      k=0      58 tokens    3.667 s/token    0.27 tok/s  (pinned 22, streamed 42, 10.478 GB/token disk)
+8G        fib      k=1      58 tokens    2.135 s/token    0.47 tok/s  rounds   30  accepted/round 0.933  rate 93%  at position [0.93]  hist [2 28]  verify 3.901 s/round  refeed 0.126 s  chain 0.000 s/step  replay 0.007 s/round
+8G        fib      k=2      58 tokens    1.579 s/token    0.63 tok/s  rounds   20  accepted/round 1.900  rate 95%  at position [1.00 0.90]  hist [0 2 18]  verify 4.227 s/round  refeed 0.153 s  chain 0.086 s/step  replay 0.011 s/round
+8G        fib      k=3      58 tokens    1.381 s/token    0.72 tok/s  rounds   16  accepted/round 2.625  rate 88%  at position [1.00 0.88 0.75]  hist [0 2 2 12]  verify 4.516 s/round  refeed 0.178 s  chain 0.084 s/step  replay 0.034 s/round
+8G        fib      k=4      58 tokens    1.378 s/token    0.73 tok/s  rounds   14  accepted/round 3.143  rate 79%  at position [1.00 0.79 0.79 0.57]  hist [0 3 0 3 8]  verify 5.071 s/round  refeed 0.195 s  chain 0.085 s/step  replay 0.066 s/round
+8G        sentence k=0     200 tokens    3.591 s/token    0.28 tok/s  (pinned 22, streamed 42, 10.298 GB/token disk)
+8G        sentence k=1     200 tokens    2.414 s/token    0.41 tok/s  rounds  119  accepted/round 0.672  rate 67%  at position [0.67]  hist [39 80]  verify 3.872 s/round  refeed 0.115 s  chain 0.001 s/step  replay 0.031 s/round
+8G        sentence k=2     200 tokens    2.290 s/token    0.44 tok/s  rounds  102  accepted/round 0.951  rate 48%  at position [0.66 0.29]  hist [35 37 30]  verify 4.176 s/round  refeed 0.116 s  chain 0.084 s/step  replay 0.072 s/round
+8G        sentence k=3     200 tokens    2.340 s/token    0.43 tok/s  rounds   95  accepted/round 1.095  rate 36%  at position [0.64 0.29 0.16]  hist [34 33 13 15]  verify 4.506 s/round  refeed 0.121 s  chain 0.083 s/step  replay 0.089 s/round
+8G        sentence k=4     200 tokens    2.534 s/token    0.39 tok/s  rounds   92  accepted/round 1.163  rate 29%  at position [0.64 0.30 0.16 0.05]  hist [33 31 13 10 5]  verify 4.983 s/round  refeed 0.121 s  chain 0.084 s/step  replay 0.107 s/round
+# membw after: 29.06 GB/s
+
+# per (budget, k), mean over the prompts: s/token, tok/s, speedup over k=0, mean accepted per round, acceptance rate, accepted at each draft position (fraction of rounds), tokens per round
+budget      k   s/token    tok/s  speedup    acc/round     rate at position                     tok/round
+8G          0     3.635     0.28     1.00            -        - -                                    1.00
+8G          1     2.195     0.46     1.66        0.865     87% 0.83                                 1.84
+8G          2     1.838     0.54     1.98        1.530     77% 0.82 0.53                            2.35
+8G          3     1.749     0.57     2.08        2.010     67% 0.80 0.49 0.38                       2.66
+8G          4     1.787     0.56     2.03        2.403     60% 0.78 0.51 0.37 0.25                  2.92
+
+# identity gate: the ids of every --spec run against the plain (k=0) run of the same prompt and budget
+  8G        capital  k=1 identical; k=2 identical; k=3 identical; k=4 identical
+  8G        capital  plain ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369,77916,13,198,760,6511,314,23655,369,44299,13,198,760,6511,314,279,24844,369,36492,13,198,760,6511,314,31868,369,35938,13,198,760,6511,314,28169,369,13762,13,198,760,6511,314,33741,369,44745,13,198,760,6511,314,33200,369,60935,13,198,760,6511,314,22466,369,50332,13,198,760,6511,314,30466,369,55918,13,198,760,6511,314,35057,369,73722,13,198,760,6511,314,14227,369,31785,13,198,760,6511,314,279,3516,14634,369,6924,13,198,760,6511,314,26707,369,69724,13,198,760,6511,314,32050,5260,369,65019,13,198,760,6511,314,41361,369,67236,13,198,760,6511,314,44512,369,32175,14981,13,198,760,6511,314,56733,369,75873,13,198,760,6511,314,56729,369,7580,6721,13,198,760,6511,314,55296,369,85567,30441,13,198,760,6511,314,75537,369,436,197935,50960,3253,13,198,760,6511,314
+  8G        fib      k=1 identical; k=2 identical; k=3 identical; k=4 identical
+  8G        fib      plain ids: 198,262,413,307,2564,220,16,25,198,285,460,307,198,262,745,25,198,285,460,73111,1393,12,16,8,478,73111,1393,12,17,8,271,2,12996,10121,198,77,283,220,16,15,198,1302,925,9726,313,77,92,337,76938,1324,369,25,313,72758,38044,1393,8866,871
+  8G        sentence k=1 identical; k=2 identical; k=3 identical; k=4 identical
+  8G        sentence plain ids: 733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446,321,4172,31717,430,781,87805,13,561,916,1315,314,1439,8177,2218,6067,289,11,62104,11,321,93114,2218,56542,279,8476,1844,5518,567,1436,3242,11,494,279,25888,3438,37647,314,279,76344,310,279,6979,11,9766,74719,314,279,8252,58225,13,1577,799,12965,383,264,55893,50471,264,80329,11,279,13224,314,6730,15919,264,24024,314,82240,4216,11,1754,592,25416,264,12096,303,8964,725,1248,3255,13,561,9662,1100,355,12389,9002,293,8269,303,279,22865,11,1345,10849,321,11456,5227,279,22327,421,3060,836,11285,506,279,15822,725,25685,11,9297,17628,7875,34343,421,3799,1472,628,88,2305,321,17198,490,1674,1518,4147,286,1083,279,17415,13,1061,6570,11051,11,15749,539,22525,321,2919,11,61544,9060,279,4128,440,8455,39604,11,12680,9506,1083,16665,321,16665,1083,56084,11,660,1345,279,6797,321,17257,6601,506,279,259,3232,321,279,9467,12899,29997,303,836,13437,14810,13,561,4128,369,2496
+identity: every --spec run equals its plain run
+
+# per-round accepted counts (each prompt, each k)
+  8G capital k=1: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+  8G capital k=2: 1 2 0 1 2 2 1 2 2 2 2 1 1 2 2 1 2 2 2 2 2 1 2 2 1 2 2 1 2 2 1 2 2 1 2 2 1 2 2 1 2 2 2 2 2 2 2 2 1 2 2 2 2 2 2 2 2 2 2 1 1 2 2 1 2 2 2 2 2 2 2 2 2
+  8G capital k=3: 1 3 1 3 1 1 3 1 3 3 1 3 1 1 3 2 1 3 3 3 1 1 3 3 3 3 3 1 1 3 3 3 3 3 1 3 3 3 3 1 1 3 1 3 3 3 3 2 3 3 3 2 1 3 3 3 3 1 2 3 3
+  8G capital k=4: 1 3 1 4 3 4 4 2 1 4 2 4 3 4 2 4 0 1 4 2 4 2 4 0 1 4 4 4 4 1 4 2 3 4 2 4 4 4 4 4 4 1 1 4 2 4 3 4 3 2 4
+  8G fib k=1: 1 1 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0
+  8G fib k=2: 1 1 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
+  8G fib k=3: 1 1 3 3 3 3 3 3 3 3 3 2 3 3 3 2
+  8G fib k=4: 1 1 4 4 4 4 4 3 4 4 3 3 4 1
+  8G sentence k=1: 1 1 0 0 1 1 1 0 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 1 1 1 0 0 1 0 0 0 1 1 1 1 1 0 0 0 0 1 1 0 1 0 1 1 1 1 0 0 1 1 1 1 1 0 1 1 1 1 0 1 1 0 0 1 1 0 0 0 1 1 1 1 1 1 1 0 0 0 0 1 1 1 1 0 1 1 1 1 0 1 1 0 0 1 0 1 0 1 1 1 0 1 1 0 1 0 1
+  8G sentence k=2: 1 2 0 1 1 2 2 0 0 2 1 0 1 2 0 2 1 2 1 2 2 0 1 2 2 1 2 2 0 1 0 0 0 2 0 2 0 2 0 0 0 2 1 1 0 1 1 2 1 0 1 2 2 1 0 1 1 1 2 1 1 0 0 1 1 0 0 0 2 2 1 2 2 0 0 0 0 1 2 2 0 1 1 1 1 0 2 1 0 1 0 1 0 2 0 1 0 1 2 1 0 1
+  8G sentence k=3: 1 2 0 1 1 2 3 0 2 1 0 1 2 0 2 1 3 3 3 1 3 0 2 3 1 0 1 0 0 0 3 3 2 0 0 0 3 0 1 0 1 1 3 0 0 1 2 3 0 0 1 1 1 2 1 1 0 0 1 1 0 0 0 3 2 0 3 1 0 0 0 0 1 3 2 1 1 1 1 0 2 1 0 1 0 1 0 3 1 0 1 2 1 0 1
+  8G sentence k=4: 1 2 0 1 1 2 3 0 2 1 0 1 2 0 2 1 3 3 3 1 4 2 4 0 0 1 0 0 0 3 3 2 0 0 0 4 1 0 1 1 3 0 0 1 2 4 0 1 1 1 2 1 1 0 0 1 1 0 0 0 3 2 0 4 0 0 0 0 0 1 3 2 1 1 1 1 0 2 1 0 1 0 1 0 3 1 0 1 2 1 0 1

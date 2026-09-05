@@ -89,9 +89,12 @@ fn assert_states_equal(a: &State, b: &State, what: &str) {
     }
 }
 
+type Force<'a> = Option<&'a mut dyn FnMut(usize, &[u32]) -> Vec<u32>>;
+type Check<'a> = Option<&'a mut dyn FnMut(usize, &State, &[u32])>;
+
 /// The speculative loop: `n` emitted tokens (the state may have consumed a few more than `n - 1`: the last
 /// round's extra accepted tokens). `force(round, emitted_so_far) -> drafts` overrides the MTP's drafts.
-fn spec(model: &Model, ids: &[u32], k: usize, n: usize, mut force: Option<&mut dyn FnMut(usize, &[u32]) -> Vec<u32>>, mut check: Option<&mut dyn FnMut(usize, &State, &[u32])>) -> (Vec<u32>, State) {
+fn spec(model: &Model, ids: &[u32], k: usize, n: usize, mut force: Force<'_>, mut check: Check<'_>) -> (Vec<u32>, State) {
     let mut state = model.new_state_spec(k).expect("spec state");
     state.reserve(ids.len() + n + k + 2);
     let mut sampler = Sampler::new(SamplerConfig::greedy(), model.vocab());
@@ -198,5 +201,68 @@ fn spec_greedy_ids_equal_plain_ids_resident_and_streamed() {
             assert_eq!(after - before, (1 + s.rounds) * per_pass, "{name}: k={k}: disk bytes over {} rounds", s.rounds);
             println!("{name} k={k} streamed ({pinned} pinned): {STEPS} ids identical; {} rounds, one disk pass each ({per_pass} bytes)", s.rounds);
         }
+    }
+}
+
+/// A second prompt fed to a state that already ran speculative rounds (a later chat turn): `spec_prefill`
+/// forgets the MTP's draft rows, feeds the new rows at the right positions, and the ids that follow are the
+/// plain loop's on the same token sequence.
+#[test]
+fn spec_prefill_on_a_used_state_matches_the_plain_loop() {
+    let model = Model::load(tiny_gguf(), 2).expect("load tiny");
+    let (name, ids) = prompts().into_iter().next().unwrap();
+    let second: Vec<u32> = vec![733, 279, 1496, 7909, 11, 91420];
+    let (n1, n2) = (40usize, 60usize);
+    // plain: prompt, n1 tokens, the second prompt, n2 tokens
+    let (mut plain_ids, mut pst) = plain(&model, &ids, n1);
+    let mut logits = vec![0f32; model.vocab()];
+    let last = *plain_ids.last().unwrap();
+    model.forward_token(last, &mut pst, &mut logits); // consume the last emitted token before the new prompt
+    let hs = model.prefill(&second, &mut pst);
+    let hidden = model.hidden();
+    model.logits_of(&hs[(second.len() - 1) * hidden..], &mut logits);
+    let mut plain2 = vec![argmax(&logits)];
+    while plain2.len() < n2 {
+        model.forward_token(*plain2.last().unwrap(), &mut pst, &mut logits);
+        plain2.push(argmax(&logits));
+    }
+    plain_ids.extend_from_slice(&plain2);
+    for k in 1..=3 {
+        let mut sampler = Sampler::new(SamplerConfig::greedy(), model.vocab());
+        let mut st = model.new_state_spec(k).expect("spec");
+        st.reserve(ids.len() + n1 + second.len() + n2 + 2 * k + 8);
+        let mut out = vec![model.spec_prefill(&ids, &mut st, &mut sampler)];
+        while out.len() < n1 {
+            let x = *out.last().unwrap();
+            model.spec_round(&mut st, x, &mut sampler);
+            out.extend_from_slice(&st.spec.as_ref().unwrap().emitted);
+        }
+        out.truncate(n1);
+        assert_eq!(out, plain_ids[..n1], "{name}: k={k} first segment");
+        // the plain loop consumed out[..n1 - 1]; the spec state may have consumed more (extra accepted rows), so
+        // bring both to the same point: feed the spec state whatever plain tokens it has not consumed yet
+        let consumed = st.pos as usize - ids.len();
+        assert!(consumed >= n1 - 1);
+        // tokens the spec state consumed beyond n1 - 1 are plain tokens too (they were accepted drafts); the
+        // plain state consumed exactly n1 tokens (the last emitted one, fed above): align by feeding the rest
+        let mut seg2: Vec<u32> = plain_ids[consumed..n1].to_vec();
+        seg2.extend_from_slice(&second);
+        // if the spec state consumed past n1 (accepted drafts beyond the cut), the plain comparison is only valid
+        // when those tokens equal the plain continuation; they do (identity), but the second prompt must then
+        // start after them: skip such states
+        if consumed > n1 {
+            println!("{name}: k={k}: spec state consumed {consumed} > {n1}, second segment skipped");
+            continue;
+        }
+        let first2 = model.spec_prefill(&seg2, &mut st, &mut sampler);
+        let mut out2 = vec![first2];
+        while out2.len() < n2 {
+            let x = *out2.last().unwrap();
+            model.spec_round(&mut st, x, &mut sampler);
+            out2.extend_from_slice(&st.spec.as_ref().unwrap().emitted);
+        }
+        out2.truncate(n2);
+        assert_eq!(out2, plain2, "{name}: k={k} second segment after a used-state prefill");
+        println!("{name}: k={k}: {n1} + {n2} ids identical across a second prefill on the used state");
     }
 }

@@ -224,11 +224,13 @@ impl Model {
     /// Prefill for speculation (prompt time, allocating like `prefill`): the batched prefill of `ids`, the
     /// first token (argmax, or a draw), the MTP fed with the prompt's `T` rows `(x_{j+1}, h_j)` as one batch
     /// (`docs/mtp.md`), and the first `k` drafts. Returns `x_T`, the token the caller emits and then passes to
-    /// the first `spec_round`.
+    /// the first `spec_round`. On a state that already consumed `P` positions (a later chat turn) the rows are
+    /// `(x_{P+j+1}, h_{P+j})` at positions `P..`, after the MTP's draft rows from the last round are forgotten.
     pub fn spec_prefill(&self, ids: &[u32], state: &mut State, sampler: &mut Sampler) -> u32 {
         let mtp = self.mtp.as_ref().expect("spec_prefill: the model has no MTP head");
         let t = ids.len();
         let hidden = self.hidden();
+        let p = state.pos as usize;
         let hs = self.prefill(ids, state);
         let mut normed = vec![0f32; t * hidden];
         for i in 0..t {
@@ -238,9 +240,11 @@ impl Model {
         self.logits_of(&hs[(t - 1) * hidden..], &mut logits);
         let x_t = if sampler.cfg.is_greedy() { argmax(&logits) } else { sampler.sample(&logits) };
 
-        // the MTP over the prompt: row j = (x_{j+1}, h_j), x_T = the token just chosen
+        // the MTP over the prompt: row j = (x_{j+1}, h_j), x_T = the token just chosen; a used state's MTP has
+        // rows 0..P-1 of target-based pairs plus the last round's chained draft rows, which go
         let spec = state.spec.as_mut().expect("spec_prefill: state without spec buffers");
-        assert_eq!(spec.mtp_rows(), 0, "spec_prefill on a used state");
+        assert!(spec.mtp_rows() >= p, "spec_prefill: the MTP has {} rows for {p} consumed positions", spec.mtp_rows());
+        MtpHead::truncate(&mut spec.mtp_cache, p);
         let mut cats = vec![0f32; t * 2 * hidden];
         let mut e = vec![0f32; hidden];
         for j in 0..t {
@@ -256,7 +260,7 @@ impl Model {
         let mut u = vec![0f32; t * hidden];
         matmul(&mtp.eh_proj.w, &a, &mut u, self.threads);
         let mut y = vec![0f32; t * hidden];
-        mtp.block.forward_prefill(&u, t, 0, &mut spec.mtp_cache, &mut y, self.threads);
+        mtp.block.forward_prefill(&u, t, p as u32, &mut spec.mtp_cache, &mut y, self.threads);
         // the last row's post-norm hidden into the scratch, its logits, draft 1, then the chain
         rmsnorm(&y[(t - 1) * hidden..], &mtp.head_norm, mtp.eps, &mut spec.mtp.hout[..hidden]);
         mtp.head_in(&self.lm_head, &mut spec.mtp, 0, self.threads);
@@ -329,7 +333,7 @@ impl Model {
         {
             let spec = state.spec.as_mut().unwrap();
             assert_eq!(spec.drafts.len(), k, "spec_round: {} drafts for k = {k}", spec.drafts.len());
-            assert_eq!(spec.mtp_rows(), p + k - 1 + 0 * t, "spec_round: MTP rows {} at position {p} (k {k})", spec.mtp_rows());
+            assert_eq!(spec.mtp_rows(), p + k - 1, "spec_round: MTP rows {} at position {p} (k {k})", spec.mtp_rows());
             spec.batch_ids.clear();
             spec.batch_ids.push(x_p);
             for i in 0..k {

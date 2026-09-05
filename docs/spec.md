@@ -131,3 +131,18 @@ is filed against measurements per rung in `docs/ladder.md`; `c_verify` is the ba
 resident, proportionally less for the pinned share) and `c_mtp` about 45 ms (`docs/mtp.md`). Where the pinned
 share is large (16 GiB, resident) the `k + 1` rows of compute are not hidden under anything, so the gain shrinks
 and can invert; the measurement, not this paragraph, decides the default `k` (5.4).
+
+## Measured (Phase 5.4; `docs/data/spec_acceptance.txt`, `docs/data/spec_identity_8g.txt`, `docs/ladder.md`)
+
+- Identity: every `--spec` run equals its plain run: resident k = 1..5 on six prompts (30 of 30), 8 GiB k = 1..4 on
+  the three fixture prompts (12 of 12), 200 greedy tokens each; on the tiny model with every acceptance count forced
+  and the carried state compared after every round (`tests/spec_identity.rs`).
+- Acceptance (resident, six prompts): 0.87 / 1.51 / 1.98 / 2.33 / 2.60 drafts accepted per round at k = 1..5, i.e.
+  1.85 / 2.40 / 2.74 / 2.99 / 3.15 tokens per round; the first draft is accepted in about 80 % of rounds on every
+  prompt, later positions fall off fast on prose (finding 67).
+- Speed: where the disk is the bottleneck a round costs one disk pass plus little else, so the tokens per round
+  become the speedup: 8 GiB 1.66 / 1.98 / 2.08 / 2.03 x at k = 1..4. Where it is not, each verify row is about 0.85 s
+  of compute (the un-blocked kernel, finding 68): resident 1.06 / 0.98 / 0.94 / 0.86 / 0.76 x. The default `--spec`
+  is k = 3 (the best streamed mean); plain decode stays the default when nothing is asked for.
+- The round's parts (8 GiB, k = 3): verify 4.5 s (of which the plain pass is 3.6), MTP re-feed 0.12 to 0.18 s,
+  chained draft 0.085 s per step, replay 0.03 to 0.09 s, snapshot 0.03 s.

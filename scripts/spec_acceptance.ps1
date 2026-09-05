@@ -41,10 +41,10 @@ function Parse-Size([string]$s) {
 
 function Membw() {
     if ($NoMembw -or $FromStats) { return "n/a" }
+    # the table rows are `threads  best  worst  runs...`; the ceiling is the best over the rows
     $txt = & $Exe bench membw --gib 1 --runs 3 2>&1 | Out-String
-    if ($txt -match 'best\s+([0-9.]+)\s*GB/s') { return $Matches[1] }
-    $m = [regex]::Matches($txt, '([0-9.]+) GB/s')
-    if ($m.Count -gt 0) { return ($m | ForEach-Object { [double]$_.Groups[1].Value } | Measure-Object -Maximum).Maximum }
+    $m = [regex]::Matches($txt, '(?m)^(\d+)\s+([0-9.]+)\s+([0-9.]+)')
+    if ($m.Count -gt 0) { return "{0:F2}" -f (($m | ForEach-Object { [double]$_.Groups[2].Value } | Measure-Object -Maximum).Maximum) }
     return "?"
 }
 

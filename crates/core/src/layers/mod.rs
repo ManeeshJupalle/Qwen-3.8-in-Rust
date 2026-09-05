@@ -360,8 +360,8 @@ impl DecoderLayer {
             }
             _ => panic!("DecoderLayer: state kind does not match mixer kind"),
         }
-        for i in 0..t * hidden {
-            bsc.resid[i] = x[i] + bsc.mixed[i];
+        for ((r, xi), mi) in bsc.resid[..t * hidden].iter_mut().zip(x).zip(&bsc.mixed[..t * hidden]) {
+            *r = *xi + *mi;
         }
         for i in 0..t {
             rmsnorm(&bsc.resid[i * hidden..(i + 1) * hidden], &self.post_attention_norm, self.eps, &mut bsc.normed[i * hidden..(i + 1) * hidden]);
@@ -371,8 +371,8 @@ impl DecoderLayer {
             acts[i].fill(&normed[i * hidden..(i + 1) * hidden], &self.mlp.input_types());
         }
         self.mlp.forward_batch_in(&normed[..t * hidden], t, acts, mlp, &mut mixed[..t * hidden], threads);
-        for i in 0..t * hidden {
-            y[i] = bsc.resid[i] + bsc.mixed[i];
+        for ((yi, r), mi) in y[..t * hidden].iter_mut().zip(&bsc.resid[..t * hidden]).zip(&bsc.mixed[..t * hidden]) {
+            *yi = *r + *mi;
         }
     }
 

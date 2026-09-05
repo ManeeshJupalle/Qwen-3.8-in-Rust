@@ -327,6 +327,7 @@ impl GatedDeltaNet {
     /// `t * conv_dim` (the conv inputs the batch computed), `a` / `b` are `t * n_v` (the gate pre-activations).
     /// The state advances exactly as `forward_batch_in` advanced it on those rows (same kernels, same order):
     /// bit-identical. Only the state is produced; the output rows are not needed.
+    #[allow(clippy::too_many_arguments)]
     pub fn replay_in(&self, mixed: &[f32], a: &[f32], b: &[f32], t: usize, state: &mut DeltaState, sc: &mut DeltaBatch, threads: usize) {
         let (n_k, n_v, dk, dv) = (self.n_k, self.n_v, self.dk, self.dv);
         let kd = n_k * dk;

@@ -152,3 +152,8 @@ One MTP row: `eh_proj` 29.5 MB + the block 209 MB (Q4_0, read from RAM: the bloc
 head 1,043 MB (Q6_K) = 1.28 GB through the CPU, so `c_mtp` is about 1.28 GB / membw plus the block's
 non-matvec work; at 30 GB/s that is roughly 45 ms, dominated by the lm_head. The MTP's batched re-feed of the
 `m + 1` accepted rows costs one more block pass (its head is read once, for the last row only).
+
+**Measured (Phase 5.4, `docs/data/spec_cost_model.txt`):** a chained draft step is 0.064 s cool and 0.085 to 0.11 s
+throttled (mean over the ladder 0.083 s), the re-feed of `m + 1` rows plus one head pass 0.11 to 0.19 s. The Q4_0
+block runs its matvecs at 26 to 40 % of membw (finding 51), which is why the step is nearly twice the head-only
+estimate: the block is 16 % of the bytes and about half the time.

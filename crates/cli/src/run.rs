@@ -21,6 +21,10 @@ pub const DEFAULT_GGUF: &str = r"C:\models\Qwen3.8-27B-Q4_K_M.gguf";
 /// The non-matvec constant of the cost model (docs/data/nonmatvec_profile.txt: 53 ms per token).
 pub const NON_MATVEC_S: f64 = 0.053;
 
+/// Drafts per round when `--spec` is given without a number: chosen from the acceptance measurement of
+/// Phase 5.4 (`docs/data/spec_acceptance.txt`, `docs/phase5-report.md`).
+pub const DEFAULT_SPEC_K: usize = 3;
+
 pub struct RunArgs {
     pub model: String,
     pub tokenizer: String,
@@ -143,10 +147,16 @@ pub fn parse(args: &[String], default_tokenizer: &str) -> Result<RunArgs, String
                 a.diskbw = Some(next(i)?.parse().map_err(|e| format!("--diskbw: {e}"))?);
                 i += 2;
             }
-            "--spec" => {
-                a.spec = next(i)?.parse().map_err(|e| format!("--spec: {e}"))?;
-                i += 2;
-            }
+            "--spec" => match args.get(i + 1).and_then(|s| s.parse::<usize>().ok()) {
+                Some(k) => {
+                    a.spec = k;
+                    i += 2;
+                }
+                None => {
+                    a.spec = DEFAULT_SPEC_K;
+                    i += 1;
+                }
+            },
             "--gen-config" => {
                 gen_config = next(i)?.clone();
                 i += 2;

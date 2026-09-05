@@ -925,3 +925,129 @@ comparison ran against an empty list, and the identity gate printed "DIFFER" for
 "vs )" in the message gave it away). The `$md` list next to the `-Md` parameter crashed the markdown step the
 same way. The script now names its own variables apart from its parameters and can re-render both files
 from the saved stats (`-FromStats`), which is how the filed ladder was produced from the run's own numbers.
+
+# Phase 5 findings (the MTP head, speculative decoding, sampling, the chat template)
+
+## 62. The MTP head consumes the post-final-norm hidden, and every serving implementation agrees, including the one whose comment says otherwise
+
+HF transformers 5.16.1 ignores the `mtp.*` weights (`_keys_to_ignore_on_load_unexpected = [r"^mtp.*"]`,
+`modeling_qwen3_5.py` lines 807 and 1584), so the reference had to be the serving code. vLLM (`Qwen3NextModel.forward`
+returns `hidden_states` after `self.norm`, line 107, and the runner hands that to the drafter, `gpu_model_runner.py`
+line 5314), SGLang (the model returns `self.norm(hidden_states, residual)`; the MTP applies `pre_fc_norm_hidden` to
+it) and llama.cpp (`qwen35.cpp` sets `res->t_h_nextn = cur` *after* `build_norm(cur, model.output_norm)`, lines
+205-209) all feed `hnorm` the vector the lm_head reads, i.e. a norm of a norm. llama.cpp's `llama-graph.h` describes
+`t_h_nextn` as "hidden state before final output norm" and its code does the opposite; the code is what runs. The
+chained draft rows likewise take the MTP's own post-`shared_head_norm` output (vLLM `model_returns_tuple` is false
+for `Qwen3NextMTP`, so `hidden_states = last_hidden_states`; llama.cpp feeds `llama_get_embeddings_nextn_ith(ctx_dft,
+i_last)`). `docs/mtp.md` records the op order; the engine's `State::final_normed` is exactly that vector, so the
+draft costs no extra norm.
+
+## 63. The converter adds +1 to the MTP block's norms too, and the tiny GGUF proves it
+
+`conversion/qwen.py` renames `mtp.pre_fc_norm_embedding.weight` to `model.layers.64.enorm.weight` (and `hnorm`,
+`shared_head.norm`, `layers.0.*`) *before* `modify_tensors`, whose `endswith("norm.weight")` rule then adds 1 to all
+of them. On the tiny model, whose MTP block is random and whose GGUF went through the same converter,
+`blk.9.nextn.enorm / hnorm / shared_head_norm / attn_norm / attn_q_norm` equal the safetensors values + 1 with max
+diff 0, while `eh_proj` and `attn_q` are unchanged. The engine therefore runs its ordinary `rmsnorm` on the stored
+weights, and the fixture (`tools/ref_mtp.py`, HF `Qwen3_5RMSNorm` = `(1 + w)`) lands at 0.00 of the budget: a wrong
+guess here would have missed by a factor of about 2 on every element.
+
+## 64. The MTP head is a GQA block with its own KV cache that must see the prompt; row `j` pairs the token after position `j` with the hidden at `j`
+
+Confirmed against the shapes (`attn_q [12288, 5120]`, `attn_q_norm [256]`, no `ssm_*`) and all three drivers: vLLM's
+proposer shifts the target tokens by one and replaces the last with the sampled token (`llm_base_proposer.py`
+lines 855-859), llama.cpp's `process()` hook decodes the MTP over every target batch with the hidden rows shifted
+right by one (`speculative.cpp` lines 1524-1527). The two differ in two harmless ways: llama.cpp numbers the row by
+the token's own position (one higher than vLLM; RoPE is relative, so a uniform shift changes nothing) and feeds an
+extra `(x_0, zeros)` row at position 0 (`pending_h` starts as zeros), a key the trained formulation never had. The
+engine follows vLLM: no zero row, row index = position = cache length. After a verification round the MTP's cache
+is truncated to the consumed count and the accepted pairs are re-fed with the target's hiddens, as both drivers do.
+
+## 65. Rollback of the DeltaNet states needs one snapshot and 10 MB of saved inputs, not `k + 1` snapshots or a second weight pass
+
+The verify batch already computes, per DeltaNet layer and row, the conv input (10,240 f32) and the two gate
+pre-activations (48 each): everything the recurrence needs besides the state it starts from. Saving them (48 layers
+x `k + 1` rows x 41 KB = 9.9 MB at `k = 4`) and one snapshot of the 48 states and conv windows (150 MiB) lets a
+rollback restore the snapshot and replay the accepted rows through `causal_conv1d_step` and `deltanet_step` alone:
+about 33 ms per replayed token from finding 53's stage times, no weight touched, and bit-identical to what the
+batch computed (same kernels, same inputs, same order). `tests/spec_identity.rs` forces every acceptance count
+`0..k` on the tiny model and compares all 48 states, both conv windows' worth of history and the 16 KV caches with
+a plain state after every round: equal. Design (a), `k + 1` snapshots, would have cost 750 MiB at `k = 4`, three
+pinned layers at 6 GiB; the plan shows the chosen design at 0.2 GB, one pinned layer.
+
+## 66. minijinja renders HF's template byte for byte once three things are supplied: `raise_exception`, a Python-style `tojson`, and the string methods
+
+The template calls `raise_exception` (HF registers it on its Jinja2 environment), pipes tool definitions through
+`tojson` (HF overrides Jinja's HTML-escaping filter with `json.dumps(..., ensure_ascii=False)`, whose separators
+are `, ` and `: `) and calls `content.startswith(...)` / `endswith(...)`, which minijinja does not provide for
+strings (`set_unknown_method_callback` supplies them; the contrib crate that has a Python-compatibility layer was
+not added). With HF's environment settings (`trim_blocks`, `lstrip_blocks`, no trailing newline) the seven cases,
+two from `docs/chat-template.md` and five multi-turn ones with reasoning content, `preserve_thinking`, an
+empty system message, emoji and CJK, are byte-identical and tokenise to HF's ids (`tests/chat_template.rs`).
+
+## 67. Acceptance is a property of the text, not of the head: 90 % on code and repetitive continuations, 25 to 70 % on prose
+
+`docs/data/spec_acceptance.txt` (resident, 200 greedy tokens, `--spec 1..5`, `tools/spec_prompts.py`): the per-draft
+acceptance rate at `k = 1 / 2 / 3 / 4 / 5` is 99 / 87 / 77 / 73 / 65 % on `capital` (the "The capital of X is Y."
+list), 93 / 95 / 88 / 79 / 69 % on `fib` (a Fibonacci function) and 98 / 94 / 89 / 76 / 76 % on `code` (a date-parsing
+function with a docstring), against 67 / 48 / 36 / 29 / 24 % on `sentence` (geology prose), 88 / 73 / 65 / 61 / 51 % on
+`fact` (the seasons) and 75 / 57 / 41 / 33 / 26 % on `essay`. The first draft of a round is accepted in 65 to 100 % of
+rounds on every prompt; it is the later positions that separate the kinds (`capital` k=5 by position 1.00 / 0.66 /
+0.55 / 0.53 / 0.51, `essay` k=5 0.67 / 0.40 / 0.20 / 0.05 / 0.00). Averaged over the six prompts a round accepts 0.87 /
+1.51 / 1.98 / 2.33 / 2.60 drafts and emits 1.85 / 2.40 / 2.74 / 2.99 / 3.15 tokens. The head is bartowski's Q4_0 copy,
+the noisiest of the three (finding 23); how much of the prose gap is the quantisation and how much the task is not
+separated here (the Unsloth Q6_K/Q8_0 copy would be the experiment). The identity gate held on all 30 runs: every
+`--spec` id list equals its plain run's.
+
+## 68. At resident, a verification row costs 0.85 s of compute, so speculation only pays where the disk is the bottleneck
+
+Verify time per round at resident (`docs/data/spec_acceptance.txt`, the box throttled: the plain token 1.21 to 1.41 s
+against 0.74 cool) is 2.2 / 3.1 / 3.8 / 4.8 / 5.6 s for 2 / 3 / 4 / 5 / 6 rows, i.e. about 0.85 s per extra row on top of
+the plain token, while a round emits 1.85 to 3.15 tokens: the mean speed over the six prompts is 1.06 x at `k = 1`,
+0.98 x at `k = 2`, 0.94 x at `k = 3`, 0.86 x at `k = 4`, 0.76 x at `k = 5` (per prompt, the best resident result is `code`
+at `k = 3`, 1.26 x; the worst `essay` at `k = 5`, 0.48 x). The reason is the kernel structure, not the drafts: `matmul`
+computes row `r` for activation `t` with the same `one_row` kernel as the single-token path, so the weight row is
+unpacked (about 115 uops per 144-byte super-block, finding 38) once per activation, and the extra rows are pure
+compute at the kernels' cache-resident rate (finding 41 measured the batched prefill at 0.45 s per token cool). A
+`t`-way blocked kernel that unpacks each super-block once and multiplies it against `t` Q8_K rows would cut the
+per-row cost by the unpack share; it was not written this phase (the brief was speculation, not kernels), and it
+is the item that would make `--spec` a win at 16 GiB and resident. Where the round is disk-bound the rows' compute
+hides under the read, which is the whole point of the design (`docs/spec.md`) and what the ladder measures.
+
+## 69. The ladder with `--spec 3`: 2.1 x where the disk is the bottleneck, break-even at 16 GiB, a loss when everything fits; ids identical at every rung
+
+`docs/ladder.md`, `docs/data/ladder.txt`, `docs/data/spec_cost_model.txt` (`scripts/ladder.ps1 -Spec 3`, 32 greedy
+tokens, the same 3 prompts, plain and `--spec 3` interleaved per prompt so each pair shares its thermal state):
+
+| rung | pinned plain / spec | plain s/token | spec s/token | speedup | s per round | verify | tokens per round |
+|---|---|---|---|---|---|---|---|
+| 5 GiB (an 8 GB laptop's free RAM) | 9 / 8 | 4.316 | 2.028 | 2.13 x | 5.39 | 4.96 | 2.87 |
+| 6 GiB | 13 / 12 | 4.095 | 1.979 | 2.07 x | 5.26 | 4.83 | 2.87 |
+| 8 GiB | 22 / 21 | 3.628 | 1.812 | 2.00 x | 4.82 | 4.44 | 2.87 |
+| 11 GiB (a 16 GB laptop's free RAM) | 36 / 35 | 2.790 | 1.814 | 1.54 x | 4.82 | 4.39 | 2.87 |
+| 12 GiB | 40 / 39 | 2.690 | 2.050 | 1.31 x | 5.45 | 4.93 | 2.87 |
+| 16 GiB | 58 / 57 | 1.155 | 1.129 | 1.02 x | 3.00 | 2.69 | 2.87 |
+| resident | 64 / 64 | 0.830 | 1.057 | 0.79 x | 2.81 | 2.50 | 2.87 |
+
+The shape is the design's: on the streamed rungs a round costs about one plain token plus 0.4 s (the verify
+batch is 4.4 to 5.0 s against a plain token of 3.6 to 4.3 s, the three extra rows' compute hidden under the disk
+reads except for a tail, plus three chained drafts at 0.08 to 0.09 s and the MTP re-feed at 0.14 s) and emits
+2.87 tokens, so the speedup is close to the tokens per round (2.87) discounted by that overhead. As the pinned
+share grows the rows stop hiding: at 11 GiB the round is 4.8 s for a 2.8 s plain token, at 16 GiB 3.0 s for 1.16 s,
+and at resident 2.8 s for 0.83 s, i.e. 0.56 s of compute per extra row (finding 68) that nothing covers. The 5 GiB
+rung is the 8 GB laptop's honest number: 0.49 tokens per second with `--spec 3` against 0.23 without. Identity:
+the 32 ids are the same at every rung, plain and spec, and equal to the Phase 3 output; peak RSS is under the cap
+at every rung with the spec buffers (one pinned layer fewer). Thermal state: the 5 to 12 GiB rungs were taken in
+the mildly throttled state (membw 27 to 28 GB/s), the 16 GiB and resident rungs after the machine had cooled
+(28.7 GB/s before, 29.95 after; their plain tokens, 1.155 and 0.830, are within 6 and 12 % of Phase 4's cool
+1.098 and 0.741), so the streamed speedups are conservative and the compute-bound losses are not throttling
+artefacts; a first pass over 8 to 16 GiB in a hot state (verify 7.2 s per round at 8 GiB) was discarded and re-run
+(`docs/data/ladder_phase4.txt` keeps the Phase 4 file for comparison).
+
+The brief's round model `t_round = bytes_ram / membw_eff + bytes_disk / diskbw + c_mtp x k + c_verify x (k + 1)`
+with `c_mtp = 0.083 s` (the mean chained draft step: MTP block + shared head) and `c_verify = 0.558 s` (fitted
+at resident as the marginal cost of one extra batch row) predicts 6.8 / 6.6 / 6.1 / 5.3 / 5.2 / 3.6 / 3.3 s per
+round against the measured 5.4 / 5.3 / 4.8 / 4.8 / 5.4 / 3.0 / 2.8 (ratios 0.79 / 0.80 / 0.79 / 0.91 / 1.05 / 0.82 /
+0.85): the sum overstates the streamed rungs by 20 % because the rows' compute overlaps the disk read there,
+which a sum cannot say, and the 12 GiB rung's 1.05 is the hot-state pass. `tools/spec_cost_model.py` refits it
+from any ladder run.
