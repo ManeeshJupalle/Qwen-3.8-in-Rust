@@ -1,0 +1,173 @@
+﻿# Phase 5.5 blocked GEMM tile sweep (aqueduct bench matmul), maneesh-msi, 2026-09-05 18:15:51, release build
+# i7-9750H: 6 cores / 12 threads, L1D 32 KB and L2 256 KB per core, L3 12 MB shared. gate = 17408 x 5120 (ffn_gate; 5120-wide activations, 6.2 KB per Q8_K row); down = 5120 x 17408 (ffn_down; 17408-wide activations, 21 KB per row).
+# tile 0 = the Phase 3.3 per-row loop (one_row per activation); tiles 2..16 = the blocked kernel (each super-block unpacked once per tile). Tiles alternated within each repetition, medians reported.
+# ---- membw before
+# aqueduct bench membw: 1 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; 6 physical cores, 12 logical
+# fill + first pass: 0.75 s
+threads   best GB/s worst GB/s   runs (GB/s)
+1             14.62      12.61   14.62 14.34 12.61
+6             27.16      26.26   27.16 26.64 26.26
+12            25.49      24.30   25.49 24.30 24.32
+# ---- 12 threads (every hardware thread: the batch policy)
+# aqueduct bench matmul: threads 12 (6 physical, 12 logical), reps 7, n [4, 32], tiles [0, 2, 4, 8, 16] (0 = the Phase 3.3 per-row loop); avx2+f16c: true
+# clock (dependent 1-cycle adds): 2.68 GHz on one thread, 2.00 GHz with 12 threads busy
+# blocked GEMM (matmul_t): each weight super-block unpacked once per tile of T activation rows; tiles alternated per repetition, medians reported
+# ms/row = ms per call / n (the marginal cost of one activation row when the weights are shared); ns/(sb,act) = ms per call * 1e6 / (rows * super-blocks * n)
+# matvec = one activation, the memory-bound floor of the same matrix (ms, and weight GB/s)
+
+gate  Q4_K  17408x5120  matvec    2.466 ms    20.33 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+gate  Q4_K     4     0      5.603     1.401         4.02      1.00       35.79
+gate  Q4_K     4     2     10.245     2.561         7.36      0.55       19.57
+gate  Q4_K     4     4      6.753     1.688         4.85      0.83       29.70
+gate  Q4_K     4     8      6.671     1.668         4.79      0.84       30.06
+gate  Q4_K     4    16      6.437     1.609         4.62      0.87       31.15
+gate  Q4_K    32     0     42.772     1.337         3.84      1.00       37.51
+gate  Q4_K    32     2     62.651     1.958         5.62      0.68       25.61
+gate  Q4_K    32     4     47.781     1.493         4.29      0.90       33.58
+gate  Q4_K    32     8     38.039     1.189         3.41      1.12       42.18
+gate  Q4_K    32    16     36.483     1.140         3.27      1.17       43.97
+
+gate  Q5_K  17408x5120  matvec    3.705 ms    16.54 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+gate  Q5_K     4     0      7.784     1.946         5.59      1.00       31.49
+gate  Q5_K     4     2     10.378     2.594         7.45      0.75       23.62
+gate  Q5_K     4     4      7.189     1.797         5.16      1.08       34.10
+gate  Q5_K     4     8      6.890     1.723         4.95      1.13       35.57
+gate  Q5_K     4    16      8.431     2.108         6.05      0.92       29.07
+gate  Q5_K    32     0     49.129     1.535         4.41      1.00       39.91
+gate  Q5_K    32     2     65.416     2.044         5.87      0.75       29.97
+gate  Q5_K    32     4     50.828     1.588         4.56      0.97       38.58
+gate  Q5_K    32     8     44.633     1.395         4.01      1.10       43.93
+gate  Q5_K    32    16     36.892     1.153         3.31      1.33       53.15
+
+gate  Q6_K  17408x5120  matvec    4.132 ms    17.70 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+gate  Q6_K     4     0      8.983     2.246         6.45      1.00       32.55
+gate  Q6_K     4     2     10.218     2.555         7.34      0.88       28.62
+gate  Q6_K     4     4      7.384     1.846         5.30      1.22       39.60
+gate  Q6_K     4     8      7.018     1.755         5.04      1.28       41.67
+gate  Q6_K     4    16      7.370     1.842         5.29      1.22       39.68
+gate  Q6_K    32     0     53.952     1.686         4.84      1.00       43.37
+gate  Q6_K    32     2     52.060     1.627         4.67      1.04       44.94
+gate  Q6_K    32     4     38.053     1.189         3.42      1.42       61.48
+gate  Q6_K    32     8     34.066     1.065         3.06      1.58       68.68
+gate  Q6_K    32    16     31.784     0.993         2.85      1.70       73.61
+
+down  Q4_K   5120x17408 matvec    2.646 ms    18.95 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+down  Q4_K     4     0      6.845     1.711         4.92      1.00       29.30
+down  Q4_K     4     2      9.951     2.488         7.15      0.69       20.15
+down  Q4_K     4     4      7.254     1.814         5.21      0.94       27.65
+down  Q4_K     4     8      8.236     2.059         5.91      0.83       24.35
+down  Q4_K     4    16      7.120     1.780         5.11      0.96       28.17
+down  Q4_K    32     0     40.701     1.272         3.65      1.00       39.42
+down  Q4_K    32     2     65.136     2.036         5.85      0.62       24.63
+down  Q4_K    32     4     46.689     1.459         4.19      0.87       34.36
+down  Q4_K    32     8     38.050     1.189         3.42      1.07       42.16
+down  Q4_K    32    16     37.836     1.182         3.40      1.08       42.40
+
+down  Q5_K   5120x17408 matvec    3.265 ms    18.77 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+down  Q5_K     4     0      7.680     1.920         5.51      1.00       31.91
+down  Q5_K     4     2      9.142     2.286         6.56      0.84       26.81
+down  Q5_K     4     4      8.368     2.092         6.01      0.92       29.29
+down  Q5_K     4     8      8.717     2.179         6.26      0.88       28.12
+down  Q5_K     4    16      7.500     1.875         5.39      1.02       32.68
+down  Q5_K    32     0     47.135     1.473         4.23      1.00       41.60
+down  Q5_K    32     2     63.391     1.981         5.69      0.74       30.93
+down  Q5_K    32     4     50.243     1.570         4.51      0.94       39.03
+down  Q5_K    32     8     40.097     1.253         3.60      1.18       48.90
+down  Q5_K    32    16     38.880     1.215         3.49      1.21       50.43
+
+down  Q6_K   5120x17408 matvec    4.258 ms    17.17 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+down  Q6_K     4     0      8.396     2.099         6.03      1.00       34.83
+down  Q6_K     4     2      9.116     2.279         6.55      0.92       32.08
+down  Q6_K     4     4      6.200     1.550         4.45      1.35       47.17
+down  Q6_K     4     8      5.161     1.290         3.71      1.63       56.67
+down  Q6_K     4    16      4.821     1.205         3.46      1.74       60.66
+down  Q6_K    32     0     51.834     1.620         4.65      1.00       45.14
+down  Q6_K    32     2     52.728     1.648         4.73      0.98       44.37
+down  Q6_K    32     4     37.247     1.164         3.34      1.39       62.81
+down  Q6_K    32     8     32.599     1.019         2.93      1.59       71.77
+down  Q6_K    32    16     37.767     1.180         3.39      1.37       61.95
+# ---- 6 threads (the physical cores: the decode thread count)
+# aqueduct bench matmul: threads 6 (6 physical, 12 logical), reps 5, n [4, 32], tiles [0, 4, 8, 16] (0 = the Phase 3.3 per-row loop); avx2+f16c: true
+# clock (dependent 1-cycle adds): 2.66 GHz on one thread, 2.44 GHz with 6 threads busy
+# blocked GEMM (matmul_t): each weight super-block unpacked once per tile of T activation rows; tiles alternated per repetition, medians reported
+# ms/row = ms per call / n (the marginal cost of one activation row when the weights are shared); ns/(sb,act) = ms per call * 1e6 / (rows * super-blocks * n)
+# matvec = one activation, the memory-bound floor of the same matrix (ms, and weight GB/s)
+
+gate  Q4_K  17408x5120  matvec    2.339 ms    21.43 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+gate  Q4_K     4     0      7.048     1.762         5.06      1.00       28.45
+gate  Q4_K     4     4      9.162     2.290         6.58      0.77       21.89
+gate  Q4_K     4     8      8.864     2.216         6.37      0.80       22.62
+gate  Q4_K     4    16      8.373     2.093         6.01      0.84       23.95
+gate  Q4_K    32     0     56.807     1.775         5.10      1.00       28.24
+gate  Q4_K    32     4     66.030     2.063         5.93      0.86       24.30
+gate  Q4_K    32     8     54.277     1.696         4.87      1.05       29.56
+gate  Q4_K    32    16     50.630     1.582         4.54      1.12       31.69
+
+gate  Q5_K  17408x5120  matvec    3.205 ms    19.12 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+gate  Q5_K     4     0      9.257     2.314         6.65      1.00       26.48
+gate  Q5_K     4     4      9.174     2.293         6.59      1.01       26.72
+gate  Q5_K     4     8     10.657     2.664         7.65      0.87       23.00
+gate  Q5_K     4    16     10.538     2.634         7.57      0.88       23.26
+gate  Q5_K    32     0     69.005     2.156         6.19      1.00       28.42
+gate  Q5_K    32     4     72.646     2.270         6.52      0.95       26.99
+gate  Q5_K    32     8     57.049     1.783         5.12      1.21       34.37
+gate  Q5_K    32    16     55.663     1.739         5.00      1.24       35.23
+
+gate  Q6_K  17408x5120  matvec    3.463 ms    21.11 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+gate  Q6_K     4     0     10.331     2.583         7.42      1.00       28.31
+gate  Q6_K     4     4      7.447     1.862         5.35      1.39       39.27
+gate  Q6_K     4     8      8.073     2.018         5.80      1.28       36.23
+gate  Q6_K     4    16      8.333     2.083         5.98      1.24       35.09
+gate  Q6_K    32     0     74.246     2.320         6.66      1.00       31.51
+gate  Q6_K    32     4     52.751     1.648         4.73      1.41       44.35
+gate  Q6_K    32     8     46.303     1.447         4.16      1.60       50.53
+gate  Q6_K    32    16     41.972     1.312         3.77      1.77       55.74
+
+down  Q4_K   5120x17408 matvec    2.719 ms    18.44 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+down  Q4_K     4     0      8.069     2.017         5.79      1.00       24.85
+down  Q4_K     4     4      8.103     2.026         5.82      1.00       24.75
+down  Q4_K     4     8      9.262     2.316         6.65      0.87       21.65
+down  Q4_K     4    16      9.944     2.486         7.14      0.81       20.17
+down  Q4_K    32     0     54.088     1.690         4.85      1.00       29.66
+down  Q4_K    32     4     63.073     1.971         5.66      0.86       25.44
+down  Q4_K    32     8     56.299     1.759         5.05      0.96       28.50
+down  Q4_K    32    16     52.462     1.639         4.71      1.03       30.58
+
+down  Q5_K   5120x17408 matvec    3.127 ms    19.59 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+down  Q5_K     4     0      8.957     2.239         6.43      1.00       27.37
+down  Q5_K     4     4      8.557     2.139         6.14      1.05       28.64
+down  Q5_K     4     8      9.235     2.309         6.63      0.97       26.54
+down  Q5_K     4    16      8.827     2.207         6.34      1.01       27.77
+down  Q5_K    32     0     73.977     2.312         6.64      1.00       26.51
+down  Q5_K    32     4     67.924     2.123         6.10      1.09       28.87
+down  Q5_K    32     8     53.484     1.671         4.80      1.38       36.66
+down  Q5_K    32    16     55.428     1.732         4.98      1.33       35.38
+
+down  Q6_K   5120x17408 matvec    3.696 ms    19.78 GB/s of weights
+shape type     n  tile    ms/call    ms/row  ns/(sb,act)   x tile0    eff GB/s
+down  Q6_K     4     0      9.253     2.313         6.64      1.00       31.61
+down  Q6_K     4     4      7.197     1.799         5.17      1.29       40.64
+down  Q6_K     4     8      7.633     1.908         5.48      1.21       38.32
+down  Q6_K     4    16      6.716     1.679         4.82      1.38       43.54
+down  Q6_K    32     0     67.391     2.106         6.05      1.00       34.72
+down  Q6_K    32     4     50.246     1.570         4.51      1.34       46.56
+down  Q6_K    32     8     43.489     1.359         3.90      1.55       53.80
+down  Q6_K    32    16     45.063     1.408         4.04      1.50       51.92
+# ---- membw after
+# aqueduct bench membw: 1 GiB buffer of u64, sum-reduce (AVX2 loads: true), best of 3; 6 physical cores, 12 logical
+# fill + first pass: 0.75 s
+threads   best GB/s worst GB/s   runs (GB/s)
+1             15.08      13.24   15.08 13.24 13.69
+6             25.78      24.91   25.15 24.91 25.78
+12            25.43      20.73   22.30 20.73 25.43

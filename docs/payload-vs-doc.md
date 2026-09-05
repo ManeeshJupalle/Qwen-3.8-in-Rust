@@ -1051,3 +1051,86 @@ round against the measured 5.4 / 5.3 / 4.8 / 4.8 / 5.4 / 3.0 / 2.8 (ratios 0.79 
 0.85): the sum overstates the streamed rungs by 20 % because the rows' compute overlaps the disk read there,
 which a sum cannot say, and the 12 GiB rung's 1.05 is the hot-state pass. `tools/spec_cost_model.py` refits it
 from any ladder run.
+
+## 70. An extra activation row costs the int8 multiply-accumulate, not the unpack: a Q4_K super-block is 50 cycles on this core and only 26 of them can be shared between rows
+
+Phase 5 attributed the 0.56 to 0.85 s an extra verify row costs at resident to the batched matmul re-unpacking
+every weight super-block per activation (finding 68), and predicted that a T-way blocked kernel would fix it.
+Phase 5.5 wrote that kernel (`docs/kquant-dot.md`, Phase 5.5 section: each super-block unpacked once, a tile of up
+to 16 Q8_K rows dotted against it, per-row arithmetic bit-identical to the single-row kernel) and measured it at
+1.1 to 1.3 x per row for Q4_K and 1.5 to 1.7 x for Q6_K over the per-row loop (`docs/data/matmul_t_bench.txt`), far
+from the 3 x the gate asked for. The probe in `tools/probe` (`docs/data/kernel_probe.txt`) says why, on an
+L1-resident row, one thread, pieces of the production kernel switched off one at a time (cycles per super-block):
+
+| piece | cost | shareable across a tile |
+|---|---|---|
+| header: two f16 converts, the 12-byte scale / min unpack, an insert and an extract | 18 | yes |
+| the eight `vpshufb` scale broadcasts | 6 | yes |
+| the nibble unpack (`and`, `srli`, `and` x 4) | 2 | yes |
+| the eight `maddubs -> madd -> add` triples with their activation loads | 21 | no |
+| the f32 tail (`cvt`, `mul`, `add`, the scalar `d`, a broadcast) | 12 | no |
+| the min term (`madd`, `cvt`, `mul`, `add`) | 8 | no |
+| whole kernel | 50 | |
+
+So 26 of 50 cycles can be amortised over a tile and 41 cannot; at tile 8 the blocked kernel's floor is 44 cycles
+per activation against 50, which is the 1.1 to 1.3 x measured. The core itself is the surprise: a
+`maddubs -> madd -> add` triple costs 1.4 cycles from registers and 2.3 with its L1 load, against 1.0 by the
+Skylake port tables (the tables are right: the probe measures `vpmaddubsw` and `vpmaddwd` at 0.65 cycles each,
+`vpshufb` at 1.0, two loads per cycle), and the load's cache-line alignment does not matter. The instruction
+stream retires about two uops per cycle whatever its order: software-pipelining the header, splitting the
+accumulator chain, ggml's scalar `utmp` unpack and the Coffee Lake JCC-erratum branch padding all land between
+48 and 55 cycles. Finding 68 was half right: the unpack is 36 % of the row; the int8 multiply-accumulate that
+every AVX2 K-quant kernel must issue (16 madd-class instructions per 256 weights per activation; AVX-512 VNNI's
+`vpdpbusd` would fold each triple into one) is the rest, and no arrangement of the same instructions moves it on
+this core.
+
+## 71. The batched kernels leave the execution ports idle behind their dependency chains; the sibling hardware thread fills them, so batches take twelve threads while the matvec keeps six
+
+With the blocked GEMM retiring two uops per cycle of a possible four, the second logical thread of each core has
+room: `aqueduct bench matmul` on the 17408 x 5120 shape with 32 activations, six threads then twelve, same binary,
+back to back (ms per activation row; `docs/data/kernel_probe.txt` section 5, `docs/data/matmul_t_bench.txt`):
+
+| kernel | 6 threads | 12 threads | gain |
+|---|---|---|---|
+| Q4_K, tile 16 | 1.395 | 1.090 | 1.28 x |
+| Q5_K, tile 16 | 1.523 | 1.117 | 1.36 x |
+| Q6_K, tile 16 | 1.335 | 0.876 | 1.52 x |
+| Q4_K, per-row loop (tile 0) | 1.560 | 1.252 | 1.25 x |
+
+The single-activation matvec is memory-bound and six threads still beat twelve on it (finding 51: two threads
+per core contend for the load ports without adding bandwidth). The engine therefore splits the policy
+(`matvec::matmul_threads`): a batched matmul of two rows or more runs on every hardware thread, a single row on
+the caller's physical-core count; `AQUEDUCT_MATMUL_THREADS=N` pins the batch count for A/B runs. The per-row loop
+gains almost as much from the sibling thread as the blocked kernel does, which is the same fact as finding 70
+seen from the other side: the cost is in how the core executes the int8 chain, not in what the kernel asks it to
+do.
+
+## 72. The activation tile: 16 rows at the hidden width, 8 at the intermediate width; at four rows Q4_K gains nothing from blocking and Q6_K a third
+
+`aqueduct bench matmul` (`docs/data/matmul_t_bench.txt`, twelve threads, medians of seven alternated repetitions,
+ms per activation row; tile 0 is the Phase 3.3 per-row loop) on the two production shapes: `gate`, 17408 x 5120
+with 5120-wide activations (6.2 KB per Q8_K row), and `down`, 5120 x 17408 with 17408-wide activations (21 KB):
+
+| shape, type | n | tile 0 | tile 2 | tile 4 | tile 8 | tile 16 |
+|---|---|---|---|---|---|---|
+| gate Q4_K | 32 | 1.337 | 1.958 | 1.493 | 1.189 | **1.140** (1.17 x) |
+| gate Q5_K | 32 | 1.535 | 2.044 | 1.588 | 1.395 | **1.153** (1.33 x) |
+| gate Q6_K | 32 | 1.686 | 1.627 | 1.189 | 1.065 | **0.993** (1.70 x) |
+| down Q4_K | 32 | 1.272 | 2.036 | 1.459 | 1.189 | **1.182** (1.08 x) |
+| down Q5_K | 32 | 1.473 | 1.981 | 1.570 | 1.253 | **1.215** (1.21 x) |
+| down Q6_K | 32 | 1.620 | 1.648 | 1.164 | **1.019** (1.59 x) | 1.180 |
+| gate Q4_K | 4 | **1.401** | 2.561 | 1.688 | 1.668 | 1.609 (0.87 x) |
+| gate Q5_K | 4 | 1.946 | 2.594 | 1.797 | **1.723** (1.13 x) | 2.108 |
+| gate Q6_K | 4 | 2.246 | 2.555 | 1.846 | **1.755** (1.28 x) | 1.842 |
+| down Q6_K | 4 | 2.099 | 2.279 | 1.550 | 1.290 | **1.205** (1.74 x) |
+
+The gain grows with the tile (the shared unpack is divided by more rows) up to where the tile's activation rows
+stop fitting L2: 16 rows at the hidden width are 99 KB and win; at the intermediate width they are 336 KB, and
+tile 8 (168 KB) beats 16 for Q5_K and Q6_K, so `matvec::tile_for` caps the tile at the largest power of two whose
+rows fit 192 KB (16 and 8 on these shapes; the L1 is 32 KB and the L2 256 KB per core on this i7-9750H). A tile of
+2 is always a loss: the two-activation group runs the same instruction stream as the per-row loop with a tile's
+bookkeeping on top. At four rows, the verify batch of `--spec 3`, the blocked Q4_K kernel is at par or a little
+behind the per-row loop (its four-accumulator group does not overlap the chains the eight-accumulator group does)
+while Q6_K still gains 1.3 to 1.7 x; the verify pass's speed-up at resident therefore comes mostly from the thread
+policy (finding 71) and from the Q6_K third of the file, and the ladder measures the mix. The six-thread sweep in
+the same file shows every ratio a little smaller, as finding 71 predicts.

@@ -1,0 +1,47 @@
+﻿
+running 1 test
+phase3_e2e-5d6dc7df2c9c4d29.exe : large pages: SeLockMemoryPrivilege is not held by this user (Local Security Policy > 
+Lock pages in memory); not changing policy; using normal pages
+At 
+C:\Users\manee\AppData\Local\Temp\scratch\d--Aqueduct\4777d510-ef51-411e-b9e6-d3881012f368\scratchpad\pipeline.ps1:31 
+char:1
++ & $e2e.FullName --ignored --nocapture 2>&1 | Out-File -FilePath docs\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (large pages: Se...ng normal pages:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+load: 9.5 s, 17.773 GB of weights, peak RSS 17.817 GB, threads 6
+activations: q8k; ceilings D:\Aqueduct\crates\core\..\..\tests\fixtures\q8k_ceilings.json
+== prompt capital (5 ids) ==
+prefill: sequential 4.38 s, batched 2.52 s (1.98 tok/s) + head 0.06 s; hidden max|diff| 0e0; last logits batched vs sequential max|diff| 0e0 (ceiling 0.7246); state max rel 0e0, cache max rel 0e0; argmax per position 5/5; vs ref_gguf max|diff| batched 0.3623 sequential 0.3623 (ceiling 0.7246)
+decode: 32 tokens, 0.926 s/token = 18.16 GB/s = 63% of membw 28.9
+ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+llama.cpp first 16 match: 16/16
+margins: 3.01 1.57 0.62 1.25 3.90 5.15 0.52 7.83 5.87 5.66 3.48 5.22 7.00 9.50 2.25 7.83 7.35 6.05 3.07 5.20 5.11 8.35 2.94 7.87 7.17 6.37 3.72 5.90 7.09 8.91 1.07 8.99
+text: " Paris.\nThe capital of Germany is Berlin.\nThe capital of Italy is Rome.\nThe capital of Spain is Madrid.\nThe capital of Portugal is"
+== prompt fib (4 ids) ==
+prefill: sequential 3.55 s, batched 2.12 s (1.89 tok/s) + head 0.06 s; hidden max|diff| 0e0; last logits batched vs sequential max|diff| 0e0 (ceiling 0.5614); state max rel 0e0, cache max rel 0e0; argmax per position 4/4; vs ref_gguf max|diff| batched 0.2807 sequential 0.2807 (ceiling 0.5614)
+test prefill_gate_and_end_to_end has been running for over 60 seconds
+decode: 32 tokens, 0.917 s/token = 18.33 GB/s = 63% of membw 28.9
+ids: 198,262,413,307,2564,220,16,25,198,285,460,307,198,262,745,25,198,285,460,73111,1393,12,16,8,478,73111,1393,12,17,8,271,2
+llama.cpp first 16 match: 6/16; first divergence at step 6: ours 16 vs llama.cpp 15 with top1-top2 margin 0.0954 (llama.cpp text "\n    if n <= 0:\n        return 0\n    elif")
+margins: 4.05 3.66 0.97 4.27 0.33 3.89 0.10 5.47 4.11 5.80 4.84 3.89 2.80 9.25 0.33 5.97 6.08 6.15 2.97 1.94 8.86 0.22 4.11 2.62 7.44 8.62 8.53 4.65 6.83 8.24 1.63 0.04
+text: "\n    if n <= 1:\n        return n\n    else:\n        return fibonacci(n-1) + fibonacci(n-2)\n\n#"
+== prompt sentence (39 ids) ==
+prefill: sequential 34.21 s, batched 14.21 s (2.75 tok/s) + head 0.47 s; hidden max|diff| 0e0; last logits batched vs sequential max|diff| 0e0 (ceiling 0.7146); state max rel 0e0, cache max rel 0e0; argmax per position 37/39; vs ref_gguf max|diff| batched 0.3573 sequential 0.3573 (ceiling 0.7146)
+argmax flip inside the noise floor: position 26: ours 491 vs ref 685 (our runner-up 685, margin 0.1821)
+argmax flip inside the noise floor: position 29: ours 23540 vs ref 2627 (our runner-up 2627, margin 0.0667)
+decode: 32 tokens, 0.926 s/token = 18.15 GB/s = 63% of membw 28.9
+ids: 733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446,321,4172,31717,430,781,87805,13,561,916,1315,314,1439,8177,2218,6067,289
+llama.cpp first 16 match: 5/16; first divergence at step 5: ours 91420 vs llama.cpp 34343 with top1-top2 margin 0.0241 (llama.cpp text " In the highlands, rivers plunge over cliffs and through narrow gorges, their")
+margins: 0.24 0.74 0.30 1.87 0.26 0.02 1.13 0.43 1.60 1.29 0.88 0.40 4.10 1.12 7.74 2.41 1.28 0.19 3.26 0.42 2.68 1.08 0.93 1.24 0.31 5.51 0.24 0.08 4.07 1.24 0.76 11.37
+text: " In the highlands, glaciers once shaped the landscape, leaving behind U-shaped valleys and moraines as they retreated. The interplay of these forcesΓÇöerosion"
+peak RSS 18.219 GB vs expected 17.936 GB (weights 17.773 GB + state), ratio 1.016; 96 tokens generated
+load 9.5 s
+summary: capital: llama.cpp match 16/16; prefill batched 2.52 s (1.98 tok/s) vs sequential 4.38 s; decode 0.926 s/token = 18.16 GB/s
+summary: fib: llama.cpp match 6/16; prefill batched 2.12 s (1.89 tok/s) vs sequential 3.55 s; decode 0.917 s/token = 18.33 GB/s
+summary: sentence: llama.cpp match 5/16; prefill batched 14.21 s (2.75 tok/s) vs sequential 34.21 s; decode 0.926 s/token = 18.15 GB/s
+test prefill_gate_and_end_to_end ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 164.17s
+
