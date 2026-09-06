@@ -64,8 +64,9 @@ about 12 MB of downloads besides the 17.8 GB model. `aqueduct doctor` checks all
 
 1. Download `aqueduct-v0.1.0-x86_64-pc-windows-msvc.exe` from the
    [release page](https://github.com/ManeeshJupalle/Qwen3.8-in-c/releases/tag/v0.1.0), check its sha256 against
-   the one on that page (`certutil -hashfile <file> SHA256`), rename it to `aqueduct.exe`, put it in an empty
-   folder and open a terminal there.
+   the one on that page (`certutil -hashfile <file> SHA256`; also filed in
+   [release_v0.1.0_sha256.txt](docs/data/release_v0.1.0_sha256.txt)), rename it to `aqueduct.exe`, put it in an
+   empty folder and open a terminal there.
 2. Run the doctor. It measures the machine, plans the model into your free RAM, predicts the speed, gives a
    verdict and prints the exact commands for the next steps with the paths filled in:
    ```
