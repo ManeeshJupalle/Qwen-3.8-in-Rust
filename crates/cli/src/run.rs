@@ -16,7 +16,13 @@ use aqueduct_core::Tok;
 
 use aqueduct_core::rss::peak_rss_bytes;
 
+/// Where `--model` defaults to: the path the ladder was measured at on Windows (finding 34), a `models/`
+/// directory next to the tokenizer files everywhere else. `aqueduct doctor` prints the download command
+/// for whichever path is in effect.
+#[cfg(windows)]
 pub const DEFAULT_GGUF: &str = r"C:\models\Qwen3.8-27B-Q4_K_M.gguf";
+#[cfg(not(windows))]
+pub const DEFAULT_GGUF: &str = "models/Qwen3.8-27B-Q4_K_M.gguf";
 
 /// The non-matvec constant of the cost model (docs/data/nonmatvec_profile.txt: 53 ms per token).
 pub const NON_MATVEC_S: f64 = 0.053;

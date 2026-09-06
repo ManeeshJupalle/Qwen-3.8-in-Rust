@@ -34,7 +34,8 @@ fn qwen35_constants_match_config_fixtures() {
 
 #[test]
 fn runtime_stop_set_is_gguf_eos_union_arch_extras() {
-    let g = Gguf::open(common::gguf_path()).expect("open");
+    let Some(gguf) = common::gguf_if_present() else { return };
+    let g = Gguf::open(gguf).expect("open");
     let c = ModelConfig::from_gguf(&g).expect("config");
     let a = arch_consts(&c.architecture).expect("architecture from the GGUF must be in the table");
     let stops = stop_ids(&c.eos_ids, a);

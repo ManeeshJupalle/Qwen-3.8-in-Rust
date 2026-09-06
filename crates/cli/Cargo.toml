@@ -2,9 +2,24 @@
 name = "aqueduct"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.87"
+description = "Run Qwen3.8-27B (Q4_K_M) on a 16 GB laptop with no GPU: a memory plan, pinned layers and a streaming ring, the same greedy tokens at every budget"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ManeeshJupalle/Qwen3.8-in-c"
+readme = "../../README.md"
+keywords = ["llm", "inference", "gguf", "qwen", "cpu"]
+categories = ["command-line-utilities", "science"]
+
+[[bin]]
+name = "aqueduct"
+path = "src/main.rs"
 
 [dependencies]
-aqueduct-core = { path = "../core" }
+aqueduct-core = { version = "0.1.0", path = "../core" }
+sha2 = "0.10"
+
+[dev-dependencies]
+serde_json = "1"
 
 [features]
 # Forwarded to aqueduct-core; `aqueduct run --profile` needs it.

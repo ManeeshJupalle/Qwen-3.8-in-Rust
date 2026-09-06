@@ -1,0 +1,50 @@
+# aqueduct doctor 0.1.0: maneesh-msi, windows x86_64, 2026-09-06 07:42 UTC
+# model path: C:\models\Qwen3.8-27B-Q4_K_M.gguf
+
+== this machine
+cpu        : 6 physical cores, 12 hardware threads (the engine runs 6 threads for the matvec, 12 for batches); AVX2+F16C: yes
+RAM        : 31.85 GiB total, 17.59 GiB free now (34,197,413,888 / 18,890,506,240 bytes)
+membw      : 28.90 GB/s at 6 threads (1 GiB sum-reduce, best of 3: 26.53 28.90 28.32)
+model      : present, 17,772,537,440 bytes (16.55 GiB); the size of the supported file
+sha256     : not checked (aqueduct doctor --sha256 reads the whole file; expected e103abf9d914d1d7b2f2592f055f2759a71195c350a01c135f71aaae86bca52b)
+disk       : C: NVMe (CT2000P310SSD8), seek penalty: no
+disk read  : sector 4096 bytes (queried); unbuffered reads of the largest layer (62: 269,681,536 bytes = 257.2 MiB), 32 MiB requests
+disk qd1   : best 2.81 GB/s, worst 1.46; runs 1.46 2.77 2.81 2.74 2.80 (5 reads at layers [0, 12, 24, 36, 48])
+disk qd2   : best 3.38 GB/s, worst 3.33; runs 3.33 3.36 3.36 3.35 3.38 (5 reads at layers [0, 12, 24, 36, 48])
+disk cold  : 3.38 GB/s at qd2 for layer 0 after 2.01 GiB of other data (3.36 GB/s while pulling it)
+large pages: unavailable: SeLockMemoryPrivilege is not held by this user (Local Security Policy > Lock pages in memory); not changing policy
+
+== the plan for this machine's free RAM now, 17.59 GiB, rounded down to --budget 17.5G (18,790,481,920 bytes)
+  memory plan: budget 18,790,481,920 bytes = 17.50 GiB; max_pos 4096; sector 4096; ring 2 slots
+    category                                                                                              bytes      running total
+    non-layer arena [output.weight 1042944000, output_norm.weight 20480, token_embd.weigh...      1,758,130,176      1,758,130,176
+    MTP block blk.64 arena (the draft head; used with --spec)                                       238,989,312      1,997,119,488
+    per-layer small tensors, 64 layers (norms, conv, dt/a; resident copies)                          10,561,536      2,007,681,024
+    DeltaNet carried state (48 layers)                                                              156,893,184      2,164,574,208
+    KV cache (16 layers x 4096 positions)                                                           536,870,912      2,701,445,120
+    scratch buffers, activation rows, logits                                                          2,589,680      2,704,034,800
+    process baseline reserve (binary, GGUF header index, thread stacks, allocator)                  268,435,456      2,972,470,256
+    tier 1 (pinned): layers 0..64 (64 layers), aligned arenas                                    15,764,881,408     18,737,351,664
+    total                                                                                        18,737,351,664
+    budget                                                                                       18,790,481,920
+    headroom                                                                                         53,130,256   fits
+    tier 2 (streamed): layers 64..64 (0 layers), 0 bytes = 0.000 GB per token from disk
+
+== predicted seconds per token (cost model, not a measurement): plain t = bytes_ram / 28.90 GB/s + bytes_disk / 3.38 GB/s + 0.053 s; --spec 3: (t + 0.085 x 3 + 0.527 x 4) / 2.74 tokens per round
+   bytes per token through the CPU: 16.807 GB; on the reference laptop the plain model was within 6 % where the disk dominates and 1.2 to 1.9 x optimistic where RAM does, and the --spec model 10 to 25 % pessimistic on streamed budgets (docs/ladder.md)
+         budget pinned (spec) streamed GB disk/token GB ram/token plain s/tok      tok/s  spec3 s/tok      tok/s
+          6 GiB       11 (10)       53        12.906        3.902       4.00       0.25         2.35       0.43
+          8 GiB       20 (19)       44        10.760        6.048       3.44       0.29         2.14       0.47
+         12 GiB       38 (37)       26         6.452       10.356       2.32       0.43         1.73       0.58
+         16 GiB       56 (55)        8         2.127       14.680       1.19       0.84         1.32       0.76
+   17.5G (here)       64 (61)        0         0.000       16.807       0.63       1.58         1.17       0.86
+       resident       64 (64)        0         0.000       16.807       0.63       1.58         1.09       0.91
+
+== verdict: Good: everything fits in RAM; expect ~0.6 s/token (--spec 3 would not help here: ~1.2) (the drive only affects the load: about 5 s for 17.8 GB at 3.38 GB/s).
+
+== next
+  1. (optional) verify the file once: certutil -hashfile C:\models\Qwen3.8-27B-Q4_K_M.gguf SHA256   expect e103abf9d914d1d7b2f2592f055f2759a71195c350a01c135f71aaae86bca52b
+  2. tokenizer, chat template and generation config: present (models/Qwen3.8-27B/tokenizer.json, models/Qwen3.8-27B/chat_template.jinja, models/Qwen3.8-27B/generation_config.json)
+  3. run (from this directory, so the files above are found):
+       aqueduct chat --model C:\models\Qwen3.8-27B-Q4_K_M.gguf --budget 17.5G
+       (--budget 17.5G is the plan above: your free RAM right now, 17.59 GiB, rounded down; the smallest budget this model accepts is 3.47 GiB)

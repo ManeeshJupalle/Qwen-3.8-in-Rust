@@ -12,7 +12,8 @@ fn u(v: &serde_json::Value) -> u64 {
 
 #[test]
 fn config_from_gguf_matches_config_json_by_path() {
-    let g = Gguf::open(common::gguf_path()).expect("open");
+    let Some(gguf) = common::gguf_if_present() else { return };
+    let g = Gguf::open(gguf).expect("open");
     let c = ModelConfig::from_gguf(&g).expect("config from gguf");
     let j = common::json(&common::fixture("config.json"));
     let t = |p: &str| jpath(&j, &format!("text_config.{p}"));

@@ -1,0 +1,19 @@
+# AVX2 gate audit of the x86-64-v3 release build (Phase 6), maneesh-msi, 2026-09-06
+# build: cargo build --release -p aqueduct --config 'build.rustflags=["-C","target-cpu=x86-64-v3"]'
+# asm:   cargo rustc --release -p aqueduct --config 'build.rustflags=["-C","target-cpu=x86-64-v3"]' -- --emit asm
+# audit: python tools/asm_audit.py target/release/deps/aqueduct.s
+# Every function executed before the cpuid check in require_avx2 is listed with any VEX (v*) or BMI mnemonic it contains;
+# calls into the precompiled standard library and the C runtime are baseline x86-64 by construction.
+roots: ['main', '_ZN3std2rt10lang_start28_$u7b$$u7b$closure$u7d$$u7d$17hb853d01773b4f0a4E', '_ZN8aqueduct4main17h67f27db4e7a6df0aE']
+  main: 12 instructions; VEX/BMI: none; calls ['_RNvNtCs1aoCESei0z2_3std2rt19lang_start_internal']
+  _ZN3std2rt10lang_start28_$u7b$$u7b$closure$u7d$$u7d$17hb853d01773b4f0a4E: 2 instructions; VEX/BMI: none; calls ['_ZN3std3sys9backtrace28__rust_begin_short_backtrace17h47fb84e49566b3ecE']
+  _ZN8aqueduct4main17h67f27db4e7a6df0aE: 5 instructions; VEX/BMI: none; calls ['_ZN8aqueduct12require_avx217h66fe91298f5d41a3E', '_ZN8aqueduct9real_main17habeca32723422340E']
+  _RNvNtCs1aoCESei0z2_3std2rt19lang_start_internal: not in this crate (precompiled std / CRT), not walked
+  _ZN3std3sys9backtrace28__rust_begin_short_backtrace17h47fb84e49566b3ecE: 5 instructions; VEX/BMI: none; calls -
+  _ZN8aqueduct12require_avx217h66fe91298f5d41a3E: 7 instructions up to cpuid; VEX/BMI: none; calls -
+  _ZN8aqueduct9real_main17habeca32723422340E: after the gate, not walked
+AUDIT PASS (7 symbols walked)
+
+# whole-body check of the gate functions (also executed on a CPU without AVX2, after cpuid):
+  _ZN8aqueduct12require_avx217h66fe91298f5d41a3E: 52 instructions in total; VEX/BMI: none
+  _ZN8aqueduct7xgetbv017h9a07e7f707d20e0fE: 6 instructions in total; VEX/BMI: none

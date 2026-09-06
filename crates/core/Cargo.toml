@@ -2,6 +2,13 @@
 name = "aqueduct-core"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.87"
+description = "The engine behind aqueduct: GGUF reader, K-quant AVX2 kernels, Gated DeltaNet and GQA layers, the memory plan and streaming tiers, MTP speculative decoding"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ManeeshJupalle/Qwen3.8-in-c"
+readme = "../../README.md"
+keywords = ["llm", "inference", "gguf", "qwen", "cpu"]
+categories = ["science"]
 
 [dependencies]
 thiserror = "2"

@@ -1,0 +1,54 @@
+# aqueduct doctor 0.1.0: maneesh-msi, windows x86_64, 2026-09-06 07:43 UTC
+# model path: D:\nomodel\Qwen3.8-27B-Q4_K_M.gguf
+
+== this machine
+cpu        : 6 physical cores, 12 hardware threads (the engine runs 6 threads for the matvec, 12 for batches); AVX2+F16C: yes
+RAM        : 31.85 GiB total, 17.80 GiB free now (34,197,413,888 / 19,115,646,976 bytes)
+membw      : 28.15 GB/s at 6 threads (1 GiB sum-reduce, best of 3: 28.15 26.79 27.69)
+model      : absent at D:\nomodel\Qwen3.8-27B-Q4_K_M.gguf; planning with the built-in layout of Qwen3.8-27B-Q4_K_M.gguf (17,772,537,440 bytes = 16.55 GiB)
+disk       : D: SATA (ST1000LM049-2GH172), seek penalty: yes (spinning disk)
+disk read  : sector 4096 bytes (queried); unbuffered reads of 256 MiB from a 1 GiB scratch file at D:\aqueduct-doctor-scratch.bin (32 MiB requests)
+disk qd1   : best 0.09 GB/s, worst 0.06; runs 0.09 0.08 0.06 0.08
+disk qd2   : best 0.11 GB/s, worst 0.08; runs 0.11 0.11 0.08 0.09
+large pages: unavailable: SeLockMemoryPrivilege is not held by this user (Local Security Policy > Lock pages in memory); not changing policy
+
+== the plan for --budget 11G (11,811,160,064 bytes = 11.00 GiB)
+  memory plan: budget 11,811,160,064 bytes = 11.00 GiB; max_pos 4096; sector 4096; ring 2 slots
+    category                                                                                              bytes      running total
+    non-layer arena [output.weight 1042944000, output_norm.weight 20480, token_embd.weigh...      1,758,130,176      1,758,130,176
+    MTP block blk.64 arena (the draft head; used with --spec)                                       238,989,312      1,997,119,488
+    per-layer small tensors, 64 layers (norms, conv, dt/a; resident copies)                          10,561,536      2,007,681,024
+    DeltaNet carried state (48 layers)                                                              156,893,184      2,164,574,208
+    KV cache (16 layers x 4096 positions)                                                           536,870,912      2,701,445,120
+    scratch buffers, activation rows, logits                                                          2,589,680      2,704,034,800
+    process baseline reserve (binary, GGUF header index, thread stacks, allocator)                  268,435,456      2,972,470,256
+    ring: 2 slots x 269,688,832 (largest streamed layer 34: 269,681,536 bytes)                      539,377,664      3,511,847,920
+    tier 1 (pinned): layers 0..33 (33 layers), aligned arenas                                     8,113,422,336     11,625,270,256
+    total                                                                                        11,625,270,256
+    budget                                                                                       11,811,160,064
+    headroom                                                                                        185,889,808   fits
+    tier 2 (streamed): layers 33..64 (31 layers), 7,651,242,112 bytes = 7.651 GB per token from disk
+
+== predicted seconds per token (cost model, not a measurement): plain t = bytes_ram / 28.15 GB/s + bytes_disk / 0.11 GB/s + 0.053 s; --spec 3: (t + 0.085 x 3 + 0.527 x 4) / 2.74 tokens per round
+   bytes per token through the CPU: 16.807 GB; on the reference laptop the plain model was within 6 % where the disk dominates and 1.2 to 1.9 x optimistic where RAM does, and the --spec model 10 to 25 % pessimistic on streamed budgets (docs/ladder.md)
+         budget pinned (spec) streamed GB disk/token GB ram/token plain s/tok      tok/s  spec3 s/tok      tok/s
+          6 GiB       11 (10)       53        12.906        3.902     116.65       0.01        44.32       0.02
+          8 GiB       20 (19)       44        10.760        6.048      97.36       0.01        37.23       0.03
+         12 GiB       38 (37)       26         6.452       10.356      58.64       0.02        23.10       0.04
+         16 GiB       56 (55)        8         2.127       14.680      19.77       0.05         8.91       0.11
+     11G (here)       33 (32)       31         7.651        9.156      69.42       0.01        26.96       0.04
+       resident       64 (64)        0         0.000       16.807       0.65       1.54         1.10       0.91
+
+== verdict: Not recommended: spinning HDD, expect ~27.0 s/token with --spec 3 (~69.4 plain).
+   (33 of 64 layers pinned in RAM, 31 streamed from disk each token, 7.651 GB per token; --spec 3 pins 32 and drafts 3 tokens per round)
+
+== next
+  1. download the model (17.8 GB, bartowski/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf, Qwen's Apache-2.0 license) to the path above:
+       curl.exe -L --create-dirs -o D:\nomodel\Qwen3.8-27B-Q4_K_M.gguf https://huggingface.co/bartowski/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-Q4_K_M.gguf
+  2. verify it (expect e103abf9d914d1d7b2f2592f055f2759a71195c350a01c135f71aaae86bca52b):
+       certutil -hashfile D:\nomodel\Qwen3.8-27B-Q4_K_M.gguf SHA256
+       or: aqueduct doctor --model D:\nomodel\Qwen3.8-27B-Q4_K_M.gguf --sha256
+  3. tokenizer, chat template and generation config: present (models/Qwen3.8-27B/tokenizer.json, models/Qwen3.8-27B/chat_template.jinja, models/Qwen3.8-27B/generation_config.json)
+  4. run (from this directory, so the files above are found):
+       aqueduct chat --model D:\nomodel\Qwen3.8-27B-Q4_K_M.gguf --budget 11G --spec 3
+       (--budget 11G is the plan above; the smallest budget this model accepts is 3.47 GiB)

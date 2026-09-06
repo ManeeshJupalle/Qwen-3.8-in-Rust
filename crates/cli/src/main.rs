@@ -1,7 +1,13 @@
 //! aqueduct CLI: `info <gguf>`, `tok encode|decode` (Phase 1), `bench kernels|membw` (Phase 2b / 3),
-//! `run` (Phase 3: greedy decode; Phase 4: under a memory budget), `plan` and `doctor` (Phase 4).
+//! `run` (Phase 3: greedy decode; Phase 4: under a memory budget), `plan` and `doctor` (Phase 4; the front
+//! door since Phase 6), `chat` (Phase 5).
+//!
+//! The first thing `main` does is check for AVX2 + F16C with `cpuid` and exit with one line if they are
+//! missing: the kernels need them, and the release binaries are compiled for the x86-64-v3 baseline, so no
+//! other code of this crate may run before that check on a CPU without them.
 
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -12,10 +18,48 @@ use aqueduct_core::{layer_of, Gguf, ModelConfig, Tok};
 
 mod bench;
 mod chat;
+mod disk;
 mod doctor;
+mod known;
 mod run;
 
 const DEFAULT_TOKENIZER: &str = "models/Qwen3.8-27B/tokenizer.json";
+
+/// Exit with one line unless the CPU has AVX2, F16C and an OS that saves the YMM registers. Runs before
+/// anything else and uses nothing but `cpuid` / `xgetbv` and a raw write to stderr, so that a binary
+/// compiled for x86-64-v3 reaches this line on a CPU that cannot execute its other code.
+#[inline(never)]
+fn require_avx2() {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::arch::x86_64::{__cpuid, __cpuid_count};
+        // SAFETY: cpuid exists on every x86_64 CPU; xgetbv is only executed after OSXSAVE was seen set.
+        let ok = unsafe {
+            let max_leaf = __cpuid(0).eax;
+            let f1 = __cpuid(1);
+            let osxsave = f1.ecx & (1 << 27) != 0;
+            let avx = f1.ecx & (1 << 28) != 0;
+            let f16c = f1.ecx & (1 << 29) != 0;
+            let avx2 = max_leaf >= 7 && __cpuid_count(7, 0).ebx & (1 << 5) != 0;
+            let ymm_state = osxsave && xgetbv0() & 6 == 6;
+            avx && avx2 && f16c && ymm_state
+        };
+        if !ok {
+            let _ = std::io::stderr().write_all(b"aqueduct: this CPU has no AVX2/F16C (or the OS does not enable them); the kernels need them, so nothing here can run (Intel Haswell 2013 / AMD Excavator 2015 or newer)\n");
+            std::process::exit(2);
+        }
+    }
+}
+
+/// XCR0: which register states the OS saves (bit 1 SSE, bit 2 AVX).
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+unsafe fn xgetbv0() -> u64 {
+    let lo: u32;
+    let hi: u32;
+    std::arch::asm!("xgetbv", in("ecx") 0u32, out("eax") lo, out("edx") hi, options(nomem, nostack, preserves_flags));
+    ((hi as u64) << 32) | lo as u64
+}
 
 fn usage() -> ExitCode {
     eprintln!(
@@ -30,7 +74,9 @@ fn usage() -> ExitCode {
                [--slots 2] [--qd 2] [--spec [K]] [--max-tokens 1024] [--max-pos 4096] [--no-think] [--reasoning-effort xhigh|medium|low]
                [--no-preserve-thinking] [--system <text>] [--greedy] [--temperature T] [--top-k K] [--top-p P] [--min-p P] [--seed S] [--show-config] [-v]
   aqueduct plan --budget <8G|bytes> [--model <gguf>] [--max-pos 4096] [--slots 2] [--spec K]
-  aqueduct doctor [--model <gguf>] [--budget X] [--max-pos 4096] [--slots 2] [--runs 5] [--out <file>]
+  aqueduct doctor [--model <gguf>] [--budget X] [--max-pos 4096] [--slots 2] [--runs 5] [--sha256] [--out <file>]
+                  (runs with or without the model file: what this machine has, the plan for its free RAM, the predicted s/token, a verdict, the next command)
+  aqueduct --version
   (--threads defaults to the physical core count, not the hardware thread count; batched matmuls (prefill, the
    --spec verify pass) run on every hardware thread, AQUEDUCT_MATMUL_THREADS=N pins them and AQUEDUCT_MATMUL_T=0 selects the Phase 3.3 per-row loop;
    --profile needs a build with --features profile; --budget sizes the memory plan, --job-limit caps the
@@ -41,8 +87,18 @@ fn usage() -> ExitCode {
 }
 
 fn main() -> ExitCode {
+    require_avx2();
+    real_main()
+}
+
+#[inline(never)]
+fn real_main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
+        Some("--version") | Some("-V") | Some("version") => {
+            println!("aqueduct {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
+        }
         Some("info") if args.len() == 2 => match info(&args[1]) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {

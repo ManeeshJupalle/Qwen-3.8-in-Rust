@@ -30,6 +30,22 @@ pub fn gguf_path() -> PathBuf {
     p
 }
 
+/// The primary GGUF if it is on this machine, else `None` after printing why the test is skipped (CI runs
+/// the suite without the 17.8 GB file; the tests that read its header or a tensor skip there). With
+/// `AQUEDUCT_REQUIRE_MODEL=1` in the environment a missing file fails instead, so a local run cannot skip
+/// silently.
+pub fn gguf_if_present() -> Option<PathBuf> {
+    let p = std::env::var_os("AQUEDUCT_GGUF").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(DEFAULT_GGUF));
+    if p.exists() {
+        return Some(p);
+    }
+    if std::env::var_os("AQUEDUCT_REQUIRE_MODEL").is_some() {
+        panic!("primary GGUF missing at {} and AQUEDUCT_REQUIRE_MODEL is set", p.display());
+    }
+    eprintln!("SKIPPED: primary GGUF missing at {} (set AQUEDUCT_GGUF, or AQUEDUCT_REQUIRE_MODEL=1 to make this a failure)", p.display());
+    None
+}
+
 pub fn tokenizer_path() -> PathBuf {
     let p = root().join("models").join("Qwen3.8-27B").join("tokenizer.json");
     assert!(p.exists(), "tokenizer.json missing at {}\nrun: hf download Qwen/Qwen3.8-27B tokenizer.json --local-dir models/Qwen3.8-27B", p.display());

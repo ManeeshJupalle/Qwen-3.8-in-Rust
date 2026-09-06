@@ -59,7 +59,8 @@ fn prompts_encode() {
 
 #[test]
 fn special_ids_from_gguf_cross_check_hf_files() {
-    let g = Gguf::open(common::gguf_path()).expect("open");
+    let Some(gguf) = common::gguf_if_present() else { return };
+    let g = Gguf::open(gguf).expect("open");
     let cfg = ModelConfig::from_gguf(&g).expect("config");
     let ids = SpecialIds::from_config(&cfg);
     let tok = Tok::from_file(common::tokenizer_path()).expect("load tokenizer.json");

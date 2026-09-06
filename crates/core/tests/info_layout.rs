@@ -18,7 +18,8 @@ fn field(line: &str, key: &str) -> u64 {
 #[test]
 fn info_numbers_match_phase0_layout_report() {
     let text = std::fs::read_to_string(common::root().join("docs").join("data").join("gguf_layout.txt")).expect("docs/data/gguf_layout.txt");
-    let g = Gguf::open(common::gguf_path()).expect("open");
+    let Some(gguf) = common::gguf_if_present() else { return };
+    let g = Gguf::open(gguf).expect("open");
     let cfg = ModelConfig::from_gguf(&g).expect("config");
     let tensors = g.tensors();
     let total: u64 = tensors.iter().map(|t| t.byte_size).sum();

@@ -1,0 +1,81 @@
+name: Release
+
+# Pushing a tag `vX.Y.Z` builds the two binaries for the AVX2 baseline (x86-64-v3, never the build
+# machine's CPU), computes their sha256, and publishes a GitHub release carrying both, the checksums
+# and the ladder table (.github/release-notes.md).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: aqueduct.exe
+            ext: .exe
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: aqueduct
+            ext: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: build
+        env:
+          RUSTFLAGS: -C target-cpu=x86-64-v3
+        run: cargo build --release -p aqueduct
+      - name: name and checksum
+        shell: bash
+        run: |
+          mkdir -p dist
+          name="aqueduct-${GITHUB_REF_NAME}-${{ matrix.target }}${{ matrix.ext }}"
+          cp "target/release/${{ matrix.bin }}" "dist/$name"
+          (cd dist && sha256sum "$name" > "$name.sha256")
+          cat "dist/$name.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: release notes
+        shell: bash
+        run: |
+          {
+            cat .github/release-notes.md
+            echo
+            echo '## Binaries (AVX2 baseline, `-C target-cpu=x86-64-v3`)'
+            echo
+            echo '```'
+            cat dist/*.sha256
+            echo '```'
+          } > notes.md
+          cat notes.md
+      - name: create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --title "aqueduct $GITHUB_REF_NAME" --notes-file notes.md --repo "$GITHUB_REPOSITORY"

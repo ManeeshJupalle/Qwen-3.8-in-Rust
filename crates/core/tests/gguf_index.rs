@@ -9,7 +9,7 @@ use aqueduct_core::{Gguf, Value};
 
 #[test]
 fn index_matches_fixture_and_open_reads_no_tensor_bytes() {
-    let path = common::gguf_path();
+    let Some(path) = common::gguf_if_present() else { return };
     let t0 = Instant::now();
     let g = Gguf::open(&path).expect("open");
     let open = t0.elapsed();
@@ -74,7 +74,8 @@ fn value_matches(key: &str, v: &Value, j: &serde_json::Value) {
 
 #[test]
 fn metadata_matches_fixture() {
-    let g = Gguf::open(common::gguf_path()).expect("open");
+    let Some(gguf) = common::gguf_if_present() else { return };
+    let g = Gguf::open(gguf).expect("open");
     let fx = common::json(&common::fixture("gguf_metadata.json"));
     let obj = fx.as_object().unwrap();
     // the python fixture adds three synthetic GGUF.* keys for the header fields
@@ -103,7 +104,8 @@ fn metadata_matches_fixture() {
 
 #[test]
 fn layer_spans_are_contiguous_and_read_raw_counts_bytes() {
-    let g = Gguf::open(common::gguf_path()).expect("open");
+    let Some(gguf) = common::gguf_if_present() else { return };
+    let g = Gguf::open(gguf).expect("open");
     let layers = g.layer_ids();
     assert_eq!(layers.len(), 65);
     assert_eq!(layers.first(), Some(&0));

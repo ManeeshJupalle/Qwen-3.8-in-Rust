@@ -80,7 +80,8 @@ fn hand_plan(budget: u64, max_pos: u64, n_slots: u64) -> Option<(u32, u64, u64)>
 
 #[test]
 fn plan_matches_hand_computation_at_five_budgets_and_refuses_three_gib() {
-    let g = Gguf::open(common::gguf_path()).expect("open");
+    let Some(gguf) = common::gguf_if_present() else { return };
+    let g = Gguf::open(gguf).expect("open");
     let cfg = ModelConfig::from_gguf(&g).expect("config");
     let input = PlanInput::new(&g, &cfg);
 

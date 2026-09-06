@@ -54,6 +54,11 @@ fn prefix_blocks_bit_exact() {
 #[test]
 fn full_smallest_tensor_bit_exact_via_digest() {
     let m = common::json(&dq_dir().join("manifest.json"));
+    // the full tensors that are too large for the repo are read from the primary GGUF; without it this test skips
+    let needs_model = m["types"].as_object().unwrap().values().any(|e| e["full"]["raw_bin"].as_str().is_none());
+    if needs_model && common::gguf_if_present().is_none() {
+        return;
+    }
     let head_n = m["head_values"].as_u64().unwrap() as usize;
     let mut g: Option<Gguf> = None;
     let mut report = Vec::new();

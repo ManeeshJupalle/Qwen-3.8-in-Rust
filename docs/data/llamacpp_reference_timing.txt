@@ -1,0 +1,4 @@
+# tools/ref_llamacpp.py  Qwen3.8-27B-Q4_K_M.gguf  llama-cpp-python 0.3.35  threads=6
+capital   argmax=11751 ' Paris' top10=[11751, 524, 303, 264, 31586, 271, 1076, 25, 198, 279] greedy=' Paris.\nThe capital of Germany is Berlin.\nThe capital of Italy is' prompt=220.4s gen=67.0s (4185 ms/tok)
+fib       argmax=198 '\n' top10=[198, 317, 271, 653, 695, 220, 2449, 1031, 2228, 262] greedy='\n    if n <= 0:\n        return 0\n    elif' prompt=9.0s gen=75.8s (4734 ms/tok)
+sentence  argmax=733 ' In' top10=[733, 561, 1061, 30798, 29780, 4081, 1577, 1848, 3095, 25067] greedy=' In the highlands, rivers plunge over cliffs and through narrow gorges, their' prompt=18.9s gen=102.0s (6376 ms/tok)

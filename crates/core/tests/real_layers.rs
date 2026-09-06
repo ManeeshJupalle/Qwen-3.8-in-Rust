@@ -385,11 +385,17 @@ fn read_at(g: &Gguf, off: u64, buf: &mut [u8]) {
 
 #[test]
 fn real_layers_0_7() {
+    if common::gguf_if_present().is_none() {
+        return;
+    }
     run_parity(8, false);
 }
 
 #[test]
 #[ignore = "all 64 layers on the real GGUF: minutes; run with --release --ignored"]
 fn real_layers_0_63_and_logits() {
+    if common::gguf_if_present().is_none() {
+        return;
+    }
     run_parity(64, true);
 }

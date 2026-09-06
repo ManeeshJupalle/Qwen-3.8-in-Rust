@@ -57,7 +57,7 @@ if (($Membw -le 0 -or $Diskbw -le 0) -and (Test-Path $Doctor)) {
         if ($Diskbw -le 0 -and $line -match '^disk qd2\s*:\s*best ([0-9.]+) GB/s') { $Diskbw = [double]$Matches[1] }
     }
 }
-if ($Membw -le 0 -or $Diskbw -le 0) { throw "need -Membw and -Diskbw (GB/s), or a doctor file at $Doctor (run: aqueduct doctor)" }
+if ($Membw -le 0 -or $Diskbw -le 0) { throw "need -Membw and -Diskbw (GB/s), or a doctor file at $Doctor (run: aqueduct doctor --out $Doctor)" }
 
 $prompts = (Get-Content "tests\fixtures\prompts.json" -Raw | ConvertFrom-Json).prompts
 $expectedIds = (Get-Content $Expected -Raw | ConvertFrom-Json).ids

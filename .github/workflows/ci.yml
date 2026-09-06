@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test and clippy (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+
+      # The tests need three small files from the model's Hugging Face repo (Apache-2.0) and the tiny
+      # oracle GGUF (hosted as a release asset of this repo). The 17.8 GB model itself is not fetched:
+      # the tests that read it skip and say so; the model-scale gates are #[ignore].
+      - name: fetch the tokenizer, chat template and generation config (Qwen/Qwen3.8-27B)
+        shell: bash
+        run: |
+          mkdir -p models/Qwen3.8-27B
+          for f in tokenizer.json chat_template.jinja generation_config.json; do
+            curl -sSL --retry 3 -o "models/Qwen3.8-27B/$f" "https://huggingface.co/Qwen/Qwen3.8-27B/resolve/main/$f"
+          done
+          ls -l models/Qwen3.8-27B
+      - name: fetch the tiny oracle GGUF (release fixtures-v1)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p models/tiny
+          gh release download fixtures-v1 --pattern tiny-f32.gguf --dir models/tiny --repo "${{ github.repository }}"
+          echo "1c9403828cfacc695badab57bbe2fe79bea661b03c3e7df8d15b8e5d45f0215b  models/tiny/tiny-f32.gguf" | sha256sum -c -
+
+      - name: cargo test
+        run: cargo test --workspace
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # The shipped binary targets the AVX2 baseline, never the build machine's CPU.
+      - name: release build (x86-64-v3)
+        env:
+          RUSTFLAGS: -C target-cpu=x86-64-v3
+        run: cargo build --release -p aqueduct
+      - name: smoke (--version, doctor without a model)
+        shell: bash
+        run: |
+          ./target/release/aqueduct --version
+          ./target/release/aqueduct doctor --model "${{ runner.temp }}/no-such-dir/Qwen3.8-27B-Q4_K_M.gguf" --runs 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aqueduct-${{ matrix.os }}
+          path: |
+            target/release/aqueduct
+            target/release/aqueduct.exe
+          if-no-files-found: error
