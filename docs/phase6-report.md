@@ -93,7 +93,11 @@ now skip with a printed line when it is absent. The ubuntu job's `cargo test` is
 `O_DIRECT` path, the sysfs sector query and the streaming ring have executed anywhere: green on the first
 run. Its clippy found two lines of the Linux branch of `os.rs` that had never been linted (the engine change
 above). `release.yml` builds both binaries on a `v*` tag, writes a `.sha256` next to each and publishes the
-release with `.github/release-notes.md` (the ladder) plus the checksums.
+release with `.github/release-notes.md` (the ladder) plus the checksums. Moving the tag twice during the
+history scrubs re-ran it twice (runs 34021992669 and 34022190403): both builds succeeded and the publish
+step refused because the release existed, so the assets on the page are the ones of the first run
+(created 08:22 UTC, verified after download); the step now uploads with `--clobber` and updates the notes
+when the release already exists, so a later re-point replaces rather than fails.
 
 ## What the clean clone taught
 
