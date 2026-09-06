@@ -1,9 +1,9 @@
-# Qwen3.8-in-c
+# Qwen-3.8-in-Rust
 
 `aqueduct` runs Qwen3.8-27B (bartowski's Q4_K_M GGUF, 17.8 GB) on a CPU-only Windows or Linux machine with
 8 to 16 GB of RAM, streaming the layers that do not fit in RAM from the drive on every token, and it emits
-the same greedy tokens at every memory budget. It is written in Rust (the repository name follows the project
-it borrows its tier design from, [kimi-k3-in-c](https://github.com/FareedKhan-dev/kimi-k3-in-c)).
+the same greedy tokens at every memory budget. It is written in Rust; the tier design is borrowed from
+[kimi-k3-in-c](https://github.com/FareedKhan-dev/kimi-k3-in-c).
 
 > Run Qwen3.8-27B at full Q4 quality on a 16 GB laptop: it streams what doesn't fit instead of forcing you
 > to a worse quant.
@@ -63,7 +63,7 @@ about 12 MB of downloads besides the 17.8 GB model. `aqueduct doctor` checks all
 ### Windows
 
 1. Download `aqueduct-v0.1.0-x86_64-pc-windows-msvc.exe` from the
-   [release page](https://github.com/ManeeshJupalle/Qwen3.8-in-c/releases/tag/v0.1.0), check its sha256 against
+   [release page](https://github.com/ManeeshJupalle/Qwen-3.8-in-Rust/releases/tag/v0.1.0), check its sha256 against
    the one on that page (`certutil -hashfile <file> SHA256`; also filed in
    [release_v0.1.0_sha256.txt](docs/data/release_v0.1.0_sha256.txt)), rename it to `aqueduct.exe`, put it in an
    empty folder and open a terminal there.
@@ -111,8 +111,8 @@ The Linux build has never been run by its author (see the limitations); the bina
 
 Rust 1.87 or newer; no other toolchain, no BLAS, no Python.
 ```
-git clone https://github.com/ManeeshJupalle/Qwen3.8-in-c.git
-cd Qwen3.8-in-c
+git clone https://github.com/ManeeshJupalle/Qwen-3.8-in-Rust.git
+cd Qwen-3.8-in-Rust
 cargo build --release
 target\release\aqueduct doctor        (Windows; cmd.exe does not run a path written with forward slashes)
 target/release/aqueduct doctor        (Linux)
@@ -230,7 +230,7 @@ Every item below is documented in a numbered finding of [docs/payload-vs-doc.md]
 7. **The Linux path compiles and has not been run by its author**: `O_DIRECT`, the sysfs sector and disk-type
    queries, large pages through `madvise`, the Ctrl-C handler, `scripts/ladder.sh`. CI now runs the whole
    non-model test suite on `ubuntu-latest`, including the streaming tests on the tiny model, which is that
-   path's first execution; its result is on the [Actions page](https://github.com/ManeeshJupalle/Qwen3.8-in-c/actions).
+   path's first execution; its result is on the [Actions page](https://github.com/ManeeshJupalle/Qwen-3.8-in-Rust/actions).
 8. **Large pages fall back and are unmeasured.** `SeLockMemoryPrivilege` is not held on the development
    machine, so every arena is on 4 KiB pages; the engine logs the fallback once and continues. Whether 2 MiB
    pages change anything here was never measured (Phase 4 report).

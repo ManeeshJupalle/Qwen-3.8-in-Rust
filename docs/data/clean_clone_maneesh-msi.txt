@@ -3,7 +3,7 @@
 ﻿== git clone
 clone at 99693d7 Phase 6: ship v0.1.0
 == cargo build --release
-powershell :    Compiling aqueduct v0.1.0 (D:\tmp\aq-clean\Qwen3.8-in-c\crates\cli)
+powershell :    Compiling aqueduct v0.1.0 (D:\tmp\aq-clean\Qwen-3.8-in-Rust\crates\cli)
 At line:1 char:302
 + ... tch {} } }; powershell -ExecutionPolicy Bypass -File "C:\Users\manee\ ...
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

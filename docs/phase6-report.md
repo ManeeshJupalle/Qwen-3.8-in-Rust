@@ -1,7 +1,7 @@
 # Phase 6 report (ship v0.1.0)
 
 Commits 3c34eb7 (the phase), 76554b6 and 6cfe71f (the clean-clone fixes and transcripts), and f64f95a (the
-Linux lint fix, the commit `v0.1.0` tags), on `main` of the repository renamed to `Qwen3.8-in-c` this session
+Linux lint fix, the commit `v0.1.0` tags), on `main` of the repository, renamed this session (now `Qwen-3.8-in-Rust`)
 (the crate and the binary stay `aqueduct`). The history was rewritten twice this session at the user's
 request, to remove attribution trailers from earlier commits and then a scratchpad path from the data
 files' older versions, so every hash before this paragraph differs from what CI ran on (the trees are the
@@ -13,7 +13,7 @@ clean-clone and demo transcripts are under `docs/data/` (`doctor_phase6_*.txt`, 
 ```
 PHASE 6 REPORT
 crate name     : aqueduct, crates.io free (and aqueduct-core free) -> chosen aqueduct; the GitHub repository was renamed
-                 Qwen3.8-in-c by the user mid-phase (remote, crate metadata, README and CI follow; the binary is aqueduct)
+                 by the user mid-phase, and again after the release (now Qwen-3.8-in-Rust; remote, crate metadata, README and CI follow; the binary is aqueduct)
 license        : MIT OR Apache-2.0 (LICENSE-MIT, LICENSE-APACHE, `license` in both crates); model license linked y
                  (Apache-2.0, huggingface.co/Qwen/Qwen3.8-27B); the GGUF credited to bartowski with its repo link
 doctor         : verdict on this box (no model, NVMe volume, 17.6 GiB free) "Good: everything fits in RAM; expect ~0.6 s/token
