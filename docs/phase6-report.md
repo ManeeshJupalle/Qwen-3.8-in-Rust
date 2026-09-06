@@ -1,8 +1,12 @@
 # Phase 6 report (ship v0.1.0)
 
-Commits 99693d7 (the phase), ae1efa8 and 332c832 (the clean-clone fixes and transcripts), and the Linux lint
-fix after them, on `main` of the repository renamed to `Qwen3.8-in-c` this session (the crate and the
-binary stay `aqueduct`). No engine feature, no kernel, no GPU. The doctor's outputs, the gate audit, the
+Commits 3c34eb7 (the phase), 76554b6 and 6cfe71f (the clean-clone fixes and transcripts), and f64f95a (the
+Linux lint fix, the commit `v0.1.0` tags), on `main` of the repository renamed to `Qwen3.8-in-c` this session
+(the crate and the binary stay `aqueduct`). The history was rewritten twice this session at the user's
+request, to remove attribution trailers from earlier commits and then a scratchpad path from the data
+files' older versions, so every hash before this paragraph differs from what CI ran on (the trees are the
+same code; CI runs 34019968088 and 34020854109 ran on the pre-rewrite hashes 99693d7 and c4d045e, and the
+release run 34021676564 on the tag's earlier object). No engine feature, no kernel, no GPU. The doctor's outputs, the gate audit, the
 clean-clone and demo transcripts are under `docs/data/` (`doctor_phase6_*.txt`, `avx2_gate_audit.txt`,
 `clean_clone_maneesh-msi.txt`, `demo_maneesh-msi.txt`); the README is the deliverable.
 
@@ -23,7 +27,7 @@ doctor         : verdict on this box (no model, NVMe volume, 17.6 GiB free) "Goo
 readme         : sections 9/9 in the brief's order (pitch, ladder, quickstart Windows/Linux/source, how it works, cost model,
                  limitations, not yet, validation, credits); numbers backed: every performance number carries a link to its
                  docs/data file (24 distinct files linked, all present); limitations items 21/13+
-ci             : windows green (17.4 min), ubuntu green (14.5 min) on run 34020854109 at c4d045e, after the Linux lint fix; runs 1-3
+ci             : windows green (17.4 min), ubuntu green (14.5 min) on run 34020854109 (the lint-fix commit, f64f95a after the rewrite); runs 1-3
                  failed only at ubuntu's clippy on two pre-existing lines of os.rs while their cargo test on ubuntu passed (the Linux
                  path's first execution, tiny-model O_DIRECT streaming included); binaries 2 (release run 34021676564 on the v0.1.0 tag:
                  aqueduct-v0.1.0-x86_64-pc-windows-msvc.exe 6,539,264 bytes, aqueduct-v0.1.0-x86_64-unknown-linux-gnu 9,310,440 bytes,
