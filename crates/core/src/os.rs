@@ -615,15 +615,17 @@ mod imp {
         pub fn open(path: &Path, chunk: usize, qd: usize) -> io::Result<DirectFile> {
             let c = CString::new(path.as_os_str().as_bytes()).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path"))?;
             // SAFETY: documented libc open.
-            let fd = unsafe { open(c.as_ptr() as *const i8, O_RDONLY | O_DIRECT | O_CLOEXEC) };
+            let fd = unsafe { open(c.as_ptr().cast(), O_RDONLY | O_DIRECT | O_CLOEXEC) };
             if fd < 0 {
                 return Err(io::Error::last_os_error());
             }
             let sector = device_block_size(path).max(4096);
             let file_size = std::fs::metadata(path)?.len();
             let chunk = align_up(chunk.max(sector) as u64, sector as u64) as usize;
-            // qd > 1 needs io_uring / aio; reads are issued one chunk at a time here (untested path).
-            Ok(DirectFile { fd, sector, chunk, qd: qd.max(1).min(1), file_size })
+            // qd > 1 needs io_uring / aio; reads are issued one chunk at a time here whatever `qd` asks
+            // (queue depth 1; the path has run only under CI's tiny-model tests).
+            let _ = qd;
+            Ok(DirectFile { fd, sector, chunk, qd: 1, file_size })
         }
 
         pub fn read_at(&mut self, offset: u64, buf: &AlignedBuf, len: usize) -> io::Result<usize> {
