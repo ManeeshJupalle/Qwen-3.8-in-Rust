@@ -1,0 +1,103 @@
+# Phase 6.5 clean-clone test on maneesh-msi, 2026-09-06: a fresh clone of the renamed repository built and run by following README.md literally (build from source, doctor, the three tokenizer files, chat at --budget 8G --spec 3), then the failure modes (wrong model path, --budget 3G) through chat and run
+# script: the transcript below is what the terminal showed; the two README fixes it produced are in commit ae1efa8
+﻿== git clone
+clone at 99693d7 Phase 6: ship v0.1.0
+== cargo build --release
+powershell :    Compiling aqueduct v0.1.0 (D:\tmp\aq-clean\Qwen3.8-in-c\crates\cli)
+At line:1 char:302
++ ... tch {} } }; powershell -ExecutionPolicy Bypass -File "C:\Users\manee\ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling aq...n-c\crates\cli):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `release` profile [optimized] target(s) in 1m 31s
+BUILD_SECONDS 91
+== target/release/aqueduct doctor  (README: build from source, step 4)
+model      : present, 17,772,537,440 bytes (16.55 GiB); the size of the supported file
+disk       : C: NVMe (CT2000P310SSD8), seek penalty: no
+== verdict: Good: everything fits in RAM; expect ~0.6 s/token (--spec 3 would not help here: ~1.2) (the drive only affects the load: about 5 s for 17.8 GB at 3.37 GB/s).
+  1. (optional) verify the file once: certutil -hashfile C:\models\Qwen3.8-27B-Q4_K_M.gguf SHA256   expect e103abf9d914d1d7b2f2592f055f2759a71195c350a01c135f71aaae86bca52b
+  2. the tokenizer, chat template and generation config from Qwen/Qwen3.8-27B (Apache-2.0; 3 of 3 missing):
+  3. run (from this directory, so the files above are found):
+DOCTOR_EXIT 0
+== the three files (README quickstart, Windows step 4)
+  chat_template.jinja 8952 bytes
+  generation_config.json 202 bytes
+  tokenizer.json 12809320 bytes
+== chat at --budget 8G --spec 3 (README step 5; the model file already at C:\models)
+target\release\aqueduct.exe : loading C:\models\Qwen3.8-27B-Q4_K_M.gguf (6 threads, --spec 3) ...
+At C:\Users\manee\AppData\Local\Temp\scratch\d--Aqueduct\e373b888-05ff-42c0-8b38-9d699db12d99\scratchpad\clean_clone.ps1
+:29 char:19
++ ... ntent $in | target\release\aqueduct.exe chat --model C:\models\Qwen3. ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (loading C:\mode..., --spec 3) ...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+large pages: SeLockMemoryPrivilege is not held by this user (Local Security Policy > Lock pages in memory); not 
+changing policy; using normal pages
+loaded in 3.4 s: 19 pinned, 45 streamed layers; 7.297 GB of weights held
+chat configuration
+  model             : C:\models\Qwen3.8-27B-Q4_K_M.gguf
+  tokenizer         : models/Qwen3.8-27B/tokenizer.json
+  chat template     : models/Qwen3.8-27B/chat_template.jinja
+  generation config : models/Qwen3.8-27B/generation_config.json (gives: temperature=1, top_k=20, top_p=0.95, do_sample=true)
+  sampling          : temperature 1 top_k 20 top_p 0.95 min_p 0 seed 7
+  thinking          : off (--no-think: the template pre-fills an empty <think></think>)
+  reasoning effort  : xhigh (template default)
+  preserve thinking : true
+  system prompt     : (none)
+  stop ids          : [248046, 248044]
+  max tokens / turn : 40
+  max positions     : 4096 (context the KV caches are sized for)
+  threads           : 6
+  speculative       : --spec 3: 3 MTP drafts per round, exact verification
+  budget            : 8589934592 bytes = 8.00 GiB, ring 2 slots, qd 2
+  job limit         : none
+  large pages       : attempted
+(type a message; /quit ends, /reset clears the conversation, /config shows the settings; Ctrl-C ends the turn)
+
+> Hello, how are you today?
+[19 prompt tokens in 8.60 s; 7 generated in 12.76 s = 0.55 tok/s; stopped] [spec 3: 3 rounds, 6/9 drafts accepted = 66.7 %, 2.00 accepted per round]
+
+> 
+CHAT_EXIT 0  wall 27 s
+== failure mode: wrong model path
+  | loading C:\models\does-not-exist.gguf (6 threads) ...
+  | error: load: io error: The system cannot find the file specified. (os error 2)
+WRONG_PATH_EXIT 1
+== failure mode: --budget 3G
+  | loading C:\models\Qwen3.8-27B-Q4_K_M.gguf (6 threads) ...
+  | error: load: memory plan does not fit: the always-resident set (2972470256 bytes) plus a 2-slot ring (539377664 bytes) needs 3511847920 bytes = 3.27 GiB, the budget is 3221225472 bytes = 3.00 GiB: short by 290622448 bytes = 0.27 GiB
+BUDGET_3G_EXIT 1
+== the same two through run
+  | loading C:\models\does-not-exist.gguf with 6 threads ...
+  | error: load: io error: The system cannot find the file specified. (os error 2)
+RUN_WRONG_PATH_EXIT 1
+  | loading C:\models\Qwen3.8-27B-Q4_K_M.gguf with 6 threads ...
+  | memory plan: budget 3,221,225,472 bytes = 3.00 GiB; max_pos 5; sector 4096; ring 2 slots
+  |   category                                                                                              bytes      running total
+  |   non-layer arena [output.weight 1042944000, output_norm.weight 20480, token_embd.weigh...      1,758,130,176      1,758,130,176
+  |   MTP block blk.64 arena (the draft head; used with --spec)                                       238,989,312      1,997,119,488
+  |   per-layer small tensors, 64 layers (norms, conv, dt/a; resident copies)                          10,561,536      2,007,681,024
+  |   DeltaNet carried state (48 layers)                                                              156,893,184      2,164,574,208
+  |   KV cache (16 layers x 5 positions)                                                                  655,360      2,165,229,568
+  |   scratch buffers, activation rows, logits                                                          1,804,208      2,167,033,776
+  |   process baseline reserve (binary, GGUF header index, thread stacks, allocator)                  268,435,456      2,435,469,232
+  |   ring: 2 slots x 269,688,832 (largest streamed layer 0: 269,681,536 bytes)                       539,377,664      2,974,846,896
+  |   tier 1 (pinned): layers 0..0 (0 layers), aligned arenas                                                   0      2,974,846,896
+  |   total                                                                                         2,974,846,896
+  |   budget                                                                                        3,221,225,472
+  |   headroom                                                                                        246,378,576   fits
+  |   tier 2 (streamed): layers 0..64 (64 layers), 15,764,432,896 bytes = 15.764 GB per token from disk
+  | large pages: SeLockMemoryPrivilege is not held by this user (Local Security Policy > Lock pages in memory); not changing policy; using normal pages
+  | loaded: tier 1 0 layers, tier 2 64 layers; 1.997 GB read unbuffered in 0.9 s (2.33 GB/s); sector 4096; large pages no
+  | loaded in 1.3 s: 64 layers (0 pinned, 64 streamed), 2.547 GB of weights held, peak RSS 2.651 GB
+  | sampling: greedy (temperature 0)
+  | prefill (batched): 1 tokens in 4.72 s (0.21 tok/s)
+  | decode: 2 tokens, 4.822 s/token (0.21 tok/s) = 3.49 GB/s of weights through the CPU, 6 threads
+  | disk: 15.764 GB per token from disk (15764432896 bytes per pass = streamed layers exactly, asserted every pass; 1 passes); reads at 3.26 GB/s; over the decode phase: reading 4.83 s, computing 0.90 s, waiting 3.93 s, wall 4.82 s; overlap 0.90 s = 18.7% of the read time hidden, 100.8% of the compute hidden
+  | peak RSS 2.776 GB vs planned 2.706 GB (weights held 2.547 GB + state 0.158 GB + logits); plan total 2.975 GB; budget 3.221 GB: UNDER
+  | prompt ids: 5834
+  | generated ids: 11,585
+  | text: ", i"
+RUN_BUDGET_3G_EXIT 0

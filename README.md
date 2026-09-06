@@ -257,6 +257,9 @@ Every item below is documented in a numbered finding of [docs/payload-vs-doc.md]
 13. **Context is what `--max-pos` sizes at load** (4096 in `chat`, 32 KiB of KV per position across the 16
     attention layers), not the model's 262K; the chat refuses a turn that would not fit and says so. Nothing
     past a few hundred positions was measured; attention over a long context runs the per-head scalar path.
+    The other side of the same fact: `aqueduct run` sizes the KV cache to the prompt plus `--max-tokens`, so a
+    two-token run fits a 3 GiB budget that `chat` refuses, with all 64 layers streamed at 4.8 s/token
+    ([clean-clone run](docs/data/clean_clone_maneesh-msi.txt)).
 14. **The cost model is optimistic where RAM dominates** (1.2 x cool, 1.9 x hot at resident, finding 55): it
     assumes the kernels stream at the full memory bandwidth and they reach 74 to 77 %. The doctor's number
     for a machine whose model fits is a floor, not an estimate.
