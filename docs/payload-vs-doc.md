@@ -1180,3 +1180,17 @@ The four-row verify batch is exactly where the blocked Q4_K kernel gains least (
 never runs at k = 3, and the Q4_K 58 % of the file goes through the four-way group at par with the per-row loop,
 so the round's saving comes from the Q6_K third and the twelve threads. The ladder's resident rung, plain and
 `--spec 3` minutes apart, is the number the default is decided on (finding 75).
+
+## 75. At 8 GiB the blocked verify pass costs 0.16 s per extra row where the disk hides it: `--spec 3` 2.23 x, `--spec 4` 2.31 x, ids identical at every k
+
+`scripts/spec_acceptance.ps1 -Budgets 8G -Ks 0,1,2,3,4 -Only capital,fib,sentence` (200 greedy tokens,
+`docs/data/spec_identity_8g.txt`, 22 pinned / 42 streamed layers, 10.3 GB from disk per pass; membw 30.6 GB/s
+before and 30.3 after, a stable state): every `--spec` run equals its plain run, 12 of 12. Mean over the three
+prompts, plain 3.658 s/token; `--spec 1..4` 2.219 / 1.788 / 1.644 / 1.585 s/token = 1.65 / 2.05 / 2.23 / 2.31 x
+(Phase 5: 1.66 / 1.98 / 2.08 / 2.03 x). The verify batch per round is 3.94 / 4.08 / 4.25 / 4.41 s for 2 / 3 / 4 / 5
+rows (Phase 5: 3.90 / 4.21 / 4.57 / 5.12), i.e. the extra rows now add 0.16 s each on top of the one disk pass
+against 0.41 before: on the streamed rungs the blocked kernel on twelve threads keeps almost all of the rows'
+compute under the read, which is the case the design was made for (`docs/spec.md`). One consequence: with the
+fourth row nearly free, `--spec 4` overtakes `--spec 3` at 8 GiB (2.31 vs 2.23 x; 2.92 tokens per round against
+2.66), where Phase 5 found the fourth draft not worth its row. The default `k` stays 3 (finding 76): it is the
+setting that loses least where nothing hides the rows, and the ladder is filed with it.

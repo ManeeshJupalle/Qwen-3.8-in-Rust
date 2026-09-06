@@ -47,7 +47,12 @@ identity       : batched prefill vs token-by-token feed on the real model: hidde
                  tests/fixtures/ladder_expected_ids.json (docs/data/phase55_e2e.txt); prefill.txt: the first generated token identical
                  across the per-row and blocked configurations at every prompt length and budget.
                  spec vs no-spec 200-token ids: resident k=1 6/6 k=2 6/6 k=3 6/6 k=4 6/6 k=5 6/6 (all six prompts; docs/data/spec_acceptance.txt);
-                 TODO_IDENTITY_8G
+                 8 GiB k=1 3/3 k=2 3/3 k=3 3/3 k=4 3/3 (200 tokens, 22 pinned / 42 streamed, docs/data/spec_identity_8g.txt); tiny model: the
+                 Phase 5 suite unchanged (200 tokens x 3 prompts x k=1..4 resident and streamed, every acceptance count forced, state equal
+                 after every round: the tiny model is F32 and never reaches the blocked kernels)
+8 GiB          : plain 3.658 s/token; --spec 1..4 1.65 / 2.05 / 2.23 / 2.31 x (Phase 5: 1.66 / 1.98 / 2.08 / 2.03); verify per round 3.94 / 4.08 /
+                 4.25 / 4.41 s for 2..5 rows (Phase 5: 3.90 / 4.21 / 4.57 / 5.12): the extra rows cost 0.16 s each under the disk pass, 0.41 before;
+                 --spec 4 now overtakes --spec 3 there (finding 75)
 acceptance     : resident mean accepted/round at k=1..5: 0.87 1.51 1.98 2.33 2.60 (Phase 5's to the digit: same ids, same text); s/token vs plain
                  1.01 / 1.02 / 0.97 / 0.81 / 0.72 x (Phase 5: 1.06 / 0.98 / 0.94 / 0.86 / 0.76) as the mean over prompts of a sweep through which the
                  plain token heated from 0.75 to 1.50 s; per prompt at k=3 (pairs minutes apart): capital 1.15 fib 1.18 code 1.39 essay 1.07 fact 0.88
