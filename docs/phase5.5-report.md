@@ -46,7 +46,12 @@ identity       : batched prefill vs token-by-token feed on the real model: hidde
                  floor, as Phase 3.5); llama.cpp first-16 match 16/16, 6/16, 5/16 as Phase 3; the 96 greedy ids equal
                  tests/fixtures/ladder_expected_ids.json (docs/data/phase55_e2e.txt); prefill.txt: the first generated token identical
                  across the per-row and blocked configurations at every prompt length and budget.
-                 spec vs no-spec 200-token ids: TODO_IDENTITY
+                 spec vs no-spec 200-token ids: resident k=1 6/6 k=2 6/6 k=3 6/6 k=4 6/6 k=5 6/6 (all six prompts; docs/data/spec_acceptance.txt);
+                 TODO_IDENTITY_8G
+acceptance     : resident mean accepted/round at k=1..5: 0.87 1.51 1.98 2.33 2.60 (Phase 5's to the digit: same ids, same text); s/token vs plain
+                 1.01 / 1.02 / 0.97 / 0.81 / 0.72 x (Phase 5: 1.06 / 0.98 / 0.94 / 0.86 / 0.76) as the mean over prompts of a sweep through which the
+                 plain token heated from 0.75 to 1.50 s; per prompt at k=3 (pairs minutes apart): capital 1.15 fib 1.18 code 1.39 essay 1.07 fact 0.88
+                 sentence 0.51 x (finding 74)
 prefill        : GATE NOT MET (>= 3 x Phase 3's asked; 1.5 to 1.8 x measured). tok/s on 32 / 128 / 512-token prompts (prefixes of one
                  text, docs/data/prefill.txt; --max-tokens 1; same-session A/B, the three configurations back to back per prompt):
                    resident  Phase 3 path (per-row loop, 6 thr) 1.55 / 1.68 / 1.67   blocked 6 thr 1.84 / 2.19 / 2.20   blocked 12 thr 2.41 / 2.97 / 3.04
@@ -63,7 +68,17 @@ findings       : 70 an extra activation row is the int8 multiply-accumulate, not
                  kernels leave the ports idle and the sibling thread fills them (12 threads for batches, 6 for the matvec); 72 the tile:
                  16 at hidden width, 8 at intermediate width, 2 always loses, at 4 rows Q4_K gains nothing; TODO_FINDINGS
 blocked on     : nothing
-did NOT do     : TODO_DIDNOT
+did NOT do     : a blocked kernel for the Q8_0 / Q4_0 weights (4.5 % + 1.3 % of the file: ssm_out in 24 layers, a few attention
+                 projections; they keep the per-row loop, on 12 threads for batches); the Q8_K row's 64-byte alignment (the probe says a
+                 split-line load costs nothing measurable, so it was not changed); an inline-asm inner loop or a 2-rows x 4-activations
+                 register tile (the probe puts the floor of any AVX2 arrangement at 41 unshareable cycles per super-block per activation,
+                 so neither can reach the gate; not attempted); a look at why the four-accumulator group runs no faster than the per-row
+                 loop for Q4_K at four rows (the verify batch; the eight-accumulator group does, so a tile of 4 padded to 8 with duplicated
+                 pointers might, at twice the multiplies); a ROW_BLOCK sweep (32 fixed; the tile's L3 re-read it amortises is small at any
+                 value above 8); the 6 / 8 / 12 GiB ladder rungs (the brief named 5 / 11 / 16 / resident; the Phase 5 files for the others
+                 are kept as *_phase5); a cool-machine rerun (the box was warm throughout: frequency counter 3.1 GHz all-core, membw 25 to
+                 29 GB/s; every filed speed-up is a same-minutes A/B); an acceptance sweep with sampling; a VNNI / AVX-512 build (no such
+                 CPU here; it is where the remaining 2 x lives, finding 70)
 ```
 
 TODO_BODY

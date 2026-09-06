@@ -1162,3 +1162,21 @@ requires. The 11 GiB rows sit above the resident ones in absolute terms because 
 the Phase 3.6 report's 1.95 / 1.98 / 2.13 tok/s on the 5 / 4 / 39-token fixture prompts were taken cool; the same
 test this session (`docs/data/phase55_e2e.txt`) gives 1.98 / 1.89 / 2.75 with the blocked kernel while its decode
 token is 1.29 x slower than then (0.926 vs 0.717 s), which is why the same-session A/B above is the number filed.
+
+## 74. Identity holds at every k on the blocked verify pass; at resident `--spec 3` is break-even on average and the marginal row costs 0.4 s where the machine is cool
+
+`scripts/spec_acceptance.ps1 -Budgets resident -Ks 0,1,2,3,4,5` on the six Phase 5.4 prompts, 200 greedy tokens
+(`docs/data/spec_acceptance.txt`): every `--spec` run's ids equal its plain run's, 30 of 30 (k = 1..5 x six prompts),
+so the blocked kernel changes nothing the verify pass emits; the acceptance statistics are Phase 5's to the digit
+(0.87 / 1.51 / 1.98 / 2.33 / 2.60 drafts accepted per round at k = 1..5), as they must be, since acceptance is a
+property of the text (finding 67) and the ids are the same. Speed: the sweep took an hour and the machine heated
+through it, the plain token going from 0.75 s (`fib`, first) to 1.50 s (`essay`, last), so the mean over prompts
+(0.97 x at k = 3 against Phase 5's 0.94 x; 1.01 / 1.02 / 0.97 / 0.81 / 0.72 x at k = 1..5) mixes states, and the
+per-prompt pairs, each taken within a few minutes, are the reading: at k = 3 `capital` 1.15 x, `fib` 1.18 x,
+`code` 1.39 x, `essay` 1.07 x, `fact` 0.88 x, `sentence` 0.51 x (36 % acceptance). The marginal verify row
+(verify per round minus the plain token, over k) is 0.41 to 0.46 s on the prompts measured cool and 0.55 to 0.80 s
+on the hot ones, against Phase 5's 0.56 (cool) to 0.85 (hot): the kernel's 1.2 to 1.5 x, not the gate's 0.2 s.
+The four-row verify batch is exactly where the blocked Q4_K kernel gains least (finding 72): the eight-way group
+never runs at k = 3, and the Q4_K 58 % of the file goes through the four-way group at par with the per-row loop,
+so the round's saving comes from the Q6_K third and the twelve threads. The ladder's resident rung, plain and
+`--spec 3` minutes apart, is the number the default is decided on (finding 75).
