@@ -17,7 +17,7 @@ marginal compute of one extra batch row where nothing hides it. membw_eff is wha
 model's whole content is the two constants. The ratio measured / predicted per rung is filed; on the streamed rungs
 the extra rows' compute hides under the disk reads, which the sum cannot express, and the ratio says by how much.
 
-Usage: python tools/spec_cost_model.py [--doctor docs/data/doctor_<machine>.txt] [--out docs/data/spec_cost_model.txt]
+Usage: python tools/spec_cost_model.py [--doctor docs/data/doctor_<machine>.txt] [--out docs/data/spec_cost_model.txt] [--rungs 5G,11G,16G,resident]
 """
 import argparse
 import glob
@@ -39,7 +39,9 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "docs", "data", "spec_cost_model.txt"))
     ap.add_argument("--membw", type=float, default=0.0)
     ap.add_argument("--diskbw", type=float, default=0.0)
+    ap.add_argument("--rungs", default="", help="comma-separated rungs to fit (default: every rung with stats files; the directory keeps older runs' files)")
     a = ap.parse_args()
+    only = [r for r in a.rungs.split(",") if r]
     membw, diskbw = a.membw, a.diskbw
     if (membw <= 0 or diskbw <= 0) and os.path.exists(a.doctor):
         for line in open(a.doctor, encoding="utf-8"):
@@ -55,6 +57,8 @@ def main():
     for f in glob.glob(os.path.join(a.dir, "stats_spec_*.json")):
         name = os.path.basename(f)[len("stats_spec_"):-len(".json")]
         rung, prompt = name.split("_", 1)
+        if only and rung not in only:
+            continue
         plain = os.path.join(a.dir, "stats_%s_%s.json" % (rung, prompt))
         if not os.path.exists(plain):
             continue

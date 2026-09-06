@@ -4,7 +4,7 @@ Commits 9b55bb9 (the kernel, tests, bench, probe), 0e9716e (the tile sweep, the 
 70 to 72) and the ones after them on `main`, 2026-09-05. Design and mechanism in `docs/kquant-dot.md` (the Phase 5.5
 section); numbers in `docs/data/` (`kernel_probe.txt`, `matmul_t_bench.txt`, `phase55_e2e.txt`, `prefill.txt`,
 `spec_acceptance.txt`, `spec_identity_8g.txt`, `ladder.txt`, `spec_cost_model.txt`) and `docs/ladder.md`; findings
-70 to TODO_LASTFINDING in `docs/payload-vs-doc.md`. The Phase 5 versions of the refiled files are kept as
+70 to 76 in `docs/payload-vs-doc.md`. The Phase 5 versions of the refiled files are kept as
 `docs/ladder_phase5.md`, `docs/data/ladder_phase5.txt`, `spec_acceptance_phase5.txt`, `spec_identity_8g_phase5.txt`,
 `spec_cost_model_phase5.txt`. Machine as in Phases 4 and 5 (i7-9750H, 6 cores / 12 threads, L1D 32 KB and L2 256 KB
 per core, L3 12 MB, 32 GB DDR4-2667, NVMe, Windows 11), through this session in its **warm** state: the frequency
@@ -66,12 +66,30 @@ prefill        : GATE NOT MET (>= 3 x Phase 3's asked; 1.5 to 1.8 x measured). t
                  across the step, so their absolute numbers sit above the resident ones; each speed-up pairs runs minutes apart)
                  per token at 512: 0.60 s (Phase 3 path) -> 0.33 s (blocked, 12 thr); the fixture prompts in phase55_e2e.txt: 1.98 / 1.89 / 2.75 tok/s
                  for 5 / 4 / 39 tokens against Phase 3.6's cool 1.95 / 1.98 / 2.13 with a decode token 1.29 x slower this session (0.926 vs 0.717 s)
-c_verify       : TODO_CVERIFY
-ladder         : TODO_LADDER
-default        : TODO_DEFAULT
+c_verify       : GATE NOT MET (<= 0.2 s per extra row asked). Fitted as Phase 5 defines it, (verify per round - plain token) / k at the resident
+                 rung of the ladder: 0.527 s (Phase 5: 0.558), on a hot rung (plain token 1.170 s against Phase 5's cool 0.830; verify per round
+                 2.752 against 2.504). In the token's own units the row fell from 0.67 to 0.45 plain tokens, the kernel's 1.5 x; on the cool
+                 prompts of the resident sweep 0.41 to 0.46 s; at 8 GiB the rows add 0.16 s each on top of the disk pass (0.41 in Phase 5). c_mtp
+                 0.085 s. docs/data/spec_cost_model.txt (tools/spec_cost_model.py --rungs 5G,11G,16G,resident; the temp directory keeps older
+                 runs' stats files, hence the filter)
+ladder (spec)  : 5 GiB  (8 GB laptop's free RAM)   8 pinned   4.305 -> 1.894 s/token  2.27 x (Phase 5 2.13)  acceptance 63 % (1.89/round, 2.87 tokens/round)
+                 11 GiB (16 GB laptop's free RAM) 35 pinned   2.819 -> 1.581          1.78 x (Phase 5 1.54)
+                 16 GiB                           57 pinned   1.572 -> 1.344          1.17 x (Phase 5 1.02)  (hot: plain 1.36 x Phase 5's cool 1.155)
+                 resident                         64 pinned   1.170 -> 1.178          0.99 x (Phase 5 0.79)  (hot: plain 1.41 x Phase 5's cool 0.830;
+                                                                                                             capital 1.05, fib 1.28, sentence 0.78 x)
+                 (32 greedy tokens x 3 prompts; ids identical at every rung, plain and spec, and equal to Phase 3; peak RSS under every cap with the
+                 spec buffers; the plain cost model's worst ratio 1.91 at the hot resident rung, every rung within 2 x; docs/ladder.md refiled with
+                 both columns, the Phase 5 file kept as docs/ladder_phase5.md; verify per round 4.64 / 3.80 / 3.16 / 2.75 s against Phase 5's
+                 4.96 / 4.39 / 2.69 / 2.50: cheaper where the disk hides the rows, the hot machine on top where it does not)
+default        : spec does NOT win at resident (0.99 x on the ladder, 0.97 x on the six-prompt sweep), so the default is left alone: plain decode when
+                 nothing is asked, --spec with k = 3 (DEFAULT_SPEC_K). Noted for a later phase: --spec 4 now edges --spec 3 at 8 GiB (2.31 vs
+                 2.23 x) because the fourth row is nearly free under the disk, so k could come from the plan on streamed budgets
 findings       : 70 an extra activation row is the int8 multiply-accumulate, not the unpack (26 of 50 cycles shareable); 71 the batched
                  kernels leave the ports idle and the sibling thread fills them (12 threads for batches, 6 for the matvec); 72 the tile:
-                 16 at hidden width, 8 at intermediate width, 2 always loses, at 4 rows Q4_K gains nothing; TODO_FINDINGS
+                 16 at hidden width, 8 at intermediate width, 2 always loses, at 4 rows Q4_K gains nothing; 73 prefill 1.5 to 1.8 x the Phase 3
+                 path, 3.0 tok/s at 512 tokens, the sibling thread a third of it; 74 identity at every k at resident (30/30), --spec 3 break-even
+                 there, the marginal row 0.4 s cool; 75 at 8 GiB the rows cost 0.16 s under the disk, --spec 3 2.23 x, --spec 4 2.31 x, 12/12
+                 identical; 76 the ladder 2.27 / 1.78 / 1.17 / 0.99 x, the default stays plain
 blocked on     : nothing
 did NOT do     : a blocked kernel for the Q8_0 / Q4_0 weights (4.5 % + 1.3 % of the file: ssm_out in 24 layers, a few attention
                  projections; they keep the per-row loop, on 12 threads for batches); the Q8_K row's 64-byte alignment (the probe says a
@@ -86,4 +104,38 @@ did NOT do     : a blocked kernel for the Q8_0 / Q4_0 weights (4.5 % + 1.3 % of 
                  CPU here; it is where the remaining 2 x lives, finding 70)
 ```
 
-TODO_BODY
+## What was built
+
+One kernel, as the brief said: `dot_q8k_t` takes a K-quant weight row and up to sixteen Q8_K activation rows,
+unpacks each 256-weight super-block once (codes, pre-shuffled scale broadcasts, mins or scale pairs) and runs the
+tile through it with one exact integer accumulator per activation, sub-blocks outer and activations inner in
+register groups of eight, four, two and one. Per activation the f32 work is the single-row kernel's in its order,
+so every output is the single-row kernel's bit for bit; the scalar reference in `kdot.rs` has the same structure,
+and `tests/matmul_t.rs` checks the three paths against each other and against the f64 reference of the Phase 2a
+fixtures within the terms budget. `matvec::matmul_t` drives it in row blocks so a weight byte leaves DRAM once
+per batch, with the tile capped so its activation rows stay in L2, and `matmul` / `matmul_fn` route every K-quant
+batch (the prefill, the verify pass, the MTP re-feed) through it without allocating. Batches of two rows or more
+now run on every hardware thread; the single-row matvec keeps the physical cores.
+
+## What was measured, and what it says
+
+The phase asked for 3 x on prefill and 0.2 s per extra verify row. The kernel gives 1.5 to 1.8 x on prefill
+(3.0 tokens per second at 512 tokens) and leaves the marginal row at 0.4 to 0.5 s where nothing hides it (0.16 s
+under the disk), and the probe in `tools/probe` says this is the core's floor, not the kernel's: a super-block
+costs 50 cycles on this i7-9750H, 26 of which a tile can share and 41 of which are the int8 multiply-accumulate
+and the f32 tail every activation pays; a `maddubs -> madd -> add` triple costs 2.3 cycles with its load against
+1.0 by the port tables, and no reordering of the instruction stream changes that. The sibling hardware thread
+fills the idle ports and is worth as much as the blocking itself. What the kernel did change: on the streamed
+rungs the rows' compute now hides under the disk almost entirely, so the ladder reads 2.27 x at 5 GiB and 1.78 x
+at 11 GiB (2.13 and 1.54 before), and the laptop numbers are 0.53 and 0.63 tokens per second with `--spec 3`;
+at resident a round costs 2.35 plain tokens instead of 3.02, which turns speculation from a loss into break-even
+and leaves the default as it was. Identity held everywhere it was checked: the blocked prefill's hidden states are
+the token-by-token feed's to the bit, the 96 Phase 3 ids are reproduced, every `--spec` run at every `k` at both
+rungs emits the plain loop's ids, and the ladder's ids are identical at every rung.
+
+## What comes next
+
+The remaining factor is the instruction set: AVX-512 VNNI folds each triple into one instruction and would take
+the unshareable 41 cycles to about 15; on this machine the only lever left in the verify batch is the four-row
+group (finding 72), and on streamed budgets `k = 4` is now marginally better than 3. Both are noted for a later
+phase; this one stops at the kernel, as instructed.

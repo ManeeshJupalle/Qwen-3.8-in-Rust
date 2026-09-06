@@ -1194,3 +1194,22 @@ compute under the read, which is the case the design was made for (`docs/spec.md
 fourth row nearly free, `--spec 4` overtakes `--spec 3` at 8 GiB (2.31 vs 2.23 x; 2.92 tokens per round against
 2.66), where Phase 5 found the fourth draft not worth its row. The default `k` stays 3 (finding 76): it is the
 setting that loses least where nothing hides the rows, and the ladder is filed with it.
+
+## 76. The ladder with the blocked verify pass: 2.27 / 1.78 / 1.17 / 0.99 x at 5 / 11 / 16 GiB / resident; speculation is break-even where the model fits, so the default stays plain
+
+`scripts/ladder.ps1 -Spec 3 -Budgets 5G,11G,16G,resident` (`docs/ladder.md`, `docs/data/ladder.txt`; 32 greedy tokens,
+the same 3 prompts, plain and `--spec 3` per prompt minutes apart): ids identical at every rung, plain and spec, and
+equal to the Phase 3 output; peak RSS under the cap at every rung with the spec buffers. Speed-ups 2.27 / 1.78 /
+1.17 / 0.99 x against Phase 5's 2.13 / 1.54 / 1.02 / 0.79 on the same rungs. The streamed rungs gained because the
+round got cheaper in absolute terms (verify 4.64 s at 5 GiB against 4.96; 3.80 at 11 GiB against 4.39: the extra
+rows' compute now hides under the disk read almost entirely, finding 75). The 16 GiB and resident rungs ran hot
+(plain tokens 1.572 and 1.170 s against Phase 5's cool 1.155 and 0.830), so their absolute rounds are slower than
+Phase 5's (3.16 and 2.75 s against 2.69 and 2.50) while their ratios improved: a resident round now costs 2.35
+plain tokens instead of 3.02 and emits 2.87, hence 0.99 x (`capital` 1.05, `fib` 1.28, `sentence` 0.78). The
+marginal verify row fitted by the cost model at resident is 0.527 s (Phase 5: 0.558), against the phase's gate of
+0.2 s: in the token's own units it fell from 0.67 to 0.45 plain tokens per row, the kernel's 1.5 x, and the hot
+machine took the rest back in seconds. Item 4 of the brief: speculation does not win at resident (0.99 x on the
+ladder, 0.97 x on the six-prompt sweep), so plain decode stays the default and `--spec` keeps its `k = 3`; on the
+streamed rungs `--spec 4` now edges `--spec 3` (finding 75) and a later phase may pick `k` from the plan. The
+honest laptop numbers are now 0.53 tokens per second at 5 GiB (an 8 GB machine's free RAM; 0.49 in Phase 5) and
+0.63 at 11 GiB (a 16 GB machine's; 0.55 in Phase 5), both with `--spec 3`.

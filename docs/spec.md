@@ -146,3 +146,19 @@ and can invert; the measurement, not this paragraph, decides the default `k` (5.
   is k = 3 (the best streamed mean); plain decode stays the default when nothing is asked for.
 - The round's parts (8 GiB, k = 3): verify 4.5 s (of which the plain pass is 3.6), MTP re-feed 0.12 to 0.18 s,
   chained draft 0.085 s per step, replay 0.03 to 0.09 s, snapshot 0.03 s.
+
+## Phase 5.5: the blocked verify pass
+
+The batched matmul that verifies a round is now the blocked GEMM (`matvec::matmul_t`, `docs/kquant-dot.md` Phase 5.5
+section): each K-quant super-block is unpacked once and the `k + 1` rows are dotted against it, on every hardware
+thread (a batched matmul is compute-bound and the sibling thread fills the ports its dependency chains leave idle;
+the single-row matvec keeps the physical cores). Per row the arithmetic is the single-row kernel's bit for bit, so
+nothing above this paragraph changes: identity holds at every `k` on the real model at resident (30 of 30) and at
+8 GiB (12 of 12), `docs/data/spec_acceptance.txt`, `spec_identity_8g.txt`. What changes is the cost of a row:
+on the streamed rungs the extra rows now add 0.16 s each to the disk pass (0.41 before), so `--spec 3` gives 2.27 x
+at 5 GiB, 1.78 x at 11 GiB and 2.23 x at 8 GiB (finding 75, 76), and `--spec 4` edges `--spec 3` at 8 GiB; where
+nothing hides the rows a round costs 2.35 plain tokens instead of 3.02 (the fitted `c_verify` is 0.53 s on a hot
+resident rung, 0.45 plain tokens per row against 0.67), which makes the resident rung break-even (0.99 x) rather
+than a loss (0.79 x). The reason it is not less is measured in finding 70: on this AVX2 core the int8
+multiply-accumulate is the floor of a row, not the unpack. Plain decode stays the default and `--spec` keeps
+`k = 3`.
