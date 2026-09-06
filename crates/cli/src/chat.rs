@@ -320,7 +320,7 @@ pub fn chat(args: &[String], default_tokenizer: &str) -> Result<(), String> {
     let tpl = ChatTemplate::from_file(&a.template).map_err(|x| e(format!("template: {x}")))?;
     let opts = LoadOpts { budget: a.budget, max_pos: a.max_pos, n_slots: a.slots, large_pages: a.large_pages, qd: a.qd, verbose: a.verbose, spec_k: a.spec, ..LoadOpts::default() };
     eprintln!("loading {} ({} threads{}) ...", a.model, a.threads, if a.spec > 0 { format!(", --spec {}", a.spec) } else { String::new() });
-    let model = Model::load_with(&a.model, a.threads, &opts).map_err(|x| e(format!("load: {x}")))?;
+    let model = Model::load_with(&a.model, a.threads, &opts).map_err(|x| e(format!("load {}: {x}", a.model)))?;
     eprintln!("loaded in {:.1} s: {} pinned, {} streamed layers; {:.3} GB of weights held", model.load_secs, model.plan.pinned, model.plan.streamed(), model.weight_bytes as f64 / 1e9);
     if a.spec > 0 && model.mtp.is_none() {
         return Err("--spec: this GGUF has no MTP block".into());

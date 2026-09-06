@@ -113,8 +113,10 @@ Rust 1.87 or newer; no other toolchain, no BLAS, no Python.
 git clone https://github.com/ManeeshJupalle/Qwen3.8-in-c.git
 cd Qwen3.8-in-c
 cargo build --release
-target/release/aqueduct doctor
+target\release\aqueduct doctor        (Windows; cmd.exe does not run a path written with forward slashes)
+target/release/aqueduct doctor        (Linux)
 ```
+A release build from a fresh clone took 91 s on the reference laptop.
 `cargo build --release` compiles for baseline x86-64 and selects the AVX2 kernels at run time; that is the
 build every number above was measured with. The release binaries add `-C target-cpu=x86-64-v3` (everything
 compiled for AVX2, not only the kernels); the path from the process entry to the `cpuid` check was audited

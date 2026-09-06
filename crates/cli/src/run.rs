@@ -271,7 +271,7 @@ pub fn run(a: RunArgs) -> Result<(), String> {
     let max_pos = a.max_pos.unwrap_or(prompt_ids.len() + a.max_tokens + k + 2);
     let opts = LoadOpts { budget: a.budget, max_pos, n_slots: a.slots, large_pages: a.large_pages, qd: a.qd, verbose: true, spec_k: k, ..LoadOpts::default() };
     eprintln!("loading {} with {} threads ...", a.model, a.threads);
-    let model = Model::load_with(&a.model, a.threads, &opts).map_err(|x| e(format!("load: {x}")))?;
+    let model = Model::load_with(&a.model, a.threads, &opts).map_err(|x| e(format!("load {}: {x}", a.model)))?;
     let rss_after_load = peak_rss_bytes();
     eprintln!(
         "loaded in {:.1} s: {} layers ({} pinned, {} streamed), {:.3} GB of weights held, peak RSS {}",
