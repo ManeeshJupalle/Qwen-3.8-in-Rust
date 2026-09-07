@@ -87,8 +87,8 @@ $benchRows = @()
 function Parse-Bench([string[]]$text) {
     $rows = @()
     foreach ($l in $text) {
-        if ($l -match '^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|\s*(\S+)\s*\|\s*([0-9.]+)\s+\S+\s+([0-9.]+)\s*\|') {
-            $rows += [pscustomobject]@{ test = $Matches[6]; tps = [double]$Matches[7]; sd = [double]$Matches[8] }
+        if ($l -match '^\|.*\|\s*(pp\d+|tg\d+)\s*\|\s*([0-9.]+)\s+\S+\s+([0-9.]+)\s*\|\s*$') {
+            $rows += [pscustomobject]@{ test = $Matches[1]; tps = [double]$Matches[2]; sd = [double]$Matches[3] }
         }
     }
     return $rows

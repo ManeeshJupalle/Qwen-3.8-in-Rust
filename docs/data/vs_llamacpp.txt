@@ -104,3 +104,38 @@ resident  no-repack     23.5     3.861    0.259       1.00    18.328      2.249 
   | model                          |       size |     params | backend    | threads |            test |                  t/s |
   | qwen35 27B Q4_K - Medium       |  16.54 GiB |    27.32 B | CPU        |       6 |            tg32 |          0.16 +/- 0.02 |
   tg32: 0.16 +/- 0.02 tokens/s = 6.25 s/token, so in the same hot state llama.cpp is 4.1 x slower than aqueduct's resident plain rung (1.534 s/token); cool against cool (llama-bench tg128 5.26 s at 16:22 on a machine already warm from the load, aqueduct 0.830 in docs\ladder.md) the ratio is larger, and the README quotes the conservative pair
+
+== Phase 6.2: llama.cpp's best case, resident, cool machine: maneesh-msi, 2026-09-06 21:44; llama-bench on the resident model, -p 0 -n 32 -r 3, one run per configuration, every command line as run
+  aqueduct doctor before the sweep: membw      : 26.58 GB/s at 6 threads (1 GiB sum-reduce, best of 3: 23.84 25.35 26.58)
+  -- baseline: -t 6, as shipped      llama-bench.exe -m C:\models\Qwen3.8-27B-Q4_K_M.gguf -t 6 -p 0 -n 32 -r 3      21:54, exit 0, 631 s wall, peak working set 23.783 GB, peak commit 10.557 GB
+     load_backend: loaded CPU backend from C:\tools\llama.cpp-b10827\ggml-cpu-haswell.dll
+     | model                          |       size |     params | backend    | threads |            test |                  t/s |
+     | ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+     | qwen35 27B Q4_K - Medium       |  16.54 GiB |    27.32 B | CPU        |       6 |            tg32 |          0.17 +/- 0.01 |
+     tg32: 0.17 +/- 0.01 tokens/s = 5.882 s/token
+  -- (a) -t 6, no repack: -ot .*=CPU pins every tensor to the plain CPU buffer type (llama-bench has no --no-repack; the server's --no-repack does the same), so the weights stay Q4_K in the mapped file      llama-bench.exe -m C:\models\Qwen3.8-27B-Q4_K_M.gguf -t 6 -ot .*=CPU -p 0 -n 32 -r 3      22:05, exit 0, 633 s wall, peak working set 23.419 GB, peak commit 10.557 GB
+     load_backend: loaded CPU backend from C:\tools\llama.cpp-b10827\ggml-cpu-haswell.dll
+     | model                          |       size |     params | backend    | threads | ot                    |            test |                  t/s |
+     | ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------------- | --------------: | -------------------: |
+     | qwen35 27B Q4_K - Medium       |  16.54 GiB |    27.32 B | CPU        |       6 | .*=CPU                |            tg32 |          0.16 +/- 0.00 |
+     tg32: 0.16 +/- 0.00 tokens/s = 6.250 s/token (parsed from the row above by hand: the script's parser of the time expected the 7-column table and missed the extra "ot" column; fixed in the script)
+  -- (b) -t 6, no mmap (-lm none: the model read into private buffers, no page cache)      llama-bench.exe -m C:\models\Qwen3.8-27B-Q4_K_M.gguf -t 6 -lm none -p 0 -n 32 -r 3      22:15, exit 0, 623 s wall, peak working set 17.822 GB, peak commit 18.457 GB
+     load_backend: loaded CPU backend from C:\tools\llama.cpp-b10827\ggml-cpu-haswell.dll
+     | model                          |       size |     params | backend    | threads |         lm |            test |                  t/s |
+     | ------------------------------ | ---------: | ---------: | ---------- | ------: | ---------: | --------------: | -------------------: |
+     | qwen35 27B Q4_K - Medium       |  16.54 GiB |    27.32 B | CPU        |       6 |       none |            tg32 |          0.17 +/- 0.01 |
+     tg32: 0.17 +/- 0.01 tokens/s = 5.882 s/token (parsed from the row above by hand, the same "lm" column miss)
+  -- (c) -t 12 (both hardware threads per core)      llama-bench.exe -m C:\models\Qwen3.8-27B-Q4_K_M.gguf -t 12 -p 0 -n 32 -r 3      22:31, exit 0, 950 s wall, peak working set 23.773 GB, peak commit 10.559 GB
+     load_backend: loaded CPU backend from C:\tools\llama.cpp-b10827\ggml-cpu-haswell.dll
+     | model                          |       size |     params | backend    | threads |            test |                  t/s |
+     | ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+     | qwen35 27B Q4_K - Medium       |  16.54 GiB |    27.32 B | CPU        |      12 |            tg32 |          0.11 +/- 0.01 |
+     tg32: 0.11 +/- 0.01 tokens/s = 9.091 s/token
+  -- baseline again: -t 6, as shipped (thermal drift over the sweep)      llama-bench.exe -m C:\models\Qwen3.8-27B-Q4_K_M.gguf -t 6 -p 0 -n 32 -r 3      22:44, exit 0, 750 s wall, peak working set 22.592 GB, peak commit 10.557 GB
+     load_backend: loaded CPU backend from C:\tools\llama.cpp-b10827\ggml-cpu-haswell.dll
+     | model                          |       size |     params | backend    | threads |            test |                  t/s |
+     | ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+     | qwen35 27B Q4_K - Medium       |  16.54 GiB |    27.32 B | CPU        |       6 |            tg32 |          0.14 +/- 0.02 |
+     tg32: 0.14 +/- 0.02 tokens/s = 7.143 s/token
+  aqueduct doctor after the sweep: membw      : 20.77 GB/s at 6 threads (1 GiB sum-reduce, best of 3: 17.05 20.77 20.29)
+  outcome: no configuration is markedly faster than the shipped -t 6 default (5.88 s/token cool at tg32; 5.26 at tg128 in Phase 6.1), so the README table keeps that configuration. No mmap (the model in an 18.4 GB private commit, no page cache, 17.8 GB working set) decodes at the same 5.88 s/token as the mapped default, which rules out page-cache pressure or the repack copy's double residency as the cause of the gap; no repack is 6 % slower; -t 12 is 1.5 x slower. The repeat baseline (7.14 s/token) and the doctor after the sweep (membw 20.8 GB/s against 26.6 before) show the laptop heating over the 50-minute sweep, so the first run of each pair is the fair one and the order (baseline first) favours nothing tried later.

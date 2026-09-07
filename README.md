@@ -70,7 +70,7 @@ resident 1.53: the ratio holds in the same thermal state.
 
 | memory | aqueduct plain, filed / hot rerun | aqueduct `--spec 3`, filed / hot rerun | llama.cpp as shipped | llama.cpp `--no-repack` |
 |---|---|---|---|---|
-| resident | 1.170 / 1.534 s/token (0.830 cool) | 1.178 / 1.446 | 3.88 s/token; `llama-bench` tg128 5.26 (0.19 tok/s) | 3.86 |
+| resident | 1.170 / 1.534 s/token (0.830 cool) | 1.178 / 1.446 | 3.88 s/token; `llama-bench` tg128 5.26 (0.19 tok/s); no other configuration is faster (below) | 3.86 |
 | 11 GiB (a 16 GB laptop's free RAM) | 2.819 / 3.379 | 1.581 / 2.384 | 9.22 on the two short prompts, then dies on the 39-token prompt (`bad allocation`) | 12.09 ¹ |
 | 8 GiB | 3.628 / 4.020 | 1.812 / 2.491 | does not load (`unable to allocate CPU_REPACK buffer`, 9.6 GB) | 12.39 ¹ |
 | 5 GiB (an 8 GB laptop's free RAM) | 4.305 / 4.551 | 1.894 / 2.336 | does not load (the same 9.6 GB buffer) | 13.42 ¹ |
@@ -94,6 +94,21 @@ llama.cpp as shipped matches this engine on 32/32, 6/32 and 32/32 tokens of the 
 `--no-repack` on 32/32, 6/32 and 5/32, so its own two kernel paths part at token 5 of the prose prompt
 (limitation 5). The figure this section replaces, 4.2 to 4.7 s/token through llama-cpp-python, is retired
 (finding 21).
+
+**llama.cpp's best case.** To give llama.cpp its best shot, `llama-bench -p 0 -n 32 -r 3` was run on the
+resident model from a cool machine in four configurations, each filed with its full command line in
+[vs_llamacpp.txt](docs/data/vs_llamacpp.txt) ([vs_llamacpp_bench.ps1](scripts/vs_llamacpp_bench.ps1)): as
+shipped with `-t 6`, 5.88 s/token; without weight repacking (`-ot .*=CPU`), 6.25; without mmap (`-lm none`,
+the model read into an 18 GB private buffer, no page cache), 5.88; and with `-t 12`, 9.09. A repeat of the
+first run after the sweep gave 7.14, the laptop having heated meanwhile, so nothing tried later was
+handicapped by order. None is markedly faster, and the table keeps the shipped configuration. The no-mmap run
+also settles which of two hypotheses for the gap survives: it is not memory pressure (the mapped file plus the
+repacked copy paging on a 32 GB box), because the same speed comes out with no page cache at all. What remains
+is a hypothesis, not a profile: this checkpoint's 48 Gated DeltaNet layers run through llama.cpp's generic
+CPU operators for the chunked recurrent scan and its gating, where this engine has a fused kernel, so
+llama.cpp's decode is bound by that compute at roughly 4 GB of weights per second while the attention and MLP
+matvecs alone would run at memory bandwidth. If you get a better llama.cpp number on this file on a
+comparable CPU, open an issue with the command line; this table will be updated.
 
 ## Quickstart
 
