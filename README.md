@@ -54,6 +54,47 @@ and a hot run, which is why two numbers are given for them. Every speed-up in th
 with and without `--spec`, and equal to the fully resident run three phases earlier:
 [ladder_expected_ids.json](tests/fixtures/ladder_expected_ids.json), checked in [ladder.txt](docs/data/ladder.txt).
 
+## Versus llama.cpp
+
+Same file, same laptop, the same three prompts and 32 greedy tokens (ids in, ids out), both engines. llama.cpp is
+the official release build b10827 (`llama-b10827-bin-win-cpu-x64.zip`, the AVX2 backend it picks on this CPU),
+`-t 6`, run through `llama-server`; the memory caps are the ladder's, applied from outside by
+[cap_run.ps1](scripts/cap_run.ps1): a Windows job object with commit limits and a hard working-set maximum,
+both equal to the cap (a commit cap alone is blind to a memory-mapped model). Every number, the ids and the
+failure lines are in [vs_llamacpp.txt](docs/data/vs_llamacpp.txt) ([vs_llamacpp.ps1](scripts/vs_llamacpp.ps1)
+is the run). The aqueduct columns give the filed ladder and a rerun taken in the same session as the llama.cpp
+sweep with the laptop hot ([ladder_phase61.txt](docs/data/ladder_phase61.txt)); the machine moved 11 GB/s
+through RAM in that rerun against 20 in the filed ladder, and the numbers follow. A short `llama-bench` (32
+tokens, 2 repetitions) taken straight after that rerun measured 0.16 tokens/s, 6.3 s/token, against the rerun's
+resident 1.53: the ratio holds in the same thermal state.
+
+| memory | aqueduct plain, filed / hot rerun | aqueduct `--spec 3`, filed / hot rerun | llama.cpp as shipped | llama.cpp `--no-repack` |
+|---|---|---|---|---|
+| resident | 1.170 / 1.534 s/token (0.830 cool) | 1.178 / 1.446 | 3.88 s/token; `llama-bench` tg128 5.26 (0.19 tok/s) | 3.86 |
+| 11 GiB (a 16 GB laptop's free RAM) | 2.819 / 3.379 | 1.581 / 2.384 | 9.22 on the two short prompts, then dies on the 39-token prompt (`bad allocation`) | 12.09 ¹ |
+| 8 GiB | 3.628 / 4.020 | 1.812 / 2.491 | does not load (`unable to allocate CPU_REPACK buffer`, 9.6 GB) | 12.39 ¹ |
+| 5 GiB (an 8 GB laptop's free RAM) | 4.305 / 4.551 | 1.894 / 2.336 | does not load (the same 9.6 GB buffer) | 13.42 ¹ |
+
+¹ A floor, not the number a real 8 or 16 GB laptop would see. The working-set cap trims llama.cpp's mapped pages,
+but on this 32 GB box they stay in the OS standby list and come back by soft fault: the drive delivered 0.004,
+0.004 and 0.025 GB per token in those three runs, where a machine with only that much RAM has to read 7, 10 and
+13 GB per token (the ladder's disk column), 2 to 4 s per token more at this drive's 3.3 GB/s.
+
+How it comes out: this engine is faster at every row, by 2.5 x resident (3.4 x against `llama-bench`) and by 2.9 x
+to 3.6 x under the caps (plain, hot rerun against the no-repack floor; 3.1 x to 4.3 x against the filed ladder;
+`--spec 3` widens it). As shipped, llama.cpp cannot run this model in 8 or 5 GiB at all: its CPU backend copies
+the Q4_K weights into a 9.6 GB repacked buffer (11.9 GB committed in all) on top of the 16.5 GiB mapped file,
+24.7 GB of working set for "resident", so it pages even on the 32 GB laptop; at 11 GiB it loads, decodes at
+9.2 s/token, and dies on the longer prompt when its batch buffers push the commit past the cap. `--no-repack`
+keeps the weights in the mapped file (2.2 GB committed) and runs under every cap at 12 to 13 s/token. Where
+llama.cpp is ahead: prompt processing, 3.77 tokens/s at 512 tokens (`llama-bench` pp512) against this engine's
+roughly 3 (limitation 1); and with `--no-repack` it needs no memory plan, running under any working-set cap at
+whatever speed the paging allows, where this engine refuses a budget its plan does not fit. The greedy ids:
+llama.cpp as shipped matches this engine on 32/32, 6/32 and 32/32 tokens of the three prompts, and with
+`--no-repack` on 32/32, 6/32 and 5/32, so its own two kernel paths part at token 5 of the prose prompt
+(limitation 5). The figure this section replaces, 4.2 to 4.7 s/token through llama-cpp-python, is retired
+(finding 21).
+
 ## Quickstart
 
 You need an x86-64 CPU with AVX2 (Intel Haswell 2013 / AMD Excavator 2015 or newer), 5 GiB of free RAM or more,
@@ -219,7 +260,10 @@ Every item below is documented in a numbered finding of [docs/payload-vs-doc.md]
    landscape"), with raw logits up to 0.95 apart ([llamacpp_bartowski_vs_ud.txt](docs/data/llamacpp_bartowski_vs_ud.txt),
    finding 24). Between this engine and llama.cpp on the *same* file, greedy tokens match 16/16, 6/16 and
    5/16 on the three test prompts, the splits sitting at margins of 0.02 to 0.10 logits, inside the 0.3 to 0.4
-   two 8-bit engines differ by ([phase3_timing.txt](docs/data/phase3_timing.txt), findings 42, 50); and the Q4_K_M
+   two 8-bit engines differ by ([phase3_timing.txt](docs/data/phase3_timing.txt), findings 42, 50), and against
+   the official b10827 build over 32 tokens 32/32, 6/32 and 32/32 as shipped but 32/32, 6/32 and 5/32 with
+   `--no-repack`, llama.cpp's own two kernel paths parting at token 5 of the prose prompt
+   ([vs_llamacpp.txt](docs/data/vs_llamacpp.txt)); and the Q4_K_M
    file itself is 0.5 to 0.7 raw logits from the bf16 model ([quant_noise_floor.txt](docs/data/quant_noise_floor.txt),
    finding 35). Token-for-token equality with another engine is a coin toss past the first few tokens of prose;
    argmax and top-10 agreement is what was gated.
@@ -251,8 +295,9 @@ Every item below is documented in a numbered finding of [docs/payload-vs-doc.md]
 12. **The projection versus what landed.** Before the first line, [ARCHITECTURE.md](ARCHITECTURE.md) projected
     1 to 2 tokens per second on a 16 GB machine without a GPU (0.5 to 1 s/token, with MTP) and a cost model of
     20 ms per GB of RAM. What landed: 0.63 tok/s at a 16 GB laptop's free RAM with `--spec 3` (1.58 s/token) and
-    1.2 tok/s fully resident on a cool machine (0.83 s), against 4.2 to 4.7 s/token for llama.cpp on the same
-    CPU ([llamacpp_reference_timing.txt](docs/data/llamacpp_reference_timing.txt), finding 21). The RAM term was 10 x
+    1.2 tok/s fully resident on a cool machine (0.83 s), against 5.3 s/token for the official llama.cpp AVX2 build
+    on the same CPU, resident (`llama-bench` tg128; [vs_llamacpp.txt](docs/data/vs_llamacpp.txt), finding 21, and
+    "Versus llama.cpp" above). The RAM term was 10 x
     optimistic (a 2667 MT/s laptop bus moves 30 GB/s, and 16.8 GB pass through it per token), and the per-row
     cost of verification (item 1) took most of what MTP was expected to give.
 13. **Context is what `--max-pos` sizes at load** (4096 in `chat`, 32 KiB of KV per position across the 16

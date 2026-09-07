@@ -223,13 +223,17 @@ consistent with the in-file layout found in item 3.
 
 ## 21. Reference timing on this machine (for planning, not a divergence)
 
-`tests/fixtures/ref_llamacpp/summary.txt` (bartowski Q4_K_M) and `tests/fixtures/ud/ref_llamacpp/summary.txt`
-(Unsloth UD): llama.cpp CPU, llama-cpp-python 0.3.35, 6 threads, i7-9750H, 32 GB. Cold load of the 16.5 GiB
-bartowski file 294 s, first prompt eval 220 s (page-in), then 9 to 19 s for 4 to 39 prompt tokens; greedy decode
-4.2 to 4.7 s per token at short context and 6.4 s per token after the 39-token prompt (UD file: 3.8 to 4.0 s and
-9.1 s). ARCHITECTURE.md's cost model (`20 ms x GB_ram` = about 0.3 s/token for 16 GB in RAM) is more than 10x
-more optimistic than llama.cpp on this CPU; the target table's "32 GB: fits fully, reference" row should be
-measured, not assumed.
+Re-measured in Phase 6.1 with the official llama.cpp release build (b10827, `llama-b10827-bin-win-cpu-x64.zip`,
+the AVX2 `ggml-cpu-haswell` backend it picks at load), the same bartowski Q4_K_M file, resident, `llama-bench -t 6`
+with its defaults (pp512, tg128, 5 repetitions): **tg128 0.19 tokens/s = 5.26 s/token**, pp512 3.77 tokens/s
+(`docs/data/vs_llamacpp.txt`; the run took 71 minutes). `llama-server` on the ladder's three prompts (ids in,
+32 greedy tokens) measured 3.88 s/token as shipped and 3.86 with `--no-repack`. As shipped, the CPU backend
+repacks the Q4_K weights into a 9.6 GB private buffer (11.9 GB committed in all) on top of the 16.5 GiB mapped
+file: a 24.7 GB working set, so "resident" on this 32 GB laptop already pages. The earlier figure here, 4.2 to
+4.7 s/token, came from llama-cpp-python 0.3.35 with the file on the SATA drive, 16 tokens and an unknown thermal
+state; it is retired. ARCHITECTURE.md's cost model (`20 ms x GB_ram` = about 0.3 s/token for 16 GB in RAM) is
+more than 10x more optimistic than llama.cpp on this CPU; this engine's resident 0.83 to 1.17 s/token
+(`docs/ladder.md`) sits between the two, measured rather than assumed.
 
 # Addendum (same day): second GGUF source, MTP identity
 
@@ -465,7 +469,7 @@ matrices, best of three runs): single thread AVX2 is 2.9x (Q4_K) to 13x (Q6_K) t
 threads the dot kernels reach 2.9 (Q4_K) to 6.1 (Q8_0) GB/s of weights, a fifth of this laptop's memory
 bandwidth: the per-block horizontal reductions and the serial f32 accumulation kept for bit-identity bound the
 kernels, not DRAM. At the file's mix (58% Q4_K, 33% Q6_K) that is about 3.4 GB/s, i.e. 5 s per token for the
-17.7 GB file, llama.cpp's neighbourhood on this CPU (4.2 to 4.7 s, finding 21). The three bench runs disagree
+17.7 GB file, llama.cpp's neighbourhood on this CPU (4.2 to 4.7 s then; 5.3 s re-measured with the official build, finding 21). The three bench runs disagree
 by up to 2x on the same kernel (an idle-machine run was the slowest), which on a laptop after hours of full
 load reads as thermal throttling; the ladder numbers in Phase 4 must be taken on a cooled machine with the
 clock frequency logged. Doubling the kernel throughput needs a batched reduction (four blocks per horizontal
@@ -555,7 +559,7 @@ table plus one row) = 37 to 41 % of the 28.9 GB/s ceiling, on a machine in its t
 where the matvec kernels themselves were measuring 8 to 18 GB/s. The per-token budget is therefore mostly the
 kernels' throttled throughput plus the non-matvec work (48 DeltaNet steps of 48 x 128 x 128 f32, conv, norms,
 the 248,320-row lm_head): with the kernels at their cool-machine 20 to 26 GB/s the same token would take about
-0.8 s. llama.cpp on this CPU took 4.2 to 4.7 s per token (finding 21, HDD-resident, throttled or not unknown).
+0.8 s. llama.cpp on this CPU took 4.2 to 4.7 s per token (finding 21, HDD-resident, throttled or not unknown; re-measured in Phase 6.1 at 5.3 s with the official build).
 ## 44. The q8 path's per-layer error on one prompt moves by up to 3 x between two correct kernel orders; the rule-5 ceilings are per layer, not per prompt
 
 `tests/fixtures/q8_ceilings.json` freezes the Phase 2b q8-mode relative errors per layer and per prompt. The

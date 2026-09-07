@@ -1,0 +1,106 @@
+# llama.cpp versus aqueduct on the same file: maneesh-msi, 2026-09-06 17:59, model C:\models\Qwen3.8-27B-Q4_K_M.gguf
+# llama.cpp: C:\tools\llama.cpp-b10827 (version: 0.4.0-dev (build 10827, commit d03efa5d5); built with Clang 20.1.8 for Windows x86_64); the official release zip llama-b<build>-bin-win-cpu-x64.zip; the CPU backend it picks at load (ggml-cpu-haswell.dll = AVX2 on this i7-9750H) is on the load_backend line
+# caps: scripts\cap_run.ps1 puts llama-server into a job object with JOB_OBJECT_LIMIT_JOB_MEMORY + PROCESS_MEMORY (commit) = cap and sets a hard working-set maximum = cap on the process; the same 5 / 8 / 11 GiB as the ladder (docs\data\ladder.txt), whose cap was the engine's own --job-limit on commit. The working-set cap bounds the mapped file's resident pages but does not take them out of RAM: on this 32 GB machine the trimmed pages stay in the standby list, so 'disk GB' says whether a rung read the drive
+# variants: default = the build as shipped (the CPU backend repacks Q4_K weights into private buffers: committed memory on top of the mapped file); no-repack = --no-repack (weights served from the mapped file)
+# prompts: the ladder's 3 (tests\fixtures\prompts.json) sent as token ids, 32 greedy tokens (temperature 0), ids compared with tests\fixtures\ladder_expected_ids.json (this engine's output); s/token is the server's own timings.predicted_ms / predicted_n, mean over the prompts that completed; -t 6, -c 4096, one slot, warmup on, otherwise the build's defaults
+
+== llama-bench -m <model> -t 6 -r 5 (defaults: pp512, tg128), resident: re-parsed from the saved stdout of the 16:22 run of the same day (4269 s wall, 71 minutes, exit 0; llama-bench printed "build: d03efa5d5 (10827)")
+  | model                          |       size |     params | backend    | threads |            test |                  t/s |
+  | ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+  | qwen35 27B Q4_K - Medium       |  16.54 GiB |    27.32 B | CPU        |       6 |           pp512 |          3.77 +/- 0.01 |
+  | qwen35 27B Q4_K - Medium       |  16.54 GiB |    27.32 B | CPU        |       6 |           tg128 |          0.19 +/- 0.00 |
+  pp512: 3.77 +/- 0.01 tokens/s = 0.265 s/token
+  tg128: 0.19 +/- 0.00 tokens/s = 5.263 s/token
+
+== llama-server, the ladder's 3 prompts x 32 greedy tokens, resident then under each cap, per variant
+rung      variant     load s   s/token    tok/s prompt t/s   peak WS   peak cmt   under  disk GB/prm   GB/token  ids vs aqueduct (matching prefix of 32) / failures
+resident  default       77.8     3.881    0.258       1.19    24.713     11.871     n/a        0.265      0.003  capital 32/32, fib 6/32, sentence 32/32
+resident  no-repack     23.5     3.861    0.259       1.00    18.328      2.249     n/a        0.157      0.002  capital 32/32, fib 6/32, sentence 5/32
+    sentence: FAILED after 25 s (server exited (code )): The underlying connection was closed: A connection that was expected to be kept alive was closed by the server.; server said: 11.47.807.805 E slot      iterate: id  0 | task 67 | got exception: bad allocation | 11.47.807.821 E srv    send_error: task id = 67, error: got exception: bad allocation | D:/a/llama.cpp/llama.cpp/tools/server/server-context.cpp:2830: GGML_ASSERT(batch.slot_batched || batch.size() == 0) failed
+11G       default       60.0     9.221    0.108       0.27    11.811     11.395     yes        0.518      0.008  capital 32/32, fib 6/32; then sentence: FAILED after 25 s (server exited (code )): The underlying connection was closed: A connection that was expected to be kept alive was closed by the server.
+11G       no-repack     32.6    12.091    0.083       0.53    11.811      2.249     yes        0.353      0.004  capital 32/32, fib 6/32, sentence 5/32
+8G        default        6.2 FAILED to load (exited ); peak WS 0.278 GB, peak commit 0.850 GB; 0.06.139.206 E llama_model_load_from_file_impl: failed to load model | 0.06.139.217 E cmn  common_init_: failed to load model 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.06.139.229 E srv    load_model: failed to load model, 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.06.142.455 E srv  llama_server: exiting due to model loading error
+8G        no-repack     33.6    12.393    0.081       0.52     8.590      2.248     yes        0.415      0.004  capital 32/32, fib 6/32, sentence 5/32
+5G        default        6.2 FAILED to load (exited ); peak WS 0.278 GB, peak commit 0.849 GB; 0.05.999.272 E llama_model_load_from_file_impl: failed to load model | 0.05.999.276 E cmn  common_init_: failed to load model 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.05.999.289 E srv    load_model: failed to load model, 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.06.002.281 E srv  llama_server: exiting due to model loading error
+5G        no-repack     33.7    13.422    0.075       0.46     5.369      2.249     yes        2.416      0.025  capital 32/32, fib 6/32, sentence 5/32
+
+# per rung and variant: load, disk read during load and during the prompts, the server's buffer lines; per prompt: s/token from the server timings, wall seconds of the request, prompt tokens and prompt tokens/s, the matching prefix against aqueduct's ids, and llama.cpp's ids
+  resident default: load 77.8 s, disk read during load 13.295 GB, during the prompts 0.265 GB
+    capital   4.077 s/token, wall 142.4 s, prompt 5 tokens at 0.42 t/s, ids match 32/32 (identical)
+              ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+    fib       3.784 s/token, wall 125.8 s, prompt 4 tokens at 0.87 t/s, ids match 6/32 (diverges at token 6)
+              ids: 198,262,413,307,2564,220,15,25,198,285,460,220,15,198,262,4265,307,606,220,16,25,198,285,460,220,16,198,262,745,25,198,285
+    sentence  3.782 s/token, wall 138.2 s, prompt 39 tokens at 2.29 t/s, ids match 32/32 (identical)
+              ids: 733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446,321,4172,31717,430,781,87805,13,561,916,1315,314,1439,8177,2218,6067,289
+  resident no-repack: load 23.5 s, disk read during load 4.065 GB, during the prompts 0.157 GB
+    capital   4.023 s/token, wall 140.8 s, prompt 5 tokens at 0.42 t/s, ids match 32/32 (identical)
+              ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+    fib       3.760 s/token, wall 125.6 s, prompt 4 tokens at 0.78 t/s, ids match 6/32 (diverges at token 6)
+              ids: 198,262,413,307,2564,220,15,25,198,285,460,220,15,198,262,4265,307,606,220,16,25,198,285,460,220,16,198,262,745,25,198,285
+    sentence  3.800 s/token, wall 143.3 s, prompt 39 tokens at 1.81 t/s, ids match 5/32 (diverges at token 5)
+              ids: 733,279,1496,7909,11,34343,64327,888,82884,321,1472,14590,338,77988,11,836,5176,44003,279,17865,440,57040,4649,13,561,73583,11,799,314,279,1814,725
+  11G default: load 60.0 s, disk read during load 7.292 GB, during the prompts 0.518 GB; sentence: FAILED after 25 s (server exited (code )): The underlying connection was closed: A connection that was expected to be kept alive was closed by the server.; server said: 11.47.807.805 E slot      iterate: id  0 | task 67 | got exception: bad allocation | 11.47.807.821 E srv    send_error: task id = 67, error: got exception: bad allocation | D:/a/llama.cpp/llama.cpp/tools/server/server-context.cpp:2830: GGML_ASSERT(batch.slot_batched || batch.size() == 0) failed
+    capital   9.605 s/token, wall 332.5 s, prompt 5 tokens at 0.20 t/s, ids match 32/32 (identical)
+              ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+    fib       8.837 s/token, wall 295.1 s, prompt 4 tokens at 0.34 t/s, ids match 6/32 (diverges at token 6)
+              ids: 198,262,413,307,2564,220,15,25,198,285,460,220,15,198,262,4265,307,606,220,16,25,198,285,460,220,16,198,262,745,25,198,285
+  11G no-repack: load 32.6 s, disk read during load 3.971 GB, during the prompts 0.353 GB
+    capital   12.277 s/token, wall 420.8 s, prompt 5 tokens at 0.18 t/s, ids match 32/32 (identical)
+              ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+    fib       11.985 s/token, wall 397.0 s, prompt 4 tokens at 0.31 t/s, ids match 6/32 (diverges at token 6)
+              ids: 198,262,413,307,2564,220,15,25,198,285,460,220,15,198,262,4265,307,606,220,16,25,198,285,460,220,16,198,262,745,25,198,285
+    sentence  12.012 s/token, wall 420.7 s, prompt 39 tokens at 1.09 t/s, ids match 5/32 (diverges at token 5)
+              ids: 733,279,1496,7909,11,34343,64327,888,82884,321,1472,14590,338,77988,11,836,5176,44003,279,17865,440,57040,4649,13,561,73583,11,799,314,279,1814,725
+  8G default: load 6.2 s, disk read during load 0.001 GB; 0.06.139.206 E llama_model_load_from_file_impl: failed to load model | 0.06.139.217 E cmn  common_init_: failed to load model 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.06.139.229 E srv    load_model: failed to load model, 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.06.142.455 E srv  llama_server: exiting due to model loading error
+      0.05.759.213 E alloc_tensor_range: failed to allocate CPU_REPACK buffer of size 9602334720
+      0.06.139.197 E llama_model_load: error loading model: unable to allocate CPU_REPACK buffer
+  8G no-repack: load 33.6 s, disk read during load 0.036 GB, during the prompts 0.415 GB
+    capital   12.457 s/token, wall 427.7 s, prompt 5 tokens at 0.17 t/s, ids match 32/32 (identical)
+              ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+    fib       12.486 s/token, wall 413.3 s, prompt 4 tokens at 0.30 t/s, ids match 6/32 (diverges at token 6)
+              ids: 198,262,413,307,2564,220,15,25,198,285,460,220,15,198,262,4265,307,606,220,16,25,198,285,460,220,16,198,262,745,25,198,285
+    sentence  12.236 s/token, wall 428.3 s, prompt 39 tokens at 1.08 t/s, ids match 5/32 (diverges at token 5)
+              ids: 733,279,1496,7909,11,34343,64327,888,82884,321,1472,14590,338,77988,11,836,5176,44003,279,17865,440,57040,4649,13,561,73583,11,799,314,279,1814,725
+  5G default: load 6.2 s, disk read during load 0.000 GB; 0.05.999.272 E llama_model_load_from_file_impl: failed to load model | 0.05.999.276 E cmn  common_init_: failed to load model 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.05.999.289 E srv    load_model: failed to load model, 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.06.002.281 E srv  llama_server: exiting due to model loading error
+      0.05.655.291 E alloc_tensor_range: failed to allocate CPU_REPACK buffer of size 9602334720
+      0.05.999.262 E llama_model_load: error loading model: unable to allocate CPU_REPACK buffer
+  5G no-repack: load 33.7 s, disk read during load 0.002 GB, during the prompts 2.416 GB
+    capital   12.661 s/token, wall 431.5 s, prompt 5 tokens at 0.19 t/s, ids match 32/32 (identical)
+              ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+    fib       13.333 s/token, wall 441.1 s, prompt 4 tokens at 0.29 t/s, ids match 6/32 (diverges at token 6)
+              ids: 198,262,413,307,2564,220,15,25,198,285,460,220,15,198,262,4265,307,606,220,16,25,198,285,460,220,16,198,262,745,25,198,285
+    sentence  14.271 s/token, wall 501.2 s, prompt 39 tokens at 0.89 t/s, ids match 5/32 (diverges at token 5)
+              ids: 733,279,1496,7909,11,34343,64327,888,82884,321,1472,14590,338,77988,11,836,5176,44003,279,17865,440,57040,4649,13,561,73583,11,799,314,279,1814,725
+
+# aqueduct's ids for the same prompts (tests\fixtures\ladder_expected_ids.json):
+    capital   ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+    fib       ids: 198,262,413,307,2564,220,16,25,198,285,460,307,198,262,745,25,198,285,460,73111,1393,12,16,8,478,73111,1393,12,17,8,271,2
+    sentence  ids: 733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446,321,4172,31717,430,781,87805,13,561,916,1315,314,1439,8177,2218,6067,289
+
+== llama-server --no-mmap under the 11G cap (the model read into private memory, which the commit cap counts)
+  did not become ready (3 s; exit code ); peak working set 0.277 GB, peak commit 0.848 GB; the server's last error lines:
+    0.02.587.102 E alloc_tensor_range: failed to allocate CPU_REPACK buffer of size 9602334720
+    0.02.667.781 E llama_model_load: error loading model: unable to allocate CPU_REPACK buffer
+    0.02.667.792 E llama_model_load_from_file_impl: failed to load model
+    0.02.667.797 E cmn  common_init_: failed to load model 'C:\models\Qwen3.8-27B-Q4_K_M.gguf'
+    0.02.667.809 E srv    load_model: failed to load model, 'C:\models\Qwen3.8-27B-Q4_K_M.gguf'
+    0.02.671.893 E srv  llama_server: exiting due to model loading error
+
+# summary (s/token = mean over the completed prompts of the server's own timings; the resident llama-bench tg128 figure is the one the README quotes)
+  resident  default    3.881 s/token (0.258 tok/s) over 3/3 prompts, peak working set 24.713 GB, peak commit 11.871 GB, under cap n/a, disk 0.003 GB per token, ids capital 32/32, fib 6/32, sentence 32/32
+  resident  no-repack  3.861 s/token (0.259 tok/s) over 3/3 prompts, peak working set 18.328 GB, peak commit 2.249 GB, under cap n/a, disk 0.002 GB per token, ids capital 32/32, fib 6/32, sentence 5/32
+  11G       default    9.221 s/token (0.108 tok/s) over 2/3 prompts, peak working set 11.811 GB, peak commit 11.395 GB, under cap yes, disk 0.008 GB per token, ids capital 32/32, fib 6/32; sentence: FAILED after 25 s (server exited (code )): The underlying connection was closed: A connection that was expected to be kept alive was closed by the server.
+  11G       no-repack  12.091 s/token (0.083 tok/s) over 3/3 prompts, peak working set 11.811 GB, peak commit 2.249 GB, under cap yes, disk 0.004 GB per token, ids capital 32/32, fib 6/32, sentence 5/32
+  8G        default    did not load: 0.06.139.206 E llama_model_load_from_file_impl: failed to load model | 0.06.139.217 E cmn  common_init_: failed to load model 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.06.139.229 E srv    load_model: failed to load model, 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.06.142.455 E srv  llama_server: exiting due to model loading error
+  8G        no-repack  12.393 s/token (0.081 tok/s) over 3/3 prompts, peak working set 8.590 GB, peak commit 2.248 GB, under cap yes, disk 0.004 GB per token, ids capital 32/32, fib 6/32, sentence 5/32
+  5G        default    did not load: 0.05.999.272 E llama_model_load_from_file_impl: failed to load model | 0.05.999.276 E cmn  common_init_: failed to load model 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.05.999.289 E srv    load_model: failed to load model, 'C:\models\Qwen3.8-27B-Q4_K_M.gguf' | 0.06.002.281 E srv  llama_server: exiting due to model loading error
+  5G        no-repack  13.422 s/token (0.075 tok/s) over 3/3 prompts, peak working set 5.369 GB, peak commit 2.249 GB, under cap yes, disk 0.025 GB per token, ids capital 32/32, fib 6/32, sentence 5/32
+  llama-bench tg128 resident: 0.19 +/- 0.00 tokens/s = 5.263 s/token
+  llama-bench pp512 resident: 3.77 +/- 0.01 tokens/s
+
+== same-state check, 20:20 to 20:28, straight after aqueduct's hot rerun (docs\data\ladder_phase61.txt, 19:35 to 20:15: resident 1.534 s/token plain, 11.4 GB/s through RAM against 20.3 in the filed ladder)
+  aqueduct doctor at 20:19: membw 27.16 GB/s at 6 threads (best of 3: 25.60 27.16 25.10) against 30.06 in docs\data\doctor_maneesh-msi.txt (cool): the DRAM rate barely moves when this laptop throttles; the compute does
+  llama-bench -m <model> -t 6 -p 0 -n 32 -r 2 (hot):
+  | model                          |       size |     params | backend    | threads |            test |                  t/s |
+  | qwen35 27B Q4_K - Medium       |  16.54 GiB |    27.32 B | CPU        |       6 |            tg32 |          0.16 +/- 0.02 |
+  tg32: 0.16 +/- 0.02 tokens/s = 6.25 s/token, so in the same hot state llama.cpp is 4.1 x slower than aqueduct's resident plain rung (1.534 s/token); cool against cool (llama-bench tg128 5.26 s at 16:22 on a machine already warm from the load, aqueduct 0.830 in docs\ladder.md) the ratio is larger, and the README quotes the conservative pair

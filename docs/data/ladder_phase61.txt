@@ -1,0 +1,96 @@
+# aqueduct ladder: maneesh-msi, 2026-09-06 19:35, exe target\release\aqueduct.exe, model C:\models\Qwen3.8-27B-Q4_K_M.gguf
+# cap: --budget sizes the plan, --job-limit puts the engine into a job object (JOB_OBJECT_LIMIT_JOB_MEMORY + PROCESS_MEMORY = budget) before it allocates; peak = max(job PeakJobMemoryUsed, engine PeakWorkingSetSize, WorkingSet64 sampled every 250 ms from this script)
+# cost model: t = bytes_ram / 30.06 GB/s + bytes_disk / 3.3 GB/s + 0.053 (membw and disk qd2 from docs\data\doctor_maneesh-msi.txt); ring 2 slots, qd 2, 32 tokens per prompt; every rung also with --spec 3 (MTP drafts per round, exact greedy verification)
+# rungs 5G and 11G are the free RAM of 8 GB and 16 GB Windows laptops
+budget    prompt    pinned streamed  GB/tok disk   s/token     GB/s   %membw pred s/tok        ratio   peakRSS   under  read hid   load s
+5G        capital        9       55       13.406     4.375     3.84      13%      4.229         1.03     5.086     yes      38%      2.4
+5G        capital   --spec 3: pinned 8, 1.821 s/token (2.40 x), 11 rounds, 1.91 accepted/round (64%), 2.91 tokens/round, verify 4.741 s/round, drafts 0.088 s/step, peak RSS 5.036 GB yes
+5G        fib            9       55       13.406     4.620     3.64      12%      4.229         1.09     5.086     yes      42%      2.2
+5G        fib       --spec 3: pinned 8, 1.847 s/token (2.50 x), 9 rounds, 2.56 accepted/round (85%), 3.56 tokens/round, verify 5.747 s/round, drafts 0.145 s/step, peak RSS 5.035 GB yes
+5G        sentence       9       55       13.406     4.658     3.61      12%      4.229         1.10     5.104     yes      47%      2.9
+5G        sentence  --spec 3: pinned 8, 3.340 s/token (1.39 x), 15 rounds, 1.20 accepted/round (40%), 2.13 tokens/round, verify 6.184 s/round, drafts 0.151 s/step, peak RSS 5.057 GB yes
+8G        capital       22       42       10.298     4.015     4.19      14%      3.390         1.18     8.201     yes      51%      5.8
+8G        capital   --spec 3: pinned 21, 2.370 s/token (1.69 x), 11 rounds, 1.91 accepted/round (64%), 2.91 tokens/round, verify 6.002 s/round, drafts 0.151 s/step, peak RSS 8.151 GB yes
+8G        fib           22       42       10.298     3.998     4.20      14%      3.390         1.18     8.200     yes      50%      5.7
+8G        fib       --spec 3: pinned 21, 1.882 s/token (2.12 x), 9 rounds, 2.56 accepted/round (85%), 3.56 tokens/round, verify 5.847 s/round, drafts 0.154 s/step, peak RSS 8.150 GB yes
+8G        sentence      22       42       10.298     4.046     4.15      14%      3.390         1.19     8.219     yes      51%      5.7
+8G        sentence  --spec 3: pinned 21, 3.220 s/token (1.26 x), 15 rounds, 1.20 accepted/round (40%), 2.13 tokens/round, verify 5.941 s/round, drafts 0.148 s/step, peak RSS 8.172 GB yes
+11G       capital       36       28        6.937     3.358     5.01      17%      2.483         1.35    11.568     yes      51%      9.0
+11G       capital   --spec 3: pinned 35, 2.221 s/token (1.51 x), 11 rounds, 1.91 accepted/round (64%), 2.91 tokens/round, verify 5.591 s/round, drafts 0.150 s/step, peak RSS 11.536 GB yes
+11G       fib           36       28        6.937     3.375     4.98      17%      2.483         1.36    11.568     yes      53%      9.1
+11G       fib       --spec 3: pinned 35, 1.851 s/token (1.82 x), 9 rounds, 2.56 accepted/round (85%), 3.56 tokens/round, verify 5.746 s/round, drafts 0.149 s/step, peak RSS 11.535 GB yes
+11G       sentence      35       29        7.151     3.402     4.94      16%      2.541         1.34    11.372     yes      51%      8.8
+11G       sentence  --spec 3: pinned 35, 3.082 s/token (1.10 x), 15 rounds, 1.20 accepted/round (40%), 2.13 tokens/round, verify 5.641 s/round, drafts 0.153 s/step, peak RSS 11.557 GB yes
+resident  capital       64        0        0.000     1.885     8.92      30%      0.612         3.08    17.947     n/a     100%     15.5
+resident  capital   --spec 3: pinned 64, 1.959 s/token (0.96 x), 11 rounds, 1.91 accepted/round (64%), 2.91 tokens/round, verify 4.864 s/round, drafts 0.149 s/step, peak RSS 18.124 GB n/a
+resident  fib           64        0        0.000     1.572    10.69      36%      0.612         2.57    17.947     n/a     100%     15.3
+resident  fib       --spec 3: pinned 64, 0.873 s/token (1.80 x), 9 rounds, 2.56 accepted/round (85%), 3.56 tokens/round, verify 2.678 s/round, drafts 0.078 s/step, peak RSS 18.123 GB n/a
+resident  sentence      64        0        0.000     1.146    14.67      49%      0.612         1.87    17.962     n/a     100%      8.8
+resident  sentence  --spec 3: pinned 64, 1.505 s/token (0.76 x), 15 rounds, 1.20 accepted/round (40%), 2.13 tokens/round, verify 2.724 s/round, drafts 0.080 s/step, peak RSS 18.128 GB n/a
+
+# per rung (mean over the 3 prompts; peak RSS = max over prompts, GB; job/engine/sampled peaks GB)
+budget    pinned streamed  GB/tok disk   s/token     GB/s   %membw pred s/tok    ratio   peakRSS   under  read hid  comp hid read GB/s   job/engine/sampled
+5G             9       55       13.406     4.551     3.70      12%      4.229     1.08     5.104 yes/yes/yes       42%       88%     3.11       5.10/5.09/5.09
+8G            22       42       10.298     4.020     4.18      14%      3.390     1.19     8.219 yes/yes/yes       50%       71%     3.09       8.22/8.20/8.20
+11G           36       28        7.008     3.379     4.98      17%      2.503     1.35    11.568 yes/yes/yes       52%       52%     3.07    11.57/11.55/11.55
+resident      64        0        0.000     1.534    11.43      38%      0.612     2.51    17.962 n/a/n/a/n/a      100%      100%     0.00     0.00/17.96/17.96
+
+# per rung with --spec 3 (mean over the 3 prompts): pinned, s/token plain -> spec, speedup, accepted per round, acceptance rate, tokens per round, seconds per round, per-round parts (verify = the k+1-row batch through all layers; snapshot; replay of accepted rows; MTP re-feed of accepted rows + head; chained draft per step), peak RSS
+budget    pinned     plain      spec  speedup acc/round   rate tok/round  s/round   verify snapshot   replay   refeed    chain   peakRSS   under
+5G             8     4.551     2.336     1.95      1.89    63%      2.87    6.207    5.618    0.033    0.109    0.183    0.129     5.057 yes/yes/yes
+8G            21     4.020     2.491     1.61      1.89    63%      2.87    6.619    5.936    0.041    0.123    0.215    0.151     8.172 yes/yes/yes
+11G           35     3.379     2.384     1.42      1.89    63%      2.87    6.336    5.652    0.041    0.122    0.214    0.151    11.557 yes/yes/yes
+resident      64     1.534     1.446     1.06      1.89    63%      2.87    3.841    3.385    0.027    0.082    0.142    0.101    18.128 n/a/n/a/n/a
+
+# identity gate: the 32 ids per prompt at every rung (plain and --spec), against tests/fixtures/ladder_expected_ids.json (Phase 3 resident output)
+  capital   identical across rungs (plain and --spec 3): yes; equal to Phase 3: yes
+  capital ids: 11751,13,198,760,6511,314,9564,369,19241,13,198,760,6511,314,14898,369,21047,13,198,760,6511,314,17163,369,23327,13,198,760,6511,314,32208,369
+  fib       identical across rungs (plain and --spec 3): yes; equal to Phase 3: yes
+  fib ids: 198,262,413,307,2564,220,16,25,198,285,460,307,198,262,745,25,198,285,460,73111,1393,12,16,8,478,73111,1393,12,17,8,271,2
+  sentence  identical across rungs (plain and --spec 3): yes; equal to Phase 3: yes
+  sentence ids: 733,279,1496,7909,11,91420,2957,25432,279,17865,11,9101,4661,533,33582,82446,321,4172,31717,430,781,87805,13,561,916,1315,314,1439,8177,2218,6067,289
+identity: ids identical across rungs yes; vs Phase 3 resident match
+cost model: worst ratio 2.51 at resident; all rungs within 2x: NO
+peak RSS under budget at every rung: yes
+
+# overlap over the decode phase, per prompt and rung: reading / computing / waiting / wall seconds, overlap seconds
+  5G capital: read 129.67 compute 55.35 wait 80.27 wall 135.61 overlap 49.40
+  5G fib: read 135.86 compute 64.74 wait 78.48 wall 143.22 overlap 57.37
+  5G sentence: read 135.23 compute 72.90 wait 71.51 wall 144.41 overlap 63.71
+  8G capital: read 103.21 compute 73.65 wait 50.81 wall 124.46 overlap 52.39
+  8G fib: read 102.60 compute 72.32 wait 51.63 wall 123.95 overlap 50.97
+  8G sentence: read 103.62 compute 74.39 wait 51.03 wall 125.42 overlap 52.58
+  11G capital: read 69.73 compute 69.63 wait 34.48 wall 104.11 overlap 35.25
+  11G fib: read 70.37 compute 71.41 wait 33.23 wall 104.64 overlap 37.14
+  11G sentence: read 71.82 compute 70.45 wait 35.02 wall 105.47 overlap 36.81
+  resident capital: read 0.00 compute 58.43 wait 0.00 wall 58.43 overlap 0.00
+  resident fib: read 0.00 compute 48.74 wait 0.00 wall 48.74 overlap 0.00
+  resident sentence: read 0.00 compute 35.51 wait 0.00 wall 35.51 overlap 0.00
+
+# per-step seconds (each prompt, each rung)
+  5G capital: 4.57 4.38 4.43 4.36 4.30 4.33 4.33 4.31 4.37 4.39 4.37 4.38 4.47 4.71 4.42 4.37 4.32 4.37 4.32 4.33 4.35 4.43 4.33 4.34 4.38 4.31 4.32 4.34 4.30 4.31 4.37
+  5G fib: 4.45 4.72 4.50 4.41 4.34 4.44 4.34 4.34 4.38 4.35 4.35 4.39 4.40 4.34 4.41 4.34 4.77 6.97 4.81 4.66 4.65 4.62 4.60 4.61 4.59 4.62 4.60 4.56 4.73 4.57 5.34
+  5G sentence: 4.75 4.75 4.90 4.84 4.82 4.78 4.79 4.58 4.61 4.62 4.56 4.67 4.50 4.51 4.57 4.71 4.64 4.53 4.58 4.72 4.57 4.74 4.67 4.57 4.66 4.65 4.57 4.73 4.58 4.53 4.66
+  8G capital: 3.98 4.05 4.00 3.96 4.06 3.97 4.04 4.22 3.96 3.97 4.03 4.01 3.97 4.05 4.01 3.95 4.01 3.97 3.99 4.01 4.10 3.94 3.96 4.06 4.00 3.97 4.16 4.02 3.96 4.09 3.98
+  8G fib: 3.96 4.07 3.97 3.96 4.08 3.93 3.99 3.97 4.06 4.02 3.95 4.06 4.10 3.90 3.96 3.98 4.01 4.08 3.95 3.94 4.05 3.99 4.01 4.08 3.97 3.95 4.02 4.01 3.92 3.93 4.01
+  8G sentence: 4.04 3.95 4.15 4.04 4.13 4.32 3.96 3.94 4.12 4.00 3.96 4.19 3.95 3.94 4.01 4.23 4.02 3.97 4.08 4.06 4.04 4.04 4.07 3.95 4.19 4.00 3.96 4.08 3.96 3.93 4.10
+  11G capital: 3.50 3.50 3.29 3.36 3.35 3.41 3.36 3.35 3.68 3.51 3.28 3.26 3.30 3.41 3.28 3.26 3.33 3.34 3.28 3.29 3.47 3.34 3.29 3.27 3.37 3.36 3.36 3.43 3.40 3.22 3.23
+  11G fib: 3.40 3.45 3.43 3.45 3.52 3.28 3.27 3.37 3.40 3.39 3.30 3.40 3.40 3.15 3.37 3.49 3.30 3.36 3.44 3.34 3.39 3.43 3.43 3.29 3.31 3.54 3.27 3.32 3.29 3.38 3.42
+  11G sentence: 3.26 3.30 3.30 3.36 3.36 3.35 3.32 3.36 3.30 3.24 3.38 3.36 3.36 3.47 3.48 3.30 3.74 4.20 3.34 3.37 3.34 3.56 3.42 3.34 3.35 3.51 3.39 3.23 3.39 3.44 3.34
+  resident capital: 1.78 1.83 1.87 1.90 2.02 1.86 1.84 1.82 1.84 2.09 1.90 1.94 1.82 1.84 1.90 1.84 1.77 1.94 1.85 1.87 1.85 1.93 1.84 2.02 1.89 1.86 1.84 1.94 1.87 1.88 1.95
+  resident fib: 1.86 1.85 1.87 1.87 1.86 1.87 1.79 1.85 1.87 2.05 1.86 1.84 1.89 1.91 1.86 1.69 1.51 1.44 1.31 1.45 1.23 1.32 1.39 1.13 1.10 1.44 1.20 1.16 1.10 1.10 1.09
+  resident sentence: 1.13 1.21 1.12 1.12 1.26 1.10 1.11 1.14 1.13 1.11 1.14 1.11 1.13 1.21 1.16 1.19 1.17 1.09 1.12 1.12 1.12 1.10 1.18 1.12 1.17 1.36 1.10 1.12 1.11 1.11 1.14
+
+# per-round seconds with --spec 3 (each prompt, each rung)
+  5G capital: 5.23 5.15 5.23 5.16 5.17 5.11 5.12 5.17 4.97 5.04 5.11
+  5G fib: 6.21 6.34 6.67 6.23 6.04 6.66 6.33 6.14 6.64
+  5G sentence: 7.61 6.49 6.61 6.60 6.74 6.61 6.97 6.51 7.08 6.52 6.88 7.40 7.35 7.59 6.59
+  8G capital: 7.13 6.33 6.66 6.25 6.74 6.59 6.72 6.89 6.81 6.45 6.91
+  8G fib: 6.19 6.74 6.17 6.90 6.20 6.68 6.52 6.45 6.49
+  8G sentence: 6.51 6.78 6.52 6.59 6.88 6.60 6.87 6.26 7.09 6.34 6.57 6.61 6.75 6.42 7.03
+  11G capital: 6.31 6.05 6.23 6.16 6.28 6.44 5.94 6.65 6.07 6.50 6.20
+  11G fib: 6.83 6.32 6.56 6.12 6.49 6.18 6.46 6.07 6.35
+  11G sentence: 6.57 6.38 6.14 6.23 6.17 7.05 6.32 6.31 6.35 6.37 6.07 6.18 6.80 6.12 6.47
+  resident capital: 5.61 5.51 5.55 5.57 5.54 5.42 5.22 5.65 5.40 5.59 5.68
+  resident fib: 3.15 3.00 2.90 3.00 2.98 2.94 2.94 3.11 3.03
+  resident sentence: 3.12 3.12 3.04 3.31 3.07 3.14 3.03 3.19 3.18 3.07 3.00 3.14 3.05 3.07 3.12
